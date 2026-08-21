@@ -17,7 +17,7 @@ npm ci
 npm run dev
 ```
 
-Vite odatda `http://localhost:5173` manzilida ishga tushadi. Development rejimida MSW mock API avtomatik ulanadi; production buildda mock worker ishga tushmaydi. Real backend uchun `VITE_API_BASE_URL`ni, masalan `/api`, qilib sozlang. Mockni developmentda o‘chirish uchun `VITE_ENABLE_MOCKS=false` ishlatiladi; ikkala qiymat ham startup vaqtida Zod orqali tekshiriladi.
+Vite odatda `http://localhost:5173` manzilida ishga tushadi. MSW mock API `VITE_ENABLE_MOCKS` qiymatiga qarab ishga tushadi — bu development'da default `true`, production build'da default `false`. Real backend ulanganda `VITE_ENABLE_MOCKS=false` qiling va `VITE_API_BASE_URL`ni real backend manziliga (masalan `/api`) sozlang. Backend hali yo‘q demo/preview deploy (masalan Vercel)da production build ham MSW bilan ishlashi uchun `VITE_ENABLE_MOCKS=true`ni deploy environment'ida aniq belgilang — bu yagona farq, boshqa hech qanday build-mode shartisiz. Ikkala qiymat ham startup vaqtida Zod orqali tekshiriladi.
 
 Demo parol barcha faol demo hisoblarda `demo123`:
 
