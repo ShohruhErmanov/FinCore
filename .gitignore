@@ -1,0 +1,13 @@
+node_modules
+.npm-cache
+dist
+coverage
+playwright-report
+test-results
+.env
+.env.local
+*.log
+*.tsbuildinfo
+.DS_Store
+.codex/*
+!.codex/config.example.toml

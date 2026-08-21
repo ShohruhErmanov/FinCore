@@ -1,0 +1,5 @@
+[mcp_servers.stitch]
+url = "https://stitch.googleapis.com/mcp"
+
+[mcp_servers.stitch.http_headers]
+X-Goog-Api-Key = "REPLACE_WITH_YOUR_GCP_API_KEY"

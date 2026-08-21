@@ -1,0 +1,352 @@
+# PHASE 15.2 — Business Decision Resolution Preparation
+
+**Purpose:** Prepare a final human decision package for FINCORE. This document resolves **nothing**. It extracts every open decision from `docs/PROJECT_REQUIREMENTS.md` (Excel — primary business source) and `docs/PHASE_15_DEVELOPMENT_SPECIFICATION.md` + `docs/PHASE_15_1_DECISION_REGISTER.md` (Figma audit + decision register), removes non-blocking noise, and packages the decisions that actually block Phase 16 (Database Architecture) into human-decidable cards.
+
+**Source priority used throughout, per instruction:**
+1. Original Excel business workflow (`PROJECT_REQUIREMENTS.md`)
+2. Explicit human-approved decisions (none exist yet — that is the point of this document)
+3. Confirmed Figma requirements (screenshot-verified, `PHASE_15_DEVELOPMENT_SPECIFICATION.md` §6.1)
+4. Figma visual structure (metadata-only, unverified screens)
+5. Inference / recommendations (lowest priority — never overrides 1–4)
+
+No conflict below has been silently resolved. Every card ends `FINAL DECISION: [OPEN — USER MUST CHOOSE]`.
+
+---
+
+## 1. COMPLETE OPEN DECISION LIST
+
+Extracted from `PHASE_15_1_DECISION_REGISTER.md` (20 numbered decisions, all still `Status: OPEN` except DECISION-00 which is `PARTIALLY RESOLVED`) plus one item from `PROJECT_REQUIREMENTS.md` §36–37 that was never assigned a register ID (CONFLICT-E2).
+
+| # | ID | Title | Priority (register) | Status |
+|---|---|---|---|---|
+| 1 | DECISION-00 | TZ/requirements document existence | P0 | PARTIALLY RESOLVED (Excel found 2026-08-20) |
+| 2 | DECISION-01 | Canonical navigation shell / product brand name | P0 | OPEN |
+| 3 | DECISION-02 | Formal role list and permission matrix | P0 | OPEN |
+| 4 | DECISION-03 | Target architecture | P0 | OPEN |
+| 5 | DECISION-04 | Phase 12 (Mobile PWA) scope | P2 | OPEN |
+| 6 | DECISION-05 | Prototype flow verification (human must check Figma directly) | P2 | OPEN |
+| 7 | DECISION-06 | Reports Center: 6 of 8 report types have no dedicated screen | P1 | OPEN |
+| 8 | DECISION-07 | Expense review threshold value/configurability | P1 | OPEN |
+| 9 | DECISION-08 | Incomplete Figma audit (38/53 screens, 7/8 QA tabs unread) | P1 | OPEN |
+| 10 | DECISION-09 | Database entity list is inferred, not confirmed | P1 | OPEN (now partially de-risked — see §5) |
+| 11 | DECISION-10 | State-machine gaps: period reopen, rejection reason, concurrent session | P1 | OPEN |
+| 12 | DECISION-11 | Audit log schema scope (platform-wide vs. closing-only) | P1 | OPEN |
+| 13 | DECISION-12 | Notification content/channel | P2 | OPEN |
+| 14 | DECISION-14 | Component library: build vs. adopt | P2 | OPEN |
+| 15 | DECISION-15 | Design tokens (color/type/spacing) extraction | P2 | OPEN |
+| 16 | DECISION-16 | Mobile nav parity (4 items vs. desktop's 8) | P2 | OPEN |
+| 17 | DECISION-17 | Tablet breakpoint support | P2 | OPEN |
+| 18 | DECISION-18 | Stray "+ New Payment" button in Admin shell | P3 | OPEN |
+| 19 | DECISION-19 | Route slug naming | P3 | OPEN |
+| 20 | DECISION-20 | Phase-grouping assumption (ASSUMPTION-01) | P3 | OPEN |
+| 21 | CONFLICT-E2 | "Uzum Bank" payment method not in Excel's 6-method list | — (unregistered) | OPEN |
+
+Plus the three other Excel-vs-Figma conflicts (`PROJECT_REQUIREMENTS.md` §36), which are **not new items** — they are the evidence behind existing register decisions and are folded into the cards below:
+- **CONFLICT-E1** (branch count, 2 vs. 4+) → feeds **DECISION-A** (§3) and DECISION-01.
+- **CONFLICT-E3** (role count, 3 vs. 5) → feeds **DECISION-D** (§3) and DECISION-02.
+- **CONFLICT-E4** (expense approval workflow, absent vs. full 3-state) → feeds **DECISION-B** (§3), DECISION-02, and DECISION-10.
+
+**TOTAL OPEN DECISIONS: 21** (20 register items + CONFLICT-E2; DECISION-00 counted as still-open since only partially resolved).
+
+---
+
+## 2. BUCKETING — MUST DECIDE NOW / DECIDE BEFORE FRONTEND / CAN DECIDE LATER
+
+### A. MUST DECIDE NOW — blocks database architecture or core product logic
+Packaged as five human decision cards in §3: **DECISION-A, DECISION-B, DECISION-C, DECISION-D, DECISION-E**. Each fully or partially resolves one or more register items:
+
+| Card | Resolves |
+|---|---|
+| DECISION-A (branch reconciliation) | CONFLICT-E1; the branch-count/extensibility portion of DECISION-01 |
+| DECISION-B (expense approval workflow) | CONFLICT-E4; the expense-status portion of DECISION-02 and DECISION-10 |
+| DECISION-C (Income/Students/Tuition/Refund scope) | The largest open portion of DECISION-09 (entity list) |
+| DECISION-D (final role system) | CONFLICT-E3; DECISION-02 |
+| DECISION-E (target architecture) | DECISION-03 |
+
+**Count: 5**
+
+### B. DECIDE BEFORE FRONTEND — can wait until database architecture is completed
+| ID | Title | Why it can wait |
+|---|---|---|
+| DECISION-01 (remainder) | Which literal shell/brand string is canonical | Cosmetic/IA choice — doesn't change what data is stored, only how it's presented |
+| DECISION-04 | PWA scope | Affects client-side build only, no schema impact |
+| DECISION-05 | Prototype verification | Informs navigation/UX, not data model |
+| DECISION-06 | Report screen scope (6 unmatched report types) | Reports read from already-scoped tables; can be a query-layer decision made after schema freeze |
+| DECISION-07 | Threshold value/configurability | Absorbable into a generic settings table without a later migration (see §5D) |
+| DECISION-08 | Re-audit the 38 unverified screens | Process decision; core entity list is already de-risked by Excel for expense/budget (§5) |
+| DECISION-10 (remainder) | Period reopen path, rejection-reason requirement, concurrent-session enforcement | Nullable fields / policy flags — cheap to add without disturbing the core schema shape |
+| DECISION-11 | Audit log scope (narrow vs. platform-wide) | A narrow, extensible starting schema (§5D) works under either eventual answer |
+| DECISION-12 | Notification channel/content | No dedicated schema exists yet in any source; purely additive later |
+| DECISION-14 | Component library: build vs. adopt | Frontend-only |
+| DECISION-15 | Design tokens | Frontend-only |
+| DECISION-16 | Mobile nav parity | Frontend-only |
+| DECISION-17 | Tablet breakpoint | Frontend-only |
+| CONFLICT-E2 | "Uzum Bank" payment method | Payment Method is already a lookup table (§5D) — adding a row is a data change, not a schema change |
+
+**Count: 13**
+
+### C. CAN DECIDE LATER — does not affect current architecture
+| ID | Title | Why it's deferrable |
+|---|---|---|
+| DECISION-18 | Stray "+ New Payment" button in Admin shell | Cosmetic defect, naturally resolved as a side effect of DECISION-01 |
+| DECISION-19 | Route slug naming | Cheap to rename later; depends on framework chosen in DECISION-E |
+| DECISION-20 | Phase-grouping assumption | Organizational only; does not change any screen's actual content |
+
+**Count: 3**
+
+**Total check: 5 + 13 + 3 = 21.** ✓
+
+---
+
+## 3. HUMAN DECISION CARDS — MUST DECIDE NOW
+
+--------------------------------------------------
+
+**DECISION ID:** DECISION-A
+
+**TITLE:** Branch count reconciliation — 2 (Excel) vs. 4+ (Figma)
+
+**WHY THIS DECISION IS REQUIRED:** Determines whether `Branch` is modeled as a small, fixed 2-row reference set or as a fully admin-manageable entity, and whether Phase 16's schema needs to support future branch creation.
+
+**CURRENT EVIDENCE:**
+**SOURCE 1 (Excel, `PROJECT_REQUIREMENTS.md` §5–6):** Exactly 2 branches — Sayxun, Xalqlar do'stligi — confirmed across all 12 worksheets, consistently, with no evidence of a self-service "add a branch" workflow anywhere in the real process today.
+**SOURCE 2 (Figma, `PHASE_15_DEVELOPMENT_SPECIFICATION.md` §6.1, Executive Dashboard `1:855` and Expense list `1:1704`):** At least 4 branch names appear — Sayxun, Xalqlar do'stligi, Yunusobod, Chilonzor — in the "Filiallar Kesimida" panel and the Expense list's Filial column.
+
+**CONFLICT:** CONFLICT-E1. Unclear whether Yunusobod/Chilonzor are real planned expansion, sample/placeholder data typed into the mockup, or leftover demo content. Neither source can settle this alone.
+
+**OPTION A: Freeze at 2 branches, no admin UI for branch creation in V1.**
+Advantages: Matches the confirmed real operating reality exactly; simplest schema and simplest V1 build.
+Risks: If Yunusobod/Chilonzor represent genuine near-term expansion, V1 will need rework and a later admin UI addition.
+Database impact: `Branch` still modeled as a first-class FK'd entity (not hardcoded), but seeded with only 2 rows; no "create branch" endpoint/UI shipped.
+Product impact: Figma's implied branch-management admin screens are descoped or stubbed for V1.
+
+**OPTION B: Build Branch as a fully admin-manageable entity from V1 (create/edit/deactivate), seeded with the 2 confirmed branches.**
+Advantages: Matches Figma's 4-branch screens and implied admin capability; low incremental schema cost since Branch is already first-class per Excel.
+Risks: Builds a create-branch admin capability whose need is `NOT VERIFIED`; wasted scope if Yunusobod/Chilonzor are just placeholder data.
+Database impact: Same table shape as Option A; the only difference is whether an admin "add branch" endpoint/UI ships in V1.
+Product impact: A real Filiallar (branches) management feature ships in the Admin module.
+
+**OPTION C: Model Branch as a dynamic, first-class entity in the schema (future-ready), but ship V1 with only 2 seeded branches and no "add branch" UI — turn the admin capability on later without a schema migration.**
+Advantages: Combines Option A's scope discipline with Option B's schema future-proofing; near-zero cost since Branch already needs to be first-class per Excel's confirmed relationships (§31).
+Risks: None beyond Option A's — this is a strict improvement in flexibility at negligible extra cost.
+Database impact: Identical to A/B — `Branch` as an FK'd entity supports N rows regardless; only the UI/endpoint surface differs.
+Product impact: Same V1 UI as Option A; door left open for Option B's admin feature later.
+
+**RECOMMENDATION — AI RECOMMENDATION — HUMAN APPROVAL REQUIRED:** Option C. It costs nothing extra at the schema level (Branch must be first-class regardless, per Excel's own confirmed relationships) while avoiding a commitment either way on whether Yunusobod/Chilonzor are real.
+
+**FINAL DECISION:** [OPEN — USER MUST CHOOSE]
+
+--------------------------------------------------
+
+**DECISION ID:** DECISION-B
+
+**TITLE:** Expense approval workflow — absent (Excel) vs. full 3-state queue (Figma)
+
+**WHY THIS DECISION IS REQUIRED:** Determines the core shape of the `Expense` table — a flat "entered = final" record like the real process today, or a status-workflow record with approver, threshold, and attachment fields. This is flagged in the source documents as **the sharpest conflict found in the entire audit.**
+
+**CURRENT EVIDENCE:**
+**SOURCE 1 (Excel, `PROJECT_REQUIREMENTS.md` §29 item 15, §36 CONFLICT-E4):** No per-expense approval workflow exists anywhere in the real process — confirmed by absence, no status field exists in `Jurnal` or either cashier sheet. Cashiers enter expenses directly. The Director's role does carry "Yakuniy nazorat va tasdiqlash" (final control and approval, §8), but this is exercised informally, not through a system gate.
+**SOURCE 2 (Figma, `PHASE_15_DEVELOPMENT_SPECIFICATION.md` §6.1, Expense list `1:1704` and Approval queue `1:4100`):** A full 3-state status model (Tasdiqlandi/Kutilmoqda/Rad etildi), a dedicated approval-queue screen with document attachments, and a threshold-triggered "needs extra review" escalation flag (exact threshold value not shown).
+
+**CONFLICT:** CONFLICT-E4. Figma proposes a materially stricter, more corporate control process than IT Live Academy's real day-to-day practice.
+
+**OPTION A: Build the full per-expense approval workflow exactly as Figma specifies.**
+Advantages: Matches the richer design vision; gives literal effect to the Director's confirmed "final control and approval" responsibility as a system-enforced gate rather than an informal habit.
+Risks: Materially stricter than what the real 3-person team does today — may create adoption friction; threshold value is undefined (DECISION-07); this is the single largest net-new scope item in the database.
+Database impact: `Expense` needs a status enum, approver/reviewed_at/reviewed_by fields, a polymorphic `Approval` entity (expenses + budgets share the queue per Figma's tabbed UI), and an `Attachment` entity.
+Product impact: New UI (queue, review detail, reject-reason capture) with no counterpart in the current real process.
+
+**OPTION B: Do not build per-expense approval. Expenses post directly as in Excel; keep only the confirmed budget-level approval chain (Finance Manager → Managing Director).**
+Advantages: Matches the real operating process exactly; smaller, fully source-backed V1 schema; avoids inventing an unconfirmed threshold value.
+Risks: Discards a substantially designed Figma feature (queue UI, attachments) that may reflect a genuine, newly-desired control the organization wants precisely because it's digitizing.
+Database impact: `Expense` stays a flat record; only `MonthlyBudgetLine` gets an approval-state field.
+Product impact: Approval queue/review screens descoped from V1.
+
+**OPTION C: Build the schema to support approval (status enum + `Approval` entity), but default the workflow OFF (auto-approved) to match today's real process — turn it on later via a setting, with no future migration required.**
+Advantages: Matches Excel's real default while preserving Figma's design investment; avoids a costly schema retrofit if approval is confirmed as a real requirement later.
+Risks: More upfront schema and validation-logic complexity than Option B for a feature that may never be activated.
+Database impact: Same shape as Option A (status enum, `Approval` entity), but expenses default to an auto-approved state when the org-level flag is off.
+Product impact: Approval UI ships but stays hidden/inactive by default.
+
+**RECOMMENDATION — AI RECOMMENDATION — HUMAN APPROVAL REQUIRED:** Option C. Retrofitting a status/approval model onto an already-flat `Expense` table later is one of the more disruptive schema changes possible (affects every existing row); building it now, defaulted off, is the safer hedge given how confirmed neither the "yes" nor the "no" answer currently is.
+
+**FINAL DECISION:** [OPEN — USER MUST CHOOSE]
+
+--------------------------------------------------
+
+**DECISION ID:** DECISION-C
+
+**TITLE:** Income / Students / Tuition / Refund — module scope for Phase 16
+
+**WHY THIS DECISION IS REQUIRED:** Determines whether the V1 database includes an entire second business domain (revenue side: Student, Payment/Income, Refund) alongside the confirmed expense/budget domain, or ships expense-and-budget-only.
+
+**CURRENT EVIDENCE:**
+**SOURCE 1 (Excel):** Zero income, tuition, student, or refund data anywhere in any of the 12 worksheets — confirmed by absence (`PROJECT_REQUIREMENTS.md` §29 item 16, §34, §35). The Excel is expense-and-budget-only by design.
+**SOURCE 2 (Figma, `PHASE_15_DEVELOPMENT_SPECIFICATION.md` §6.1 and §P):** Four real screens exist — Income list (`1:2331`, per-student tuition payments, payment methods including "Uzum Bank"), Student profile (`1:3245`), New payment (`1:3159`), New refund (`1:3927`) — with no backend/schema behind any of them.
+
+**CONFLICT:** Not a direct contradiction (the Excel simply doesn't cover this area) — a genuine scope question: is this a real, near-term business need, or Figma's own product-expansion vision with no current business backing? One relevant data point: Excel confirms the Fixed/Variable expense split exists specifically "for required breakeven calculation" (§12), and break-even needs revenue data that only this module could supply — but Excel itself contains no revenue figures and performs no break-even computation.
+
+**OPTION A: Include full Income/Student/Tuition/Refund entities in Phase 16 V1, matching Figma's four screens.**
+Advantages: Unblocks the break-even feature's revenue-side input (a real, Excel-confirmed need); matches already-designed screens.
+Risks: Entirely `NOT VERIFIED` against the real business — no confirmation IT Live Academy wants (or doesn't already have elsewhere) a tuition/student tracking system; largest single scope addition in the whole schema with zero source-of-truth backing.
+Database impact: Adds `Student`, `Payment`/`Income transaction`, `Refund` entities and their branch relationships — a substantial V1 schema expansion.
+Product impact: Adds an entire second business domain alongside the confirmed expense side.
+
+**OPTION B: Exclude Income/Student/Tuition/Refund from V1 entirely. Ship expense-and-budget-only, matching Excel's confirmed real scope. Revisit once a real source confirms the requirement.**
+Advantages: Zero invented scope; V1 schema stays fully source-backed; fastest to ship.
+Risks: Break-even (a real, Excel-confirmed need) stays uncomputable without revenue data; the four already-designed Figma screens sit unused for longer.
+Database impact: No Student/Income/Refund tables in V1.
+Product impact: Income/Students/Refunds nav items and screens descoped from V1 launch.
+
+**OPTION C: Include only a minimal Income/Revenue entity (a single branch × month revenue total) sufficient to feed the break-even formula, deferring full per-student/payment/refund modeling to a later phase.**
+Advantages: Unblocks break-even — the one Excel-confirmed need — with the smallest possible schema addition; defers the large, unconfirmed Student/Refund domain.
+Risks: Doesn't match Figma's actual per-student, per-payment screen designs, so it may need rework if Option A's full model is later required anyway.
+Database impact: One lightweight `Income`/`Revenue` entity (branch, month, amount); much smaller than Option A.
+Product impact: Breakeven screen becomes computable; Income list/Student profile/Refund screens remain unbuilt for now.
+
+**RECOMMENDATION — AI RECOMMENDATION — HUMAN APPROVAL REQUIRED:** Option B for the V1 freeze — ship what is actually confirmed — with Option C flagged as the fallback specifically if break-even must be computable at V1 launch. Option A's full scope should not be adopted without an independent source (TZ, stakeholder interview) confirming the need, since nothing here — Excel or Figma — actually confirms it.
+
+**FINAL DECISION:** [OPEN — USER MUST CHOOSE]
+
+--------------------------------------------------
+
+**DECISION ID:** DECISION-D
+
+**TITLE:** Final role system — 3 confirmed roles (Excel) vs. up to 5 implied (Figma)
+
+**WHY THIS DECISION IS REQUIRED:** Determines the `Role`/`Permission` schema shape — a small fixed 3-value set, or an extensible set anticipating Viewer and Administrator.
+
+**CURRENT EVIDENCE:**
+**SOURCE 1 (Excel, `PROJECT_REQUIREMENTS.md` §7–9, §32):** Exactly 3 roles, verbatim from the `Rollar` sheet, each with confirmed branch scope: "Moliya rahbari + kassir" (Madina, Sayxun), "Kassir" (Maftuna, Xalqlar do'stligi), "Direktor" (Abdulla, all branches).
+**SOURCE 2 (Figma, `PHASE_15_DEVELOPMENT_SPECIFICATION.md` §11.5, §6.1 `3:410`):** Only "Viewer (Ko'ruvchi)" is literally named as a role anywhere in the file (shown restricted from the Administratsiya module). "Administrator" is implied by copy ("admin-only") but never named as a role. "Moliya Menejeri" and "Boshqaruvchi Direktor" appear as approval-stepper step labels (`1:2638`) — a close conceptual match to Excel's "Moliya rahbari" and "Direktor," but not confirmed as formal system roles versus just the two people who happened to be logged in during that mockup.
+
+**CONFLICT:** CONFLICT-E3. Not a direct contradiction (Figma could simply be adding roles for a bigger platform) but a real gap between the confirmed-real role set and the platform's apparent design.
+
+**Sub-question carried from `PROJECT_REQUIREMENTS.md` §32 (not a lettered option — flag only, do not silently apply):** Should Madina's combined "Moliya rahbari + kassir" title be modeled as one composite role, or as two separate role-assignments (`FinanceManager` + `Cashier`) on one user account? A real second cashier-only user (Maftuna) already exists, which argues for two separate assignable roles rather than a special-cased combined role — but this is a recommendation, not a decision made here.
+
+**OPTION A: Adopt exactly the 3 confirmed Excel roles — `FinanceManager`, `Cashier`, `Director` — no Viewer or Administrator in V1.**
+Advantages: Fully source-backed, zero invented roles; simplest RBAC to implement and test.
+Risks: No read-only stakeholder role and no system-admin role distinct from Director — both plausible needs once the process moves from paper to a real login-based system that Excel's process never had to solve.
+Database impact: `Role` table seeded with exactly 3 rows.
+Product impact: Figma's Access-Denied screen (which literally displays a "Viewer" role chip) and the Administratsiya admin-only gating become unbuildable as designed.
+
+**OPTION B: Adopt 5 roles — the 3 confirmed Excel roles plus Figma's Viewer and Administrator.**
+Advantages: Matches Figma's designed screens exactly; anticipates real needs of a login-based system (e.g., a board member who only views, a system admin distinct from Director).
+Risks: Viewer and Administrator are entirely `NOT VERIFIED` against real usage — no evidence anyone at IT Live Academy needs either; risk of over-engineering.
+Database impact: `Role` table with 5 rows; more permission-matrix design work for the 2 unconfirmed roles.
+Product impact: Full Figma role surface becomes buildable.
+
+**OPTION C: Ship the 3 confirmed roles as the functional V1 set, but design `Role`/`Permission` as an extensible lookup (not a hardcoded enum) so Viewer/Administrator can be added later without a migration.**
+Advantages: Ships only source-backed roles now while keeping the door open for Figma's additional roles once confirmed; avoids both over-building and a future schema rewrite.
+Risks: Slightly more upfront design effort (permission-matrix framework must be generic, not hardcoded to 3 roles) for roles that may never be needed.
+Database impact: Proper `Role` + `Permission` tables from day one, seeded with 3 rows — good practice independent of A vs. B.
+Product impact: V1 ships a 3-role UI; Viewer/Admin screens stay stubbed/hidden until enabled.
+
+**RECOMMENDATION — AI RECOMMENDATION — HUMAN APPROVAL REQUIRED:** Option C, combined with modeling Madina's combined title as two separate role-assignments rather than a composite role. Do not rename or discard the 3 original Excel role names in the process — see the "Do not rename original roles silently" instruction.
+
+**FINAL DECISION:** [OPEN — USER MUST CHOOSE]
+
+--------------------------------------------------
+
+**DECISION ID:** DECISION-E
+
+**TITLE:** Target architecture
+
+**WHY THIS DECISION IS REQUIRED:** No frontend framework, backend, hosting model, or tenancy model has been chosen anywhere in this project. Phase 16 (Database Architecture) needs at minimum a tenancy-model answer (does every table need an `organization_id`?) to freeze a schema.
+
+**CURRENT EVIDENCE:**
+**SOURCE 1 (Excel):** No architecture signal — a spreadsheet carries none. Confirms scale only: ~500 transactions/year, 3 real users, 2 real branches, 1 real organization (`PROJECT_REQUIREMENTS.md` §28).
+**SOURCE 2 (Figma):** No architecture signal either — `PHASE_15_DEVELOPMENT_SPECIFICATION.md` §11.2 confirms this explicitly. The only indirect signal is the shell-brand inconsistency (DECISION-01) showing multiple product/tenant name variants, which is more plausibly sloppy AI-assisted mockup assembly (§2, leaked layer-name artifacts) than deliberate multi-tenant design intent.
+
+**CONFLICT:** None — pure absence, not a disagreement between sources.
+
+**OPTION A: Traditional server-rendered / monolith stack — one backend serving both API and web frontend, one relational database, single deploy unit.**
+Advantages: Simplest to build and operate for a small (3–12 user) internal financial tool; matches the confirmed real scale; fastest to ship V1.
+Risks: Less naturally supports the mobile/PWA ambitions visible in Figma's 14 mobile screens without extra later work.
+Database impact: Single relational DB (e.g., PostgreSQL), schema directly matching the confirmed entity model — no tenancy column needed.
+Product impact: Fastest path to a working V1 matching the confirmed 10-entity, 3-role, 2-branch reality.
+
+**OPTION B: Decoupled SPA/API stack — separate frontend app + REST/GraphQL backend, still single-tenant, one relational database.**
+Advantages: Cleanly separates the already-designed Figma frontend from backend logic; better fit if PWA (DECISION-04) is later confirmed in scope; standard, well-understood pattern.
+Risks: More moving parts/deploy complexity than Option A for the currently very small user base.
+Database impact: Same relational DB and schema as Option A — this choice mainly affects application-layer architecture, not table shape.
+Product impact: Matches Figma's screen-by-screen structure most directly.
+
+**OPTION C: Multi-tenant SaaS architecture — tenant-scoped data model (`organization_id` on every table), decoupled frontend/API. Only relevant if DECISION-01's "shells map to real tenants" reading is also adopted.**
+Advantages: Future-proofs the product if FINCORE is meant to be sold to other education centers, not just digitize this one organization's process.
+Risks: Entirely `NOT VERIFIED` as a real goal — nothing in either source confirms multi-tenant intent beyond the shell-naming inconsistency, which is more plausibly a mockup-assembly defect (§2 of the Figma audit) than deliberate design; adds real schema and access-control complexity for a currently single-organization product.
+Database impact: Every table gains a tenant key; materially more complex access-control layer.
+Product impact: Only justified if there is an actual, confirmed intent to sell FINCORE to multiple organizations.
+
+**RECOMMENDATION — AI RECOMMENDATION — HUMAN APPROVAL REQUIRED:** Option B — decoupled SPA/API, single-tenant relational database. Matches the confirmed small-scale, single-organization reality while still supporting the mobile/responsive Figma work, without committing to the unverified multi-tenant scope of Option C.
+
+**FINAL DECISION:** [OPEN — USER MUST CHOOSE]
+
+--------------------------------------------------
+
+---
+
+## 4. SECONDARY CONFLICT — PAYMENT METHOD (not a MUST-DECIDE-NOW item, flagged for completeness)
+
+**CONFLICT-E2** (`PROJECT_REQUIREMENTS.md` §13, §36): Excel's canonical payment-method list (6: Naqd pul, Bank o'tkazmasi, Plastik karta, Click/Payme, Korporativ karta, Boshqa) does not include "Uzum Bank," which appears on Figma's Income list (`1:2331`). Excel's generic "Bank o'tkazmasi" or "Korporativ karta" might already subsume it. Because `PaymentMethod` is modeled as a lookup table regardless (§5D below), this does not block schema freeze — it is a data-row decision, bucketed under **DECIDE BEFORE FRONTEND** (§2B).
+
+---
+
+## 5. PROPOSED DATABASE V1 SCOPE
+
+### A. SAFE TO INCLUDE NOW
+Confirmed entities, `PROJECT_REQUIREMENTS.md` §30–31 — 10 core entities, source-backed, no open decision blocks these:
+1. **Organization** (IT Live Academy)
+2. **Branch** (Sayxun, Xalqlar do'stligi) — table shape safe now; extensibility/admin-UI scope pending DECISION-A
+3. **User/Staff**
+4. **Role** — table shape safe now; seed set/extensibility pending DECISION-D
+5. **Expense Category** (Fixed/Variable typed)
+6. **Department**
+7. **Payment Method** (6 confirmed rows; "Uzum Bank" row pending CONFLICT-E2, does not block table creation)
+8. **Expense Transaction**
+9. **Monthly Budget Line** (Branch × Category × Month × Year)
+10. **Budget History structure** (append-only monthly blocks — confirmed immutability requirement, §17–18)
+
+### B. CONDITIONAL ENTITIES — each requires exactly one human decision
+| Entity/feature | Blocked by |
+|---|---|
+| Expense `Approval` entity + status enum + `Attachment` | DECISION-B |
+| `Income`/`Payment`, `Student`, `Refund` | DECISION-C |
+| Extended `Role` seed set (Viewer, Administrator) | DECISION-D |
+| `Branch` self-service creation/admin UI | DECISION-A |
+| Threshold/config table for approval escalation | DECISION-07 (register) |
+| `AuditLog` (scope: platform-wide vs. closing-only) | DECISION-11 (register) |
+| `ClosingPeriod` reopen path | DECISION-10 (register) |
+
+### C. EXCLUDED FROM V1 UNTIL CONFIRMED
+- Notifications (channel/content entirely unknown — DECISION-12)
+- PWA-specific entities: install state, offline sync tokens, manifest data (`NOT PRESENT IN FIGMA FILE` — DECISION-04)
+- Tenant-isolation columns on any table (unless DECISION-E resolves to Option C)
+- Materialized views / dedicated tables for the 6 unmatched report types (Filiallar taqqoslash, Yillik hisobot, Naqd oqim, Xarajatlar tahlili, Daromad tahlili, second Reja–fakt — DECISION-06); these can remain query-layer concerns over the entities in §5A/B rather than new tables
+
+### D. FUTURE-READY DESIGN CONSIDERATIONS (architectural stance, not unsupported tables)
+- Model `Branch` as a first-class FK'd entity, never a hardcoded enum, regardless of DECISION-A's UI-scope outcome.
+- Model `Role`/`Permission` as an extensible lookup, never a hardcoded 3-value enum, regardless of DECISION-D's seed-set outcome.
+- Model `Expense.status` as a nullable/optional enum from day one (even if the approval workflow ships disabled per DECISION-B Option C), so later activation is a data/config change, not a migration.
+- Keep `ExpenseCategory`, `PaymentMethod`, and `Department` as lookup tables (not code-baked enums), so the Sozlamalar-vs-Budjet_tarixi category-list inconsistency (`PROJECT_REQUIREMENTS.md` §11) and the Uzum Bank question (CONFLICT-E2) are resolvable by data change alone.
+- Design `AuditLog` narrowly (closing-period scope, matching the one place a checksum is actually shown — Business Rule 8) but with a generic-enough shape (actor, timestamp, entity_type, entity_id, payload) that widening it to platform-wide later (DECISION-11 Option A) is additive.
+
+---
+
+## 6. MINIMUM DECISIONS TO START PHASE 16
+
+The smallest set of decisions that must be approved before Database Architecture can begin — exactly the five cards in §3, no more:
+
+| Decision ID | Why required | What happens if unresolved |
+|---|---|---|
+| **DECISION-A** | `Branch` table's extensibility scope must be set once, since every Expense/Budget row FKs to it. | Branch entity ships ambiguous — either under-built (blocks a legitimate 4-branch future) or over-built (wasted admin UI); high odds of schema rework either way. |
+| **DECISION-B** | `Expense`'s core columns (status, approver, threshold, attachments) cannot be finalized without this — it is the single highest-risk schema item flagged in the entire audit (CONFLICT-E4, "the sharpest conflict found"). | Expense table ships either too thin (no status path, blocking a real approval need) or over-built (unused workflow columns) — and status/approval is the most disruptive kind of retrofit to a live table. |
+| **DECISION-C** | Determines whether Income/Student/Refund tables exist in V1 at all — a ±4-entity swing in schema size. | Phase 16's scope itself stays undefined by a wide margin; the break-even feature's data dependency stays unresolved either way. |
+| **DECISION-D** | `Role`/`Permission` is the foundation every other table's access rules sit on. | User/Role/Permission — and therefore every access-control decision downstream — cannot be built with confidence. |
+| **DECISION-E** | At minimum, single-tenant vs. multi-tenant must be answered — it determines whether every table needs a tenant-scoping column. | Every table in the schema is at risk of needing a tenant column retrofitted later — one of the most invasive schema changes possible, touching every table and every query. |
+
+No other open decision (§2B, §2C) blocks Phase 16 from starting. They should be resolved before their respective downstream phase (frontend, PWA, reporting UI) but not before database architecture.
+
+---
+
+*End of PHASE_15_2_BUSINESS_DECISIONS.md. No decision was made. No conflict was silently resolved. No entity was invented beyond what §5A traces to a confirmed source. PHASE 16 has not been started.*
