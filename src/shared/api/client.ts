@@ -100,7 +100,13 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     init,
   );
   if (response.status === 204) return undefined as T;
-  const payload: unknown = await response.json().catch(() => null);
+
+  // Backend ulanmagan deploymentda SPA rewrite /api/* ga ham index.html
+  // qaytaradi. JSON kutilgan joyda HTML kelsa, uni "bo‘sh javob" deb qabul
+  // qilmaymiz — aks holda ilova xatoni yutib, bo‘sh ma’lumot ko‘rsatadi.
+  const isJson = (response.headers.get('content-type') ?? '').includes('application/json');
+  const payload: unknown = isJson ? await response.json().catch(() => null) : null;
+
   if (!response.ok) {
     const parsed = apiErrorSchema.safeParse(payload);
     const errorBody: ApiErrorBody = parsed.success
@@ -109,9 +115,21 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
           message: parsed.data.message,
           ...(parsed.data.details ? { details: parsed.data.details } : {}),
         }
-      : { code: 'UNKNOWN_ERROR', message: 'Kutilmagan server xatosi.' };
+      : isJson
+        ? { code: 'UNKNOWN_ERROR', message: 'Kutilmagan server xatosi.' }
+        : {
+            code: 'API_UNAVAILABLE',
+            message: `Server API javob bermayapti (${response.status}). Demo rejimi uchun VITE_ENABLE_MOCKS=true qo‘ying yoki backendni ulang.`,
+          };
     throw new ApiError(response.status, errorBody);
   }
+
+  if (!isJson)
+    throw new ApiError(502, {
+      code: 'API_UNAVAILABLE',
+      message:
+        'Server API o‘rniga HTML qaytardi. Demo rejimi uchun VITE_ENABLE_MOCKS=true qo‘ying yoki backendni ulang.',
+    });
   try {
     assertFinancialPayload(payload);
   } catch (error) {
