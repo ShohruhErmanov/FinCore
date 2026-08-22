@@ -30,26 +30,65 @@ export function formatPercent(value: number | null | undefined, digits = 2): str
   return `${new Intl.NumberFormat('uz-UZ', { maximumFractionDigits: digits }).format(value)}%`;
 }
 
+const monthNamesUz = [
+  'yanvar',
+  'fevral',
+  'mart',
+  'aprel',
+  'may',
+  'iyun',
+  'iyul',
+  'avgust',
+  'sentabr',
+  'oktabr',
+  'noyabr',
+  'dekabr',
+];
+
+/** Tashkent vaqt mintaqasidagi kalendar sana qismlari. */
+function tashkentParts(date: Date): { day: number; month: number; year: number } | null {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tashkent',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const pick = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value);
+  const day = pick('day');
+  const month = pick('month');
+  const year = pick('year');
+  if (!day || !month || !year) return null;
+  return { day, month, year };
+}
+
+/** Jadval uchun qisqa sana: 20.08.2026 */
 export function formatDate(value: IsoDate): string {
   const [year, month, day] = value.split('-').map(Number);
   if (!year || !month || !day) return value;
-  return new Intl.DateTimeFormat('uz-UZ', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'Asia/Tashkent',
-  }).format(new Date(Date.UTC(year, month - 1, day, 12)));
+  return `${String(day).padStart(2, '0')}.${String(month).padStart(2, '0')}.${year}`;
 }
 
+/** Sarlavha uchun to‘liq sana: 20-avgust 2026 */
+export function formatDateLong(value: IsoDate): string {
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return value;
+  return `${day}-${monthNamesUz[month - 1] ?? month} ${year}`;
+}
+
+/** Sana va vaqt: 20.08.2026 19:30 */
 export function formatDateTime(value: IsoDateTime): string {
-  return new Intl.DateTimeFormat('uz-UZ', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
+  const date = new Date(value);
+  const parts = tashkentParts(date);
+  if (!parts) return value;
+  const time = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Tashkent',
     hour: '2-digit',
     minute: '2-digit',
-    timeZone: 'Asia/Tashkent',
-  }).format(new Date(value));
+    hour12: false,
+  }).format(date);
+  const { day, month, year } = parts;
+  return `${String(day).padStart(2, '0')}.${String(month).padStart(2, '0')}.${year} ${time}`;
 }
 
 export function toChartNumber(value: MoneyUzs): number {

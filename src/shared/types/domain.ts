@@ -9,41 +9,27 @@ export type PermissionCode =
   | 'expense.view_all_branches'
   | 'expense.create'
   | 'expense.edit'
-  | 'expense.correct_reverse'
-  | 'expense.submit'
-  | 'expense.approve'
-  | 'expense.reject'
   | 'budget.view'
   | 'budget.create_edit'
-  | 'budget.submit'
-  | 'budget.approve'
-  | 'revenue.view_own'
-  | 'revenue.view_all'
+  | 'revenue.view_own_branch'
+  | 'revenue.view_all_branches'
   | 'revenue.create'
-  | 'revenue.reverse'
-  | 'revenue.enter_on_behalf'
-  | 'revenue_plan.create_edit'
-  | 'revenue_plan.submit'
-  | 'revenue_plan.approve'
-  | 'reports.view'
+  | 'revenue.edit'
+  | 'revenue_plan.manage'
+  | 'import.run'
+  | 'notification.manage'
   | 'reports.view_cashiers'
-  | 'period.close'
-  | 'period.reopen'
+  | 'reports.view_own_performance'
+  | 'reports.view'
   | 'master_data.manage'
   | 'user.manage'
-  | 'role.manage'
-  | 'audit.view'
-  | 'import.run'
-  | 'import.resolve_exception';
+  | 'role.manage';
 
 export type RoleCode = 'cashier' | 'finance_manager' | 'director';
 export type UserStatus = 'active' | 'inactive' | 'blocked';
 export type ExpenseType = 'fixed' | 'variable';
-export type ExpenseStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'reversed';
-export type PlanStatus = 'draft' | 'submitted' | 'approved' | 'locked';
-export type RevenueStatus = 'posted' | 'reversed';
 export type PeriodStatus = 'open' | 'closed';
-export type Severity = 'info' | 'warning' | 'error';
+export type TrendGranularity = 'daily' | 'weekly' | 'monthly';
 
 export interface Branch {
   id: UUID;
@@ -69,6 +55,8 @@ export interface AuthenticatedUser {
   permissions: PermissionCode[];
   branchScopes: UUID[];
   writeBranchScopes: UUID[];
+  /** Oylik fix oylik — kassirlar hisobotida ishlatiladi. */
+  fixedSalaryUzs: MoneyUzs;
   lastLoginAt: IsoDateTime | null;
 }
 
@@ -119,21 +107,6 @@ export interface MasterItem {
   isActive: boolean;
 }
 
-export interface AuditEvent {
-  id: UUID;
-  occurredAt: IsoDateTime;
-  actorId: UUID;
-  actorName: string;
-  action: string;
-  entityType: string;
-  entityId: UUID | string;
-  branchId: UUID | null;
-  branchName: string | null;
-  result: 'success' | 'denied' | 'failed';
-  reason: string | null;
-  changes?: Array<{ field: string; before: string | null; after: string | null }>;
-}
-
 export interface Expense {
   id: UUID;
   transactionDate: IsoDate;
@@ -155,14 +128,65 @@ export interface Expense {
   enteredBy: UUID;
   enteredByName: string;
   comment: string | null;
-  status: ExpenseStatus;
-  isReversed: boolean;
-  reversalReason: string | null;
+  /** Excel’dan import qilingan bo‘lsa — manba varaq va qator (takroriy importni to‘xtatadi). */
   sourceSheet: string | null;
   sourceRow: number | null;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
-  audit: AuditEvent[];
+}
+
+export interface TelegramRecipient {
+  userId: UUID;
+  fullName: string;
+  /** Telegram chat ID — bo‘sh bo‘lsa, bu xodimga xabar yuborilmaydi. */
+  chatId: string;
+}
+
+export interface TelegramSettings {
+  enabled: boolean;
+  /** Token hech qachon qaytarilmaydi — faqat o‘rnatilgani ma’lum bo‘ladi. */
+  botTokenSet: boolean;
+  dailyReminderEnabled: boolean;
+  /** Toshkent vaqti bo‘yicha HH:mm. */
+  reminderTimeLocal: string;
+  monthlyReportEnabled: boolean;
+  /** Oyning nechanchi kunida hisobot yuboriladi (1–28). */
+  monthlyReportDay: number;
+  recipients: TelegramRecipient[];
+}
+
+export interface TelegramSettingsInput {
+  enabled: boolean;
+  botToken?: string | undefined;
+  dailyReminderEnabled: boolean;
+  reminderTimeLocal: string;
+  monthlyReportEnabled: boolean;
+  monthlyReportDay: number;
+  recipients: TelegramRecipient[];
+}
+
+export interface ReminderPreview {
+  businessDate: IsoDate;
+  branches: Array<{
+    branchId: UUID;
+    branchName: string;
+    totalUzs: MoneyUzs | null;
+    recipients: TelegramRecipient[];
+    message: string | null;
+  }>;
+}
+
+export interface MonthlyReportPreview {
+  periodLabel: string;
+  message: string;
+  recipients: TelegramRecipient[];
+}
+
+export interface ImportSummary {
+  imported: number;
+  skipped: number;
+  totalUzs: MoneyUzs;
+  rejected: Array<{ sourceSheet: string; sourceRow: number; message: string }>;
 }
 
 export interface ExpenseCreateInput {
@@ -189,129 +213,128 @@ export interface BudgetLine {
   plannedAmountUzs: MoneyUzs | null;
   actualAmountUzs: MoneyUzs;
   varianceUzs: MoneyUzs | null;
-  reason: string | null;
   hasPlan: boolean;
 }
 
-export interface BudgetVersion {
+export interface BudgetPlan {
   id: UUID;
   periodId: UUID;
   periodLabel: string;
-  revisionNo: number;
-  status: PlanStatus;
-  reason: string | null;
-  createdByName: string;
-  submittedByName: string | null;
-  approvedByName: string | null;
-  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+  updatedByName: string;
   lines: BudgetLine[];
 }
 
-export interface BudgetRevisionCreateInput {
-  reason: string;
-}
-
-export interface RevenuePlan {
+/** Bir kun + bir filial = bitta kunlik tushum yozuvi. */
+export interface DailyRevenue {
   id: UUID;
+  businessDate: IsoDate;
   periodId: UUID;
-  periodLabel: string;
   branchId: UUID;
   branchName: string;
-  plannedAmountUzs: MoneyUzs;
-  revisionNo: number;
-  status: PlanStatus;
-  reason: string | null;
-  submittedByName: string | null;
-  approvedByName: string | null;
+  cashUzs: MoneyUzs;
+  cardUzs: MoneyUzs;
+  transferUzs: MoneyUzs;
+  totalUzs: MoneyUzs;
+  comment: string | null;
+  enteredBy: UUID;
+  enteredByName: string;
+  createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
 }
 
-export interface RevenuePlanSummary {
-  period: AccountingPeriod;
-  expectedBranchCount: number;
-  branchesWithPlan: number;
-  planComplete: boolean;
-  totalPlannedAmountUzs: MoneyUzs;
-}
-
-export interface RevenueTransaction {
-  id: UUID;
-  receiptNo: string;
-  paymentAt: IsoDateTime;
-  paymentBusinessDate: IsoDate;
-  timePrecision: 'exact' | 'date_only';
-  periodId: UUID;
-  branchId: UUID;
-  branchName: string;
-  amountUzs: MoneyUzs;
-  paymentMethodId: UUID;
-  paymentMethodName: string;
-  collectorUserId: UUID;
-  collectorName: string;
-  enteredBy: UUID;
-  enteredByName: string;
-  enteredOnBehalf: boolean;
-  onBehalfReason: string | null;
-  externalReference: string | null;
-  description: string;
-  status: RevenueStatus;
-  reversalReason: string | null;
-  createdAt: IsoDateTime;
-  audit: AuditEvent[];
-}
-
-export interface RevenueCreateInput {
-  paymentAt: IsoDateTime;
+export interface DailyRevenueInput {
+  businessDate: IsoDate;
   branchId?: UUID;
-  amountUzs: MoneyUzs;
-  paymentMethodId: UUID;
-  collectorUserId?: UUID;
-  onBehalfReason?: string | undefined;
-  externalReference?: string | undefined;
-  description: string;
+  cashUzs: MoneyUzs;
+  cardUzs: MoneyUzs;
+  transferUzs: MoneyUzs;
+  comment?: string | undefined;
   idempotencyKey: string;
 }
 
-export interface KpiValue {
+/** Oylik tushum rejasi: filial × davr. Kunlik/haftalik reja shundan bo‘linadi. */
+export interface RevenuePlanLine {
+  id: UUID;
+  branchId: UUID;
+  branchName: string;
+  plannedAmountUzs: MoneyUzs | null;
+  actualAmountUzs: MoneyUzs;
+  varianceUzs: MoneyUzs | null;
+  completionPercent: number | null;
+  hasPlan: boolean;
+  dailyPlanUzs: MoneyUzs | null;
+}
+
+export interface RevenuePlanBoard {
+  id: UUID;
+  periodId: UUID;
+  periodLabel: string;
+  daysInMonth: number;
+  updatedAt: IsoDateTime;
+  updatedByName: string;
+  lines: RevenuePlanLine[];
+}
+
+export interface TrendPoint {
+  bucket: string;
   label: string;
-  valueUzs?: MoneyUzs;
-  valuePct?: number | null;
-  helper: string;
-  tone: 'neutral' | 'success' | 'warning' | 'danger' | 'info';
-  drilldown: { pathname: string; search: Record<string, string> };
+  planUzs: MoneyUzs;
+  actualUzs: MoneyUzs;
+}
+
+/** Excel «Xulosa» varag‘i: yillik kesim, doimiy ulushi va oylik dinamika. */
+export interface AnnualExpenseSummary {
+  year: number;
+  totalActualUzs: MoneyUzs;
+  fixedActualUzs: MoneyUzs;
+  variableActualUzs: MoneyUzs;
+  fixedSharePct: number | null;
+  totalPlanUzs: MoneyUzs;
+  varianceUzs: MoneyUzs;
+  averageMonthlyUzs: MoneyUzs;
+  averageMonthsCount: number;
+  peakMonth: { month: number; label: string; actualUzs: MoneyUzs } | null;
+  months: Array<{
+    month: number;
+    label: string;
+    fixedUzs: MoneyUzs;
+    variableUzs: MoneyUzs;
+    actualUzs: MoneyUzs;
+    planUzs: MoneyUzs;
+    varianceUzs: MoneyUzs;
+    completionPct: number | null;
+  }>;
 }
 
 export interface DashboardResponse {
   isDemo: boolean;
   period: AccountingPeriod;
   branchId: UUID | null;
+  granularity: TrendGranularity;
   expensePlanUzs: MoneyUzs;
   expenseActualUzs: MoneyUzs;
   expenseVarianceUzs: MoneyUzs;
   expenseCompletionPct: number | null;
-  revenuePlanUzs: MoneyUzs;
-  revenueActualUzs: MoneyUzs;
-  revenueGapUzs: MoneyUzs;
-  revenueOverPlanUzs: MoneyUzs;
-  collectionPct: number | null;
-  netResultUzs: MoneyUzs;
-  netMarginPct: number | null;
   fixedExpenseUzs: MoneyUzs;
   variableExpenseUzs: MoneyUzs;
-  channels: Array<{ id: UUID; name: string; amountUzs: MoneyUzs; sharePct: number | null }>;
-  monthlyTrend: Array<{ month: string; planUzs: MoneyUzs; actualUzs: MoneyUzs }>;
+  expenseTrend: TrendPoint[];
+  revenuePlanUzs: MoneyUzs;
+  revenueActualUzs: MoneyUzs;
+  revenueVarianceUzs: MoneyUzs;
+  revenueCompletionPct: number | null;
+  revenueTrend: TrendPoint[];
+  annual: AnnualExpenseSummary;
   branches: Array<{
     branchId: UUID;
     name: string;
-    planUzs: MoneyUzs;
-    actualUzs: MoneyUzs;
-    collectionPct: number | null;
+    expensePlanUzs: MoneyUzs;
+    expenseActualUzs: MoneyUzs;
+    expenseCompletionPct: number | null;
+    revenuePlanUzs: MoneyUzs;
+    revenueActualUzs: MoneyUzs;
+    revenueCompletionPct: number | null;
   }>;
-  dataQuality: {
-    status: 'healthy' | 'warning' | 'mismatch';
-    openCount: number;
-    excludedAmountUzs: MoneyUzs;
-  };
 }
 
 export interface HistoricalRef {
@@ -328,17 +351,6 @@ export interface PlanActual {
   varianceUzs: MoneyUzs | null;
   completionPercent: number | null;
   status: 'no_plan' | 'unplanned' | 'under_plan' | 'on_plan' | 'over_plan';
-}
-
-export interface RevenueKpi {
-  planComplete: boolean;
-  branchesWithPlan: number;
-  expectedBranchCount: number;
-  expectedRevenueUzs: MoneyUzs | null;
-  actualRevenueUzs: MoneyUzs;
-  shortfallUzs: MoneyUzs | null;
-  overPlanUzs: MoneyUzs | null;
-  collectionPercent: number | null;
 }
 
 export interface MonthlyReportRow {
@@ -362,179 +374,12 @@ export interface MonthlyReport {
 export interface BranchSummary {
   branch: HistoricalRef;
   expense: PlanActual;
-  revenue: RevenueKpi;
 }
 
 export interface BranchComparisonReport {
   year: number;
   months: Array<{ month: number; branches: BranchSummary[]; total: BranchSummary }>;
   annual: { branches: BranchSummary[]; total: BranchSummary };
-}
-
-export interface ProfitLossReport {
-  period: AccountingPeriod;
-  branchFilter: UUID | 'all';
-  actualRevenueUzs: MoneyUzs;
-  actualExpenseUzs: MoneyUzs;
-  netFinancialResultUzs: MoneyUzs;
-  netMarginPercent: number | null;
-  label: 'Foyda' | 'Zarar' | 'Nol natija';
-}
-
-export interface RevenueKpiSummary {
-  planComplete: boolean;
-  branchesWithPlan: number;
-  expectedBranchCount: number;
-  expectedRevenueUzs: MoneyUzs;
-  actualRevenueUzs: MoneyUzs;
-  shortfallUzs: MoneyUzs;
-  overPlanUzs: MoneyUzs;
-  collectionPercent: number | null;
-}
-
-export interface RevenueChannelSummary {
-  id: UUID;
-  paymentMethodId: UUID;
-  paymentMethodName: string;
-  amountUzs: MoneyUzs;
-  transactionCount: number;
-  sharePercent: number | null;
-  drilldownFilters: Record<string, string>;
-}
-
-export interface RevenueReportResponse {
-  period: AccountingPeriod;
-  branchFilter: UUID | 'all';
-  center: RevenueKpiSummary;
-  channels: RevenueChannelSummary[];
-  branches: Array<{
-    branchId: UUID;
-    branchName: string;
-    kpi: RevenueKpiSummary;
-    channels: RevenueChannelSummary[];
-  }>;
-  reconciliation: ReconciliationResult;
-}
-
-export interface CashierSummary {
-  collectorUserId: UUID;
-  collectorName: string;
-  branchId: UUID;
-  branchName: string;
-  isActive: boolean;
-  totalUzs: MoneyUzs;
-  transactionCount: number;
-  cashUzs: MoneyUzs;
-  cardUzs: MoneyUzs;
-  bankUzs: MoneyUzs;
-  branchSharePct: number | null;
-}
-
-export interface CashierReportResponse {
-  period: AccountingPeriod;
-  branchFilter: UUID | 'all';
-  collectorFilter: UUID | 'all';
-  items: CashierSummary[];
-  summary: {
-    totalUzs: MoneyUzs;
-    cashierCount: number;
-    inactiveCount: number;
-  };
-}
-
-export interface DataQualityException {
-  id: UUID;
-  severity: Severity;
-  issueType: string;
-  title: string;
-  sourceSheet: string;
-  sourceRow: number;
-  branchId: UUID | null;
-  branchName: string | null;
-  transactionDate: string | null;
-  amountUzs: MoneyUzs;
-  detail: string;
-  ownerName: string | null;
-  status: 'open' | 'resolved' | 'ignored';
-  createdAt: IsoDateTime;
-  resolutionReason?: string | null;
-  resolvedAt?: IsoDateTime | null;
-  correctedDate?: IsoDate | null;
-  resolvedCategoryId?: UUID | null;
-  resolvedCategoryName?: string | null;
-}
-
-export interface DataQualityResolutionInput {
-  reason: string;
-  correctedDate?: IsoDate;
-  categoryId?: UUID;
-}
-
-export interface DataQualityPageResponse extends PaginatedResponse<DataQualityException> {
-  summary: {
-    openCount: number;
-    openAmountUzs: MoneyUzs;
-  };
-}
-
-export interface ReconciliationResult {
-  id: UUID;
-  scope: string;
-  sourceCount: number;
-  sourceSumUzs: MoneyUzs;
-  targetCount: number;
-  targetSumUzs: MoneyUzs;
-  diffCount: number;
-  diffSumUzs: MoneyUzs;
-  status: 'match' | 'mismatch';
-  checkedAt: IsoDateTime;
-}
-
-export interface ImportJob {
-  id: UUID;
-  sourceName: string;
-  status: 'preview_ready' | 'running' | 'completed' | 'failed';
-  totalRows: number;
-  normalizedRows: number;
-  exceptionRows: number;
-  recoveredAmountUzs: MoneyUzs;
-  startedAt: IsoDateTime | null;
-  completedAt: IsoDateTime | null;
-  message: string;
-}
-
-export interface CloseCheck {
-  id: string;
-  label: string;
-  description: string;
-  status: 'passed' | 'warning' | 'blocked';
-  count?: number;
-  amountUzs?: MoneyUzs;
-}
-
-export interface PeriodCloseReadiness {
-  period: AccountingPeriod;
-  canClose: boolean;
-  checks: CloseCheck[];
-  snapshot: PeriodCloseSnapshot | null;
-  history: Array<{
-    id: UUID;
-    action: 'closed' | 'reopened';
-    actorName: string;
-    occurredAt: IsoDateTime;
-    reason: string;
-  }>;
-}
-
-export interface PeriodCloseSnapshot {
-  id: UUID;
-  createdAt: IsoDateTime;
-  createdByName: string;
-  expenseActualUzs: MoneyUzs;
-  revenueActualUzs: MoneyUzs;
-  netResultUzs: MoneyUzs;
-  reconciliationStatus: 'match' | 'mismatch';
-  artifacts: string[];
 }
 
 export interface PaginatedResponse<T> {

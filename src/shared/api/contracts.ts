@@ -1,38 +1,36 @@
 import type {
   AccountingPeriod,
-  AuditEvent,
   AuthenticatedUser,
   Branch,
-  BudgetRevisionCreateInput,
-  BudgetVersion,
-  CashierReportResponse,
+  BudgetLine,
+  BudgetPlan,
+  DailyRevenue,
+  DailyRevenueInput,
   DashboardResponse,
-  DataQualityPageResponse,
-  DataQualityResolutionInput,
   Expense,
   ExpenseCategory,
-  ImportJob,
   ExpenseCreateInput,
+  ImportSummary,
   MasterItem,
   MonthlyReport,
+  MonthlyReportPreview,
+  ReminderPreview,
+  TelegramSettings,
+  TelegramSettingsInput,
+  MoneyUzs,
   PaginatedResponse,
-  PeriodCloseReadiness,
-  ProfitLossReport,
-  ReconciliationResult,
   BranchComparisonReport,
+  RevenuePlanBoard,
   RoleCode,
   PermissionCode,
   RolePermissionMatrix,
-  RevenueCreateInput,
-  RevenuePlan,
-  RevenuePlanSummary,
-  RevenueReportResponse,
-  RevenueTransaction,
+  TrendGranularity,
   UserCreateInput,
   UserAccessUpdateInput,
   UserDirectoryItem,
   UserStatus,
 } from '@/shared/types/domain';
+import type { CashierReport } from '@/features/reports/cashier-report';
 import { api } from './client';
 
 export const authApi = {
@@ -56,8 +54,10 @@ export const referenceApi = {
 };
 
 export const dashboardApi = {
-  get: (query: { period: string; branch: string }, signal?: AbortSignal) =>
-    api.get<DashboardResponse>('/reports/dashboard', query, signal),
+  get: (
+    query: { period: string; branch: string; granularity: TrendGranularity },
+    signal?: AbortSignal,
+  ) => api.get<DashboardResponse>('/reports/dashboard', query, signal),
 };
 
 export const reportApi = {
@@ -65,8 +65,8 @@ export const reportApi = {
     api.get<MonthlyReport>('/reports/monthly', query, signal),
   branchComparison: (query: { year: string | number }, signal?: AbortSignal) =>
     api.get<BranchComparisonReport>('/reports/branch-comparison', query, signal),
-  profitLoss: (query: { period: string; branch: string }, signal?: AbortSignal) =>
-    api.get<ProfitLossReport>('/reports/profit-loss', query, signal),
+  cashiers: (query: { period: string; branch: string }, signal?: AbortSignal) =>
+    api.get<CashierReport>('/reports/cashiers', query, signal),
 };
 
 export const expenseApi = {
@@ -77,74 +77,49 @@ export const expenseApi = {
   create: (input: ExpenseCreateInput) => api.post<Expense>('/expenses', input),
   update: (id: string, input: Partial<ExpenseCreateInput>) =>
     api.patch<Expense>(`/expenses/${id}`, input),
-  reverse: (id: string, reason: string) => api.post<Expense>(`/expenses/${id}/correct`, { reason }),
 };
 
 export const budgetApi = {
-  list: (periodId: string, signal?: AbortSignal) =>
-    api.get<BudgetVersion[]>(`/budget-periods/${periodId}/versions`, undefined, signal),
-  createRevision: (periodId: string, input: BudgetRevisionCreateInput) =>
-    api.post<BudgetVersion>(`/budget-periods/${periodId}/versions`, input),
-  detail: (id: string, signal?: AbortSignal) =>
-    api.get<BudgetVersion>(`/budget-versions/${id}`, undefined, signal),
+  get: (periodId: string, signal?: AbortSignal) =>
+    api.get<BudgetPlan>(`/budget-plans/${periodId}`, undefined, signal),
   saveLines: (
-    id: string,
-    lines: Array<
-      Pick<
-        BudgetVersion['lines'][number],
-        'branchId' | 'categoryId' | 'plannedAmountUzs' | 'reason'
-      >
-    >,
-  ) => api.put<BudgetVersion>(`/budget-versions/${id}/lines`, { lines }),
-  submit: (id: string) => api.post<BudgetVersion>(`/budget-versions/${id}/submit`),
-  approve: (id: string) => api.post<BudgetVersion>(`/budget-versions/${id}/approve`),
+    periodId: string,
+    lines: Array<Pick<BudgetLine, 'branchId' | 'categoryId' | 'plannedAmountUzs'>>,
+  ) => api.put<BudgetPlan>(`/budget-plans/${periodId}/lines`, { lines }),
+};
+
+export const notificationApi = {
+  settings: (signal?: AbortSignal) =>
+    api.get<TelegramSettings>('/notifications/telegram', undefined, signal),
+  saveSettings: (input: TelegramSettingsInput) =>
+    api.put<TelegramSettings>('/notifications/telegram', input),
+  reminderPreview: (date: string, signal?: AbortSignal) =>
+    api.get<ReminderPreview>('/notifications/reminder-preview', { date }, signal),
+  monthlyPreview: (period: string, signal?: AbortSignal) =>
+    api.get<MonthlyReportPreview>('/notifications/monthly-preview', { period }, signal),
+  sendTest: (chatId: string) =>
+    api.post<{ delivered: boolean; chatId: string; note: string }>(
+      '/notifications/telegram/test',
+      { chatId },
+    ),
+};
+
+export const importApi = {
+  expenses: (rows: unknown[]) => api.post<ImportSummary>('/imports/expenses', { rows }),
 };
 
 export const revenueApi = {
-  plans: (periodId: string, signal?: AbortSignal) =>
-    api.get<RevenuePlan[]>('/revenue-plans', { periodId }, signal),
-  planSummary: (periodId: string, signal?: AbortSignal) =>
-    api.get<RevenuePlanSummary>('/revenue-plans/summary', { periodId }, signal),
-  plan: (id: string, signal?: AbortSignal) =>
-    api.get<RevenuePlan>(`/revenue-plans/${id}`, undefined, signal),
-  createPlan: (input: Partial<RevenuePlan>) => api.post<RevenuePlan>('/revenue-plans', input),
-  updatePlan: (id: string, input: { plannedAmountUzs: string; reason: string }) =>
-    api.patch<RevenuePlan>(`/revenue-plans/${id}`, input),
-  submitPlan: (id: string) => api.post<RevenuePlan>(`/revenue-plans/${id}/submit`),
-  approvePlan: (id: string) => api.post<RevenuePlan>(`/revenue-plans/${id}/approve`),
-  transactions: (query: Record<string, string | number | undefined>, signal?: AbortSignal) =>
-    api.get<PaginatedResponse<RevenueTransaction>>('/revenue-transactions', query, signal),
-  transaction: (id: string, signal?: AbortSignal) =>
-    api.get<RevenueTransaction>(`/revenue-transactions/${id}`, undefined, signal),
-  create: (input: RevenueCreateInput) =>
-    api.post<RevenueTransaction>('/revenue-transactions', input),
-  reverse: (id: string, reason: string) =>
-    api.post<RevenueTransaction>(`/revenue-transactions/${id}/reverse`, { reason }),
-  report: (query: { periodId: string; branch: string }, signal?: AbortSignal) =>
-    api.get<RevenueReportResponse>('/reports/revenue', query, signal),
-  cashiers: (query: Record<string, string | undefined>, signal?: AbortSignal) =>
-    api.get<CashierReportResponse>('/reports/cashiers', query, signal),
-};
-
-export const operationsApi = {
-  exceptions: (query: Record<string, string | number | undefined>, signal?: AbortSignal) =>
-    api.get<DataQualityPageResponse>('/reports/data-quality', query, signal),
-  reconciliations: (signal?: AbortSignal) =>
-    api.get<ReconciliationResult[]>('/reconciliations', undefined, signal),
-  latestImport: (signal?: AbortSignal) => api.get<ImportJob>('/imports/latest', undefined, signal),
-  runLegacyImport: () => api.post<ImportJob>('/imports/legacy-normalize'),
-  resolveException: (id: string, input: DataQualityResolutionInput) =>
-    api.post<DataQualityPageResponse['items'][number]>(`/data-quality-exceptions/${id}/resolve`, {
-      ...input,
-    }),
-  readiness: (periodId: string, signal?: AbortSignal) =>
-    api.get<PeriodCloseReadiness>(`/periods/${periodId}/readiness`, undefined, signal),
-  close: (periodId: string, note: string) =>
-    api.post<PeriodCloseReadiness>(`/periods/${periodId}/close`, { note }),
-  reopen: (periodId: string, reason: string) =>
-    api.post<PeriodCloseReadiness>(`/periods/${periodId}/reopen`, { reason }),
-  audit: (query: Record<string, string | number | undefined>, signal?: AbortSignal) =>
-    api.get<PaginatedResponse<AuditEvent>>('/audit-logs', query, signal),
+  list: (query: Record<string, string | number | undefined>, signal?: AbortSignal) =>
+    api.get<PaginatedResponse<DailyRevenue>>('/daily-revenues', query, signal),
+  detail: (id: string, signal?: AbortSignal) =>
+    api.get<DailyRevenue>(`/daily-revenues/${id}`, undefined, signal),
+  create: (input: DailyRevenueInput) => api.post<DailyRevenue>('/daily-revenues', input),
+  update: (id: string, input: Partial<DailyRevenueInput>) =>
+    api.patch<DailyRevenue>(`/daily-revenues/${id}`, input),
+  plan: (periodId: string, signal?: AbortSignal) =>
+    api.get<RevenuePlanBoard>(`/revenue-plans/${periodId}`, undefined, signal),
+  savePlan: (periodId: string, lines: Array<{ branchId: string; plannedAmountUzs: MoneyUzs | null }>) =>
+    api.put<RevenuePlanBoard>(`/revenue-plans/${periodId}`, { lines }),
 };
 
 type MasterResource = 'categories' | 'departments' | 'payment-methods';
@@ -165,6 +140,8 @@ export const adminApi = {
   createUser: (input: UserCreateInput) => api.post<AuthenticatedUser>('/users', input),
   updateUserAccess: (id: string, input: UserAccessUpdateInput) =>
     api.put<AuthenticatedUser>(`/users/${id}/access`, input),
+  updateUserSalary: (id: string, fixedSalaryUzs: MoneyUzs) =>
+    api.patch<AuthenticatedUser>(`/users/${id}/salary`, { fixedSalaryUzs }),
   updateUserStatus: (id: string, status: UserStatus) =>
     api.patch<AuthenticatedUser>(`/users/${id}/status`, { status }),
 };

@@ -11,3 +11,4 @@ test-results
 .DS_Store
 .codex/*
 !.codex/config.example.toml
+.claude/

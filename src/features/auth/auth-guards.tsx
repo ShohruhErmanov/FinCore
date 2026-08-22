@@ -26,7 +26,15 @@ export function ProtectedRoute() {
   return <Outlet />;
 }
 
-export function PermissionRoute({ permission }: { permission: PermissionCode }) {
+/** `permission` ro‘yxat bo‘lsa — kamida bittasi yetarli. */
+export function PermissionRoute({
+  permission,
+}: {
+  permission: PermissionCode | PermissionCode[];
+}) {
   const { hasPermission } = useAuth();
-  return hasPermission(permission) ? <Outlet /> : <AccessDenied />;
+  const allowed = Array.isArray(permission)
+    ? permission.some((code) => hasPermission(code))
+    : hasPermission(permission);
+  return allowed ? <Outlet /> : <AccessDenied />;
 }

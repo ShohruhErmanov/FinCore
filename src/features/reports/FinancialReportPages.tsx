@@ -1,14 +1,4 @@
 import { useQuery } from '@tanstack/react-query';
-import {
-  ArrowRight,
-  BadgeAlert,
-  Calculator,
-  CheckCircle2,
-  Scale,
-  TrendingDown,
-  TrendingUp,
-} from 'lucide-react';
-import { useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   Bar,
@@ -20,7 +10,9 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { Download } from 'lucide-react';
 import { getApiErrorMessage } from '@/shared/api/client';
+import { downloadCsv } from '@/shared/lib/csv';
 import { referenceApi, reportApi } from '@/shared/api/contracts';
 import { queryKeys } from '@/shared/api/query-keys';
 import { routes } from '@/shared/config/routes';
@@ -33,17 +25,15 @@ import type {
   MonthlyReport,
   MonthlyReportRow,
   PlanActual,
-  ProfitLossReport,
-  RevenueKpi,
 } from '@/shared/types/domain';
 import {
   Alert,
   Breadcrumbs,
+  Button,
   Card,
   EmptyState,
   ErrorState,
   FormField,
-  KpiCard,
   LoadingState,
   MoneyText,
   PageHeader,
@@ -243,6 +233,45 @@ function MonthlyCell({
   );
 }
 
+function exportMonthlyReport(report: MonthlyReport) {
+  const typeLabel = (type: ExpenseType) => (type === 'fixed' ? 'Doimiy' : 'O‘zgaruvchan');
+  const rows: Array<Array<string | number | null>> = [
+    [
+      'Kategoriya',
+      'Turi',
+      ...monthLongNames.flatMap((month) => [`${month} reja`, `${month} fakt`]),
+      'Yillik reja',
+      'Yillik fakt',
+      'Farq (reja−fakt)',
+    ],
+  ];
+  for (const type of ['fixed', 'variable'] as ExpenseType[])
+    for (const row of report.rows.filter((item) => item.category.expenseTypeSnapshot === type))
+      rows.push([
+        row.category.name,
+        typeLabel(type),
+        ...row.months.flatMap((month) => [
+          month.planActual.plannedAmountUzs,
+          month.planActual.actualAmountUzs,
+        ]),
+        row.annual.plannedAmountUzs,
+        row.annual.actualAmountUzs,
+        row.annual.varianceUzs,
+      ]);
+  const totalRow = (label: string, total: PlanActual) => [
+    label,
+    '',
+    ...Array.from({ length: 24 }, () => ''),
+    total.plannedAmountUzs,
+    total.actualAmountUzs,
+    total.varianceUzs,
+  ];
+  rows.push(totalRow('DOIMIY JAMI', report.totals.fixed));
+  rows.push(totalRow('O‘ZGARUVCHAN JAMI', report.totals.variable));
+  rows.push(totalRow('UMUMIY JAMI', report.totals.overall));
+  downloadCsv(`oylik-hisobot-${report.year}`, rows);
+}
+
 export function MonthlyReportPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const year = searchParams.get('year') ?? '2026';
@@ -264,6 +293,15 @@ export function MonthlyReportPage() {
       <PageHeader
         title="Oylik plan–fakt hisoboti"
         description="Kategoriya × oy kesimidagi server agregatlari. Har bir fakt katagidan filtrlangan jurnalga o‘ting."
+        actions={
+          <Button
+            variant="secondary"
+            disabled={!reportQuery.data?.rows.length}
+            onClick={() => reportQuery.data && exportMonthlyReport(reportQuery.data)}
+          >
+            <Download className="h-4 w-4" /> CSV yuklab olish
+          </Button>
+        }
       />
       <ReportFilters
         year={year}
@@ -403,35 +441,37 @@ function MonthlyReportContent({ report }: { report: MonthlyReport }) {
   );
 }
 
-function RevenueKpiBlock({ data }: { data: RevenueKpi }) {
-  return (
-    <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-      <div>
-        <dt className="text-xs text-muted">Tushum rejasi</dt>
-        <dd className="mt-1 font-semibold text-ink">
-          <MoneyText value={data.expectedRevenueUzs} compact />
-        </dd>
-      </div>
-      <div>
-        <dt className="text-xs text-muted">Haqiqiy tushum</dt>
-        <dd className="mt-1 font-semibold text-ink">
-          <MoneyText value={data.actualRevenueUzs} compact />
-        </dd>
-      </div>
-      <div>
-        <dt className="text-xs text-muted">Yetishmagan</dt>
-        <dd className="mt-1 font-semibold text-warning">
-          <MoneyText value={data.shortfallUzs} compact />
-        </dd>
-      </div>
-      <div>
-        <dt className="text-xs text-muted">Yig‘ilish</dt>
-        <dd className="mt-1 font-semibold text-ink">
-          <PercentText value={data.collectionPercent} />
-        </dd>
-      </div>
-    </dl>
-  );
+function exportBranchComparison(report: BranchComparisonReport) {
+  const branchNames = report.annual.branches.map((item) => item.branch.name);
+  const rows: Array<Array<string | number | null>> = [
+    [
+      'Oy',
+      ...branchNames.flatMap((name) => [`${name} fakt`, `${name} reja`]),
+      'Jami fakt',
+      'Jami reja',
+      'Farq (reja−fakt)',
+      'Bajarilish %',
+    ],
+  ];
+  const line = (
+    label: string,
+    branches: BranchComparisonReport['annual']['branches'],
+    total: BranchComparisonReport['annual']['total'],
+  ) => [
+    label,
+    ...report.annual.branches.flatMap((annualBranch) => {
+      const found = branches.find((item) => item.branch.id === annualBranch.branch.id);
+      return [found?.expense.actualAmountUzs ?? '0', found?.expense.plannedAmountUzs ?? '0'];
+    }),
+    total.expense.actualAmountUzs,
+    total.expense.plannedAmountUzs,
+    total.expense.varianceUzs,
+    total.expense.completionPercent,
+  ];
+  for (const month of report.months)
+    rows.push(line(monthLongNames[month.month - 1] ?? String(month.month), month.branches, month.total));
+  rows.push(line('JAMI (yil)', report.annual.branches, report.annual.total));
+  downloadCsv(`filiallar-taqqoslash-${report.year}`, rows);
 }
 
 export function BranchComparisonPage() {
@@ -448,7 +488,16 @@ export function BranchComparisonPage() {
       />
       <PageHeader
         title="Filiallar taqqoslash"
-        description="Sayxun va Xalqlar do‘stligi xarajat hamda tushum reja-faktlarini bitta source of truth’dan solishtiring."
+        description="Sayxun va Xalqlar do‘stligi xarajat reja-faktlarini bitta source of truth’dan solishtiring."
+        actions={
+          <Button
+            variant="secondary"
+            disabled={!reportQuery.data?.months.length}
+            onClick={() => reportQuery.data && exportBranchComparison(reportQuery.data)}
+          >
+            <Download className="h-4 w-4" /> CSV yuklab olish
+          </Button>
+        }
       />
       <ReportFilters
         year={year}
@@ -505,7 +554,6 @@ function BranchComparisonContent({ report }: { report: BranchComparisonReport })
             description={`${report.year} yil server agregati`}
           >
             <PlanActualSummary title="Xarajat reja-fakt" data={summary.expense} />
-            <RevenueKpiBlock data={summary.revenue} />
           </Card>
         ))}
       </div>
@@ -586,7 +634,7 @@ function BranchComparisonContent({ report }: { report: BranchComparisonReport })
                 <th className="px-4 py-3 text-right">Jami fakt</th>
                 <th className="px-4 py-3 text-right">Jami reja</th>
                 <th className="px-4 py-3 text-right">Farq</th>
-                <th className="px-4 py-3 text-right">Tushum yig‘ilishi</th>
+                <th className="px-4 py-3 text-right">Bajarilish</th>
               </tr>
             </thead>
             <tbody>
@@ -628,7 +676,7 @@ function BranchComparisonContent({ report }: { report: BranchComparisonReport })
                     )}
                   </td>
                   <td className="px-4 py-3 text-right font-semibold">
-                    <PercentText value={month.total.revenue.collectionPercent} />
+                    <PercentText value={month.total.expense.completionPercent} />
                   </td>
                 </tr>
               ))}
@@ -636,198 +684,6 @@ function BranchComparisonContent({ report }: { report: BranchComparisonReport })
           </table>
         </div>
       </Card>
-    </>
-  );
-}
-
-export function ProfitLossReportPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const periodsQuery = useQuery({
-    queryKey: queryKeys.periods,
-    queryFn: ({ signal }) => referenceApi.periods(signal),
-    staleTime: 60_000,
-  });
-  const branchesQuery = useQuery({
-    queryKey: queryKeys.branches,
-    queryFn: ({ signal }) => referenceApi.branches(signal),
-    staleTime: 300_000,
-  });
-  const periodId =
-    searchParams.get('period') ??
-    periodsQuery.data?.find((period) => period.status === 'open')?.id ??
-    periodsQuery.data?.[0]?.id ??
-    '';
-  const branch = searchParams.get('branch') ?? 'all';
-  const reportQuery = useQuery({
-    queryKey: queryKeys.report('profit-loss', `period=${periodId}&branch=${branch}`),
-    queryFn: ({ signal }) => reportApi.profitLoss({ period: periodId, branch }, signal),
-    enabled: Boolean(periodId),
-  });
-
-  useEffect(() => {
-    if (!searchParams.get('period') && periodId) {
-      const next = new URLSearchParams(searchParams);
-      next.set('period', periodId);
-      if (!next.get('branch')) next.set('branch', 'all');
-      setSearchParams(next, { replace: true });
-    }
-  }, [periodId, searchParams, setSearchParams]);
-  const setFilter = (key: string, value: string) => {
-    const next = new URLSearchParams(searchParams);
-    next.set(key, value);
-    setSearchParams(next, { replace: true });
-  };
-
-  return (
-    <div>
-      <Breadcrumbs
-        items={[{ label: 'Hisobotlar' }, { label: 'Sof moliyaviy natija', current: true }]}
-      />
-      <PageHeader
-        title="Foyda / zarar hisoboti"
-        description="Haqiqiy tushum va haqiqiy xarajat alohida faktlar; sof moliyaviy natija serverda hisoblanadi."
-      />
-      <Card title="Hisobot filtrlari" className="mb-5">
-        <div className="grid gap-4 sm:grid-cols-2 lg:max-w-2xl">
-          <FormField label="Davr" htmlFor="pl-period">
-            <Select
-              id="pl-period"
-              value={periodId}
-              onChange={(event) => setFilter('period', event.target.value)}
-            >
-              {(periodsQuery.data ?? []).map((period) => (
-                <option key={period.id} value={period.id}>
-                  {period.label} — {period.status === 'open' ? 'Ochiq' : 'Yopiq'}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-          <FormField label="Filial" htmlFor="pl-branch">
-            <Select
-              id="pl-branch"
-              value={branch}
-              onChange={(event) => setFilter('branch', event.target.value)}
-            >
-              <option value="all">Barchasi</option>
-              {(branchesQuery.data ?? []).map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-        </div>
-      </Card>
-      {reportQuery.isLoading ? <LoadingState label="Sof moliyaviy natija hisoblanmoqda…" /> : null}
-      {reportQuery.isError ? (
-        <ErrorState
-          message={getApiErrorMessage(reportQuery.error)}
-          onRetry={() => void reportQuery.refetch()}
-        />
-      ) : null}
-      {reportQuery.data ? <ProfitLossContent report={reportQuery.data} /> : null}
-    </div>
-  );
-}
-
-function ProfitLossContent({ report }: { report: ProfitLossReport }) {
-  const positive = BigInt(report.netFinancialResultUzs) > 0n;
-  const negative = BigInt(report.netFinancialResultUzs) < 0n;
-  const branchSearch = report.branchFilter === 'all' ? 'all' : report.branchFilter;
-  return (
-    <>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <KpiCard
-          label="Haqiqiy tushum"
-          value={<MoneyText value={report.actualRevenueUzs} />}
-          helper="Faqat posted tushumlar; bu o‘z-o‘zidan foyda emas."
-          tone="info"
-          to={drilldownUrl(routes.revenueTransactions, {
-            period: report.period.id,
-            branch: branchSearch,
-            status: 'posted',
-          })}
-        />
-        <KpiCard
-          label="Haqiqiy xarajat"
-          value={<MoneyText value={report.actualExpenseUzs} />}
-          helper="Tanlangan davr va filialning haqiqiy xarajatlari."
-          tone="warning"
-          to={drilldownUrl(routes.expenses, {
-            year: String(report.period.year),
-            month: String(report.period.month),
-            branch: branchSearch,
-            status: 'approved',
-          })}
-        />
-        <KpiCard
-          label="Sof moliyaviy natija"
-          value={<MoneyText value={report.netFinancialResultUzs} />}
-          helper={`Server tasnifi: ${report.label}. Tushum − xarajat.`}
-          tone={positive ? 'success' : negative ? 'danger' : 'neutral'}
-        />
-        <KpiCard
-          label="Sof marja"
-          value={<PercentText value={report.netMarginPercent} />}
-          helper="Sof natija / haqiqiy tushum; maxraj 0 bo‘lsa —."
-          tone={positive ? 'success' : negative ? 'danger' : 'neutral'}
-        />
-      </div>
-      <Card
-        title="Hisoblash izohi"
-        description={`${report.period.label} · ${report.branchFilter === 'all' ? 'Barcha filiallar' : 'Tanlangan filial'}`}
-        className="mt-5"
-      >
-        <div className="grid gap-5 lg:grid-cols-[1fr_auto_1fr_auto_1fr] lg:items-center">
-          <div className="rounded-card bg-sky-50 p-5 text-center">
-            <TrendingUp className="mx-auto h-6 w-6 text-info" />
-            <p className="mt-2 text-sm font-semibold text-sky-900">Haqiqiy tushum</p>
-            <p className="mt-2 text-xl font-bold text-ink">
-              <MoneyText value={report.actualRevenueUzs} />
-            </p>
-          </div>
-          <span className="text-center text-2xl font-bold text-muted">−</span>
-          <div className="rounded-card bg-amber-50 p-5 text-center">
-            <TrendingDown className="mx-auto h-6 w-6 text-warning" />
-            <p className="mt-2 text-sm font-semibold text-amber-900">Haqiqiy xarajat</p>
-            <p className="mt-2 text-xl font-bold text-ink">
-              <MoneyText value={report.actualExpenseUzs} />
-            </p>
-          </div>
-          <span className="text-center text-2xl font-bold text-muted">=</span>
-          <div
-            className={cn(
-              'rounded-card p-5 text-center',
-              positive ? 'bg-green-50' : negative ? 'bg-red-50' : 'bg-slate-50',
-            )}
-          >
-            {positive ? (
-              <CheckCircle2 className="mx-auto h-6 w-6 text-success" />
-            ) : negative ? (
-              <BadgeAlert className="mx-auto h-6 w-6 text-danger" />
-            ) : (
-              <Scale className="mx-auto h-6 w-6 text-muted" />
-            )}
-            <p className="mt-2 text-sm font-semibold text-ink">{report.label}</p>
-            <p className="mt-2 text-xl font-bold text-ink">
-              <MoneyText value={report.netFinancialResultUzs} />
-            </p>
-          </div>
-        </div>
-        <Alert title="Terminologiya himoyasi" tone="info" className="mt-5">
-          Tushgan pul <strong>“sof foyda”</strong> deb belgilanmaydi. Foyda yoki zarar faqat haqiqiy
-          tushumdan haqiqiy xarajat ayrilgandan keyin aniqlanadi.
-        </Alert>
-      </Card>
-      <div className="mt-5 flex justify-end">
-        <Link
-          className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline"
-          to={routes.monthlyReport}
-        >
-          <Calculator className="h-4 w-4" /> Xarajat plan-fakt tafsiloti{' '}
-          <ArrowRight className="h-4 w-4" />
-        </Link>
-      </div>
     </>
   );
 }

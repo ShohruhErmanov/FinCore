@@ -11,6 +11,10 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined;
+          // exceljs faqat Excel import sahifasida kerak — umumiy vendor’ga
+          // qo‘shilmasin, aks holda har sahifada ~900 KB ortiqcha yuklanadi.
+          if (/[\\/]node_modules[\\/](exceljs|unzipper|archiver|jszip|saxes)/.test(id))
+            return undefined;
           if (/[\\/]node_modules[\\/](recharts|d3-|victory-vendor)/.test(id))
             return 'vendor-charts';
           if (

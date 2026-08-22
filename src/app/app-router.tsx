@@ -20,10 +20,18 @@ const ExpenseDetailPage = lazy(async () => ({
   default: (await loadExpensePages()).ExpenseDetailPage,
 }));
 const loadBudgetPages = () => import('@/features/budgets/BudgetPages');
-const BudgetListPage = lazy(async () => ({ default: (await loadBudgetPages()).BudgetListPage }));
-const BudgetDetailPage = lazy(async () => ({
-  default: (await loadBudgetPages()).BudgetDetailPage,
+const BudgetPage = lazy(async () => ({ default: (await loadBudgetPages()).BudgetPage }));
+const loadRevenuePages = () => import('@/features/revenue/RevenuePages');
+const RevenueLedgerPage = lazy(async () => ({
+  default: (await loadRevenuePages()).RevenueLedgerPage,
 }));
+const RevenueCreatePage = lazy(async () => ({
+  default: (await loadRevenuePages()).RevenueCreatePage,
+}));
+const RevenueDetailPage = lazy(async () => ({
+  default: (await loadRevenuePages()).RevenueDetailPage,
+}));
+const RevenuePlanPage = lazy(async () => ({ default: (await loadRevenuePages()).RevenuePlanPage }));
 const loadFinancialReportPages = () => import('@/features/reports/FinancialReportPages');
 const MonthlyReportPage = lazy(async () => ({
   default: (await loadFinancialReportPages()).MonthlyReportPage,
@@ -31,37 +39,14 @@ const MonthlyReportPage = lazy(async () => ({
 const BranchComparisonPage = lazy(async () => ({
   default: (await loadFinancialReportPages()).BranchComparisonPage,
 }));
-const ProfitLossReportPage = lazy(async () => ({
-  default: (await loadFinancialReportPages()).ProfitLossReportPage,
-}));
-const loadRevenuePages = () => import('@/features/revenue');
-const RevenueLedgerPage = lazy(async () => ({
-  default: (await loadRevenuePages()).RevenueLedgerPage,
-}));
-const RevenueDetailPage = lazy(async () => ({
-  default: (await loadRevenuePages()).RevenueDetailPage,
-}));
-const NewRevenuePage = lazy(async () => ({ default: (await loadRevenuePages()).NewRevenuePage }));
-const RevenuePlansPage = lazy(async () => ({
-  default: (await loadRevenuePages()).RevenuePlansPage,
-}));
-const RevenuePlanDetailPage = lazy(async () => ({
-  default: (await loadRevenuePages()).RevenuePlanDetailPage,
-}));
-const RevenueReportPage = lazy(async () => ({
-  default: (await loadRevenuePages()).RevenueReportPage,
-}));
 const CashierReportPage = lazy(async () => ({
-  default: (await loadRevenuePages()).CashierReportPage,
+  default: (await import('@/features/reports/CashierReportPage')).CashierReportPage,
 }));
-const loadOperationsPages = () => import('@/features/operations');
-const DataQualityPage = lazy(async () => ({
-  default: (await loadOperationsPages()).DataQualityPage,
+const ImportPage = lazy(async () => ({
+  default: (await import('@/features/imports/ImportPage')).ImportPage,
 }));
-const ImportsPage = lazy(async () => ({ default: (await loadOperationsPages()).ImportsPage }));
-const PeriodsPage = lazy(async () => ({ default: (await loadOperationsPages()).PeriodsPage }));
-const PeriodDetailPage = lazy(async () => ({
-  default: (await loadOperationsPages()).PeriodDetailPage,
+const NotificationsPage = lazy(async () => ({
+  default: (await import('@/features/notifications/NotificationsPage')).NotificationsPage,
 }));
 const loadAdminPages = () => import('@/features/admin');
 const CategoriesPage = lazy(async () => ({ default: (await loadAdminPages()).CategoriesPage }));
@@ -72,7 +57,6 @@ const PaymentMethodsPage = lazy(async () => ({
 const BranchesPage = lazy(async () => ({ default: (await loadAdminPages()).BranchesPage }));
 const UsersPage = lazy(async () => ({ default: (await loadAdminPages()).UsersPage }));
 const RolesPage = lazy(async () => ({ default: (await loadAdminPages()).RolesPage }));
-const AuditPage = lazy(async () => ({ default: (await loadAdminPages()).AuditPage }));
 
 function NotFoundPage() {
   return (
@@ -105,40 +89,35 @@ export function AppRouter() {
               <Route path={routes.expenseNew} element={<ExpenseCreatePage />} />
             </Route>
 
-            <Route element={<PermissionRoute permission="budget.view" />}>
-              <Route path={routes.budgets} element={<BudgetListPage />} />
-              <Route path="/budgets/:versionId" element={<BudgetDetailPage />} />
-            </Route>
-
-            <Route element={<PermissionRoute permission="revenue.view_own" />}>
-              <Route path={routes.revenueTransactions} element={<RevenueLedgerPage />} />
-              <Route path="/revenue/transactions/:transactionId" element={<RevenueDetailPage />} />
+            <Route element={<PermissionRoute permission="revenue.view_own_branch" />}>
+              <Route path={routes.revenues} element={<RevenueLedgerPage />} />
             </Route>
             <Route element={<PermissionRoute permission="revenue.create" />}>
-              <Route path={routes.revenueNew} element={<NewRevenuePage />} />
+              <Route path={routes.revenueNew} element={<RevenueCreatePage />} />
             </Route>
-            <Route element={<PermissionRoute permission="revenue_plan.create_edit" />}>
-              <Route path={routes.revenuePlans} element={<RevenuePlansPage />} />
-              <Route path="/revenue/plans/:planId" element={<RevenuePlanDetailPage />} />
+            <Route element={<PermissionRoute permission="revenue_plan.manage" />}>
+              <Route path={routes.revenuePlans} element={<RevenuePlanPage />} />
+            </Route>
+            <Route element={<PermissionRoute permission="revenue.view_own_branch" />}>
+              <Route path="/revenue/:revenueId" element={<RevenueDetailPage />} />
+            </Route>
+
+            <Route element={<PermissionRoute permission="budget.view" />}>
+              <Route path={routes.budgets} element={<BudgetPage />} />
             </Route>
 
             <Route element={<PermissionRoute permission="reports.view" />}>
               <Route path={routes.monthlyReport} element={<MonthlyReportPage />} />
               <Route path={routes.branchReport} element={<BranchComparisonPage />} />
-              <Route path={routes.profitLoss} element={<ProfitLossReportPage />} />
-              <Route path={routes.revenueReport} element={<RevenueReportPage />} />
             </Route>
-            <Route element={<PermissionRoute permission="reports.view_cashiers" />}>
-              <Route path={routes.cashiersReport} element={<CashierReportPage />} />
-            </Route>
-
-            <Route element={<PermissionRoute permission="import.run" />}>
-              <Route path={routes.dataQuality} element={<DataQualityPage />} />
-              <Route path={routes.imports} element={<ImportsPage />} />
-            </Route>
-            <Route element={<PermissionRoute permission="period.close" />}>
-              <Route path={routes.periods} element={<PeriodsPage />} />
-              <Route path="/periods/:periodId" element={<PeriodDetailPage />} />
+            <Route
+              element={
+                <PermissionRoute
+                  permission={['reports.view_cashiers', 'reports.view_own_performance']}
+                />
+              }
+            >
+              <Route path={routes.cashierReport} element={<CashierReportPage />} />
             </Route>
 
             <Route element={<PermissionRoute permission="master_data.manage" />}>
@@ -147,14 +126,17 @@ export function AppRouter() {
               <Route path={routes.paymentMethods} element={<PaymentMethodsPage />} />
               <Route path={routes.branches} element={<BranchesPage />} />
             </Route>
+            <Route element={<PermissionRoute permission="import.run" />}>
+              <Route path={routes.imports} element={<ImportPage />} />
+            </Route>
+            <Route element={<PermissionRoute permission="notification.manage" />}>
+              <Route path={routes.notifications} element={<NotificationsPage />} />
+            </Route>
             <Route element={<PermissionRoute permission="user.manage" />}>
               <Route path={routes.users} element={<UsersPage />} />
             </Route>
             <Route element={<PermissionRoute permission="role.manage" />}>
               <Route path={routes.roles} element={<RolesPage />} />
-            </Route>
-            <Route element={<PermissionRoute permission="audit.view" />}>
-              <Route path={routes.audit} element={<AuditPage />} />
             </Route>
             <Route path="*" element={<NotFoundPage />} />
           </Route>

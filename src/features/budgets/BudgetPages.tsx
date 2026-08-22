@@ -1,351 +1,36 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  AlertTriangle,
-  ArrowLeft,
-  CheckCircle2,
-  ClipboardCheck,
-  CopyPlus,
-  FilePenLine,
-  Save,
-  Send,
-  Sparkles,
-} from 'lucide-react';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { AlertTriangle, Download, Save } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { authApi, budgetApi, referenceApi } from '@/shared/api/contracts';
 import { getApiErrorMessage } from '@/shared/api/client';
 import { invalidatePlanningAggregates } from '@/shared/api/invalidation';
+import { downloadCsv } from '@/shared/lib/csv';
 import { queryKeys } from '@/shared/api/query-keys';
-import { routes } from '@/shared/config/routes';
 import { formatDateTime, formatPercent } from '@/shared/lib/format';
-import type { BudgetLine, BudgetVersion, ExpenseType } from '@/shared/types/domain';
+import type { BudgetLine, BudgetPlan, ExpenseType } from '@/shared/types/domain';
 import {
   Alert,
   Breadcrumbs,
   Button,
   Card,
   CurrencyInput,
-  DataTable,
-  EmptyState,
   ErrorState,
   FormField,
-  Input,
   LoadingState,
   LockedNotice,
   MoneyText,
   PageHeader,
   Select,
-  StatusBadge,
-  Textarea,
   VarianceText,
-  type Column,
 } from '@/shared/ui';
 
 type BudgetLineDraft = Pick<
   BudgetLine,
-  'id' | 'branchId' | 'categoryId' | 'hasPlan' | 'plannedAmountUzs' | 'reason'
+  'id' | 'branchId' | 'categoryId' | 'hasPlan' | 'plannedAmountUzs'
 >;
 
-function statusDescription(status: BudgetVersion['status']) {
-  if (status === 'draft') return 'Moliya rahbari tahrirlaydi va tasdiqqa yuboradi.';
-  if (status === 'submitted') return 'Direktor ko‘rib chiqishi va tasdiqlashi kutilmoqda.';
-  if (status === 'approved')
-    return 'Amaldagi tasdiqlangan versiya. O‘zgartirish yangi reviziya talab qiladi.';
-  return 'Davr bilan birga qulflangan tarixiy versiya.';
-}
-
-function CreateBudgetRevisionPanel({
-  periodId,
-  periodLabel,
-  sourceRevisionNo,
-  onCancel,
-  onCreated,
-}: {
-  periodId: string;
-  periodLabel: string;
-  sourceRevisionNo: number;
-  onCancel: () => void;
-  onCreated: (created: BudgetVersion) => void | Promise<void>;
-}) {
-  const [reason, setReason] = useState('');
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const createMutation = useMutation({
-    mutationFn: () => budgetApi.createRevision(periodId, { reason: reason.trim() }),
-    onSuccess: onCreated,
-  });
-
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const normalizedReason = reason.trim();
-    if (normalizedReason.length < 5) {
-      setValidationError('Reviziya sababi kamida 5 ta belgidan iborat bo‘lsin.');
-      return;
-    }
-    setValidationError(null);
-    createMutation.mutate();
-  };
-
-  return (
-    <Card
-      title="Yangi budjet reviziyasi"
-      description={`${periodLabel} · #${sourceRevisionNo} tasdiqlangan/locked versiya nusxalanadi.`}
-      className="mb-5"
-    >
-      <form className="space-y-4" onSubmit={handleSubmit}>
-        <Alert title="Server yangi draft yaratadi" tone="info">
-          Reviziya raqami serverda avtomatik beriladi. Tasdiqlangan tarix o‘zgarmaydi; yangi draft
-          eng so‘nggi tasdiqlangan yoki locked versiyadan olinadi.
-        </Alert>
-        <FormField
-          label="Reviziya sababi"
-          htmlFor={`budget-revision-reason-${periodId}`}
-          required
-          hint="Masalan: ijara xarajatlari bo‘yicha yangilangan prognoz."
-          error={validationError ?? undefined}
-        >
-          <Textarea
-            id={`budget-revision-reason-${periodId}`}
-            value={reason}
-            onChange={(event) => {
-              setReason(event.target.value);
-              if (validationError) setValidationError(null);
-            }}
-            maxLength={500}
-            aria-invalid={Boolean(validationError)}
-            aria-describedby={
-              validationError ? `budget-revision-reason-${periodId}-error` : undefined
-            }
-            placeholder="Reviziya nima sababdan kerakligini yozing"
-            disabled={createMutation.isPending}
-          />
-        </FormField>
-        {createMutation.error ? (
-          <Alert title="Reviziya yaratilmadi" tone="danger">
-            {getApiErrorMessage(createMutation.error)}
-          </Alert>
-        ) : null}
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={onCancel}
-            disabled={createMutation.isPending}
-          >
-            Bekor qilish
-          </Button>
-          <Button type="submit" loading={createMutation.isPending}>
-            <CopyPlus className="h-4 w-4" /> Draft reviziya yaratish
-          </Button>
-        </div>
-      </form>
-    </Card>
-  );
-}
-
-export function BudgetListPage() {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [revisionPanelOpen, setRevisionPanelOpen] = useState(false);
-  const meQuery = useQuery({ queryKey: queryKeys.me, queryFn: ({ signal }) => authApi.me(signal) });
-  const periodsQuery = useQuery({
-    queryKey: queryKeys.periods,
-    queryFn: ({ signal }) => referenceApi.periods(signal),
-    staleTime: 60_000,
-  });
-  const selectedPeriodId =
-    searchParams.get('period') ??
-    periodsQuery.data?.find((period) => period.status === 'open')?.id ??
-    periodsQuery.data?.[0]?.id ??
-    '';
-  const versionsQuery = useQuery({
-    queryKey: queryKeys.budgets(selectedPeriodId),
-    queryFn: ({ signal }) => budgetApi.list(selectedPeriodId, signal),
-    enabled: Boolean(selectedPeriodId),
-  });
-  const selectedPeriod = periodsQuery.data?.find((period) => period.id === selectedPeriodId);
-  const periodVersions = versionsQuery.data ?? [];
-  const sourceVersion = periodVersions
-    .filter((version) => version.status === 'approved' || version.status === 'locked')
-    .sort((a, b) => b.revisionNo - a.revisionNo)[0];
-  const inProgressVersion = periodVersions.find(
-    (version) => version.status === 'draft' || version.status === 'submitted',
-  );
-  const hasCreatePermission = Boolean(meQuery.data?.permissions.includes('budget.create_edit'));
-  const revisionBlockedReason =
-    selectedPeriod?.status === 'closed'
-      ? 'Yopiq davr uchun yangi reviziya yaratib bo‘lmaydi.'
-      : inProgressVersion
-        ? `#${inProgressVersion.revisionNo} reviziya hali ${inProgressVersion.status === 'draft' ? 'qoralama' : 'tasdiqda'}.`
-        : !sourceVersion
-          ? 'Tasdiqlangan yoki locked manba versiya mavjud emas.'
-          : undefined;
-  const canCreateRevision =
-    hasCreatePermission &&
-    selectedPeriod?.status === 'open' &&
-    Boolean(sourceVersion) &&
-    !inProgressVersion;
-
-  useEffect(() => {
-    if (!searchParams.get('period') && selectedPeriodId) {
-      const next = new URLSearchParams(searchParams);
-      next.set('period', selectedPeriodId);
-      setSearchParams(next, { replace: true });
-    }
-  }, [searchParams, selectedPeriodId, setSearchParams]);
-
-  const columns = useMemo<Column<BudgetVersion>[]>(
-    () => [
-      {
-        key: 'revision',
-        header: 'Reviziya',
-        cell: (row) => <span className="font-bold text-ink">#{row.revisionNo}</span>,
-      },
-      { key: 'period', header: 'Davr', cell: (row) => row.periodLabel },
-      { key: 'status', header: 'Holat', cell: (row) => <StatusBadge status={row.status} /> },
-      {
-        key: 'lines',
-        header: 'Qatorlar',
-        cell: (row) => <span className="tabular-nums">{row.lines.length}</span>,
-      },
-      {
-        key: 'creator',
-        header: 'Yaratgan',
-        cell: (row) => (
-          <div>
-            <p>{row.createdByName}</p>
-            <p className="mt-0.5 text-xs text-muted">{formatDateTime(row.createdAt)}</p>
-          </div>
-        ),
-      },
-      {
-        key: 'workflow',
-        header: 'Workflow',
-        cell: (row) => (
-          <span className="max-w-xs text-xs leading-5 text-muted">
-            {statusDescription(row.status)}
-          </span>
-        ),
-      },
-    ],
-    [],
-  );
-
-  return (
-    <div>
-      <Breadcrumbs items={[{ label: 'Rejalashtirish' }, { label: 'Budjet', current: true }]} />
-      <PageHeader
-        title="Budjet versiyalari"
-        description="Kategoriya × filial × davr bo‘yicha revisionli xarajat rejasi. Eski qiymat overwrite qilinmaydi."
-        actions={
-          hasCreatePermission ? (
-            <Button
-              disabled={!canCreateRevision}
-              title={revisionBlockedReason}
-              onClick={() => setRevisionPanelOpen(true)}
-            >
-              <CopyPlus className="h-4 w-4" /> Yangi reviziya
-            </Button>
-          ) : undefined
-        }
-      />
-      <Card
-        title="Hisob davri"
-        description="Ochiq va tarixiy davrlarni alohida ko‘ring."
-        className="mb-5"
-      >
-        {periodsQuery.isLoading ? <LoadingState label="Davrlar yuklanmoqda…" /> : null}
-        {periodsQuery.isError ? (
-          <ErrorState
-            message={getApiErrorMessage(periodsQuery.error)}
-            onRetry={() => void periodsQuery.refetch()}
-          />
-        ) : null}
-        {periodsQuery.data ? (
-          <div className="max-w-md">
-            <FormField label="Davr" htmlFor="budget-period-filter">
-              <Select
-                id="budget-period-filter"
-                value={selectedPeriodId}
-                onChange={(event) => {
-                  setRevisionPanelOpen(false);
-                  setSearchParams({ period: event.target.value }, { replace: true });
-                }}
-              >
-                {periodsQuery.data.map((period) => (
-                  <option key={period.id} value={period.id}>
-                    {period.label} — {period.status === 'open' ? 'Ochiq' : 'Yopiq'}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
-          </div>
-        ) : null}
-      </Card>
-
-      {inProgressVersion ? (
-        <Alert title="Davom etayotgan reviziya mavjud" tone="warning" className="mb-5">
-          #{inProgressVersion.revisionNo} reviziya{' '}
-          {inProgressVersion.status === 'draft' ? 'qoralama holatida' : 'direktor tasdig‘ida'}.
-          Yangi draft ochishdan oldin shu oqim yakunlanishi kerak.{' '}
-          <Link
-            to={routes.budgetDetail(inProgressVersion.id)}
-            className="font-semibold underline underline-offset-2"
-          >
-            Reviziyani ochish
-          </Link>
-        </Alert>
-      ) : null}
-      {revisionPanelOpen && canCreateRevision && selectedPeriod && sourceVersion ? (
-        <CreateBudgetRevisionPanel
-          key={selectedPeriod.id}
-          periodId={selectedPeriod.id}
-          periodLabel={selectedPeriod.label}
-          sourceRevisionNo={sourceVersion.revisionNo}
-          onCancel={() => setRevisionPanelOpen(false)}
-          onCreated={async (created) => {
-            setRevisionPanelOpen(false);
-            queryClient.setQueryData(queryKeys.budget(created.id), created);
-            await queryClient.invalidateQueries({ queryKey: queryKeys.budgets(created.periodId) });
-            navigate(routes.budgetDetail(created.id));
-          }}
-        />
-      ) : null}
-
-      {versionsQuery.isLoading ? <LoadingState label="Budjet versiyalari yuklanmoqda…" /> : null}
-      {versionsQuery.isError ? (
-        <ErrorState
-          message={getApiErrorMessage(versionsQuery.error)}
-          onRetry={() => void versionsQuery.refetch()}
-        />
-      ) : null}
-      {versionsQuery.data?.length === 0 ? (
-        <EmptyState
-          title="Budjet versiyasi mavjud emas"
-          description="Bu davrda reviziya uchun nusxalanadigan tasdiqlangan yoki locked budjet versiyasi mavjud emas."
-        />
-      ) : null}
-      {versionsQuery.data?.length ? (
-        <Card
-          title={`${versionsQuery.data.length} ta versiya`}
-          description="Qatorni bosib matritsa va workflow tafsilotlarini oching."
-          className="overflow-hidden"
-        >
-          <div className="-m-5">
-            <DataTable
-              rows={versionsQuery.data}
-              columns={columns}
-              caption="Budjet versiyalari"
-              onRowClick={(row) => navigate(routes.budgetDetail(row.id))}
-            />
-          </div>
-        </Card>
-      ) : null}
-    </div>
-  );
-}
-
-function getLinePresentation(line: BudgetLine | (BudgetLine & BudgetLineDraft)) {
+function getLinePresentation(line: Pick<BudgetLine, 'hasPlan' | 'plannedAmountUzs' | 'actualAmountUzs' | 'varianceUzs'>) {
   if (!line.hasPlan || line.plannedAmountUzs === null)
     return {
       label: 'Reja mavjud emas',
@@ -387,14 +72,12 @@ function BudgetLineRow({
     previewPlan === null
       ? null
       : (BigInt(previewPlan || '0') - BigInt(line.actualAmountUzs)).toString();
-  const previewLine: BudgetLine = {
-    ...line,
+  const presentation = getLinePresentation({
     hasPlan: draft.hasPlan,
     plannedAmountUzs: previewPlan,
+    actualAmountUzs: line.actualAmountUzs,
     varianceUzs: previewVariance,
-    reason: draft.reason,
-  };
-  const presentation = getLinePresentation(previewLine);
+  });
 
   return (
     <tr className="border-b border-border align-top last:border-0">
@@ -468,20 +151,6 @@ function BudgetLineRow({
           Bajarilish: {formatPercent(presentation.completion)}
         </p>
       </td>
-      <td className="min-w-64 px-4 py-3">
-        {editable && draft.hasPlan ? (
-          <Input
-            aria-label={`${line.branchName}, ${line.categoryNameSnapshot} reja sababi`}
-            value={draft.reason ?? ''}
-            onChange={(event) => onChange({ ...draft, reason: event.target.value })}
-            placeholder="Reja sababi"
-          />
-        ) : (
-          <span className="text-sm text-slate-600">
-            {draft.reason ?? (draft.hasPlan ? 'Sabab kiritilmagan' : 'Reja qatori yo‘q')}
-          </span>
-        )}
-      </td>
     </tr>
   );
 }
@@ -519,35 +188,57 @@ function SummaryBlock({
   );
 }
 
-export function BudgetDetailPage() {
-  const { versionId = '' } = useParams();
-  const navigate = useNavigate();
+function exportBudgetPlan(plan: BudgetPlan) {
+  downloadCsv(`budjet-${plan.periodLabel.replace(/\s+/g, '-').toLowerCase()}`, [
+    ['Davr', 'Kategoriya', 'Turi', 'Filial', 'Reja mavjud', 'Reja', 'Fakt', 'Farq (reja−fakt)'],
+    ...plan.lines.map((line) => [
+      plan.periodLabel,
+      line.categoryNameSnapshot,
+      line.expenseTypeSnapshot === 'fixed' ? 'Doimiy' : 'O‘zgaruvchan',
+      line.branchName,
+      line.hasPlan ? 'Ha' : 'Yo‘q',
+      line.plannedAmountUzs,
+      line.actualAmountUzs,
+      line.varianceUzs,
+    ]),
+  ]);
+}
+
+export function BudgetPage() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [drafts, setDrafts] = useState<Record<string, BudgetLineDraft>>({});
-  const [revisionPanelOpen, setRevisionPanelOpen] = useState(false);
-  const versionQuery = useQuery({
-    queryKey: queryKeys.budget(versionId),
-    queryFn: ({ signal }) => budgetApi.detail(versionId, signal),
-    enabled: Boolean(versionId),
-  });
-  const siblingPeriodId = versionQuery.data?.periodId ?? '';
-  const siblingVersionsQuery = useQuery({
-    queryKey: queryKeys.budgets(siblingPeriodId),
-    queryFn: ({ signal }) => budgetApi.list(siblingPeriodId, signal),
-    enabled: Boolean(siblingPeriodId),
-  });
   const meQuery = useQuery({ queryKey: queryKeys.me, queryFn: ({ signal }) => authApi.me(signal) });
   const periodsQuery = useQuery({
     queryKey: queryKeys.periods,
     queryFn: ({ signal }) => referenceApi.periods(signal),
     staleTime: 60_000,
   });
+  const selectedPeriodId =
+    searchParams.get('period') ??
+    periodsQuery.data?.find((period) => period.status === 'open')?.id ??
+    periodsQuery.data?.[0]?.id ??
+    '';
+  const selectedPeriod = periodsQuery.data?.find((period) => period.id === selectedPeriodId);
+  const planQuery = useQuery({
+    queryKey: queryKeys.budget(selectedPeriodId),
+    queryFn: ({ signal }) => budgetApi.get(selectedPeriodId, signal),
+    enabled: Boolean(selectedPeriodId),
+  });
 
   useEffect(() => {
-    if (versionQuery.data) {
+    if (!searchParams.get('period') && selectedPeriodId) {
+      const next = new URLSearchParams(searchParams);
+      next.set('period', selectedPeriodId);
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, selectedPeriodId, setSearchParams]);
+
+  useEffect(() => {
+    if (planQuery.data) {
       setDrafts(
         Object.fromEntries(
-          versionQuery.data.lines.map((line) => [
+          planQuery.data.lines.map((line) => [
             line.id,
             {
               id: line.id,
@@ -555,239 +246,157 @@ export function BudgetDetailPage() {
               categoryId: line.categoryId,
               hasPlan: line.hasPlan,
               plannedAmountUzs: line.plannedAmountUzs,
-              reason: line.reason,
             },
           ]),
         ),
       );
     }
-  }, [versionQuery.data]);
+  }, [planQuery.data]);
 
-  const updateCache = async (updated: BudgetVersion) => {
-    queryClient.setQueryData(queryKeys.budget(versionId), updated);
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.budgets(updated.periodId) }),
-      invalidatePlanningAggregates(queryClient),
-    ]);
-  };
   const saveMutation = useMutation({
     mutationFn: () => {
       const inputs = Object.values(drafts).map((line) => ({
         branchId: line.branchId,
         categoryId: line.categoryId,
         plannedAmountUzs: line.hasPlan ? (line.plannedAmountUzs ?? '0') : null,
-        reason: line.hasPlan ? line.reason?.trim() || null : null,
       }));
-      return budgetApi.saveLines(versionId, inputs);
+      return budgetApi.saveLines(selectedPeriodId, inputs);
     },
-    onSuccess: updateCache,
-  });
-  const submitMutation = useMutation({
-    mutationFn: () => budgetApi.submit(versionId),
-    onSuccess: updateCache,
-  });
-  const approveMutation = useMutation({
-    mutationFn: () => budgetApi.approve(versionId),
-    onSuccess: updateCache,
+    onSuccess: async (updated: BudgetPlan) => {
+      queryClient.setQueryData(queryKeys.budget(updated.periodId), updated);
+      await invalidatePlanningAggregates(queryClient);
+    },
   });
 
-  if (versionQuery.isLoading) return <LoadingState label="Budjet matritsasi yuklanmoqda…" />;
-  if (versionQuery.isError)
-    return (
-      <ErrorState
-        message={getApiErrorMessage(versionQuery.error)}
-        onRetry={() => void versionQuery.refetch()}
-      />
-    );
-  if (!versionQuery.data) return <EmptyState title="Budjet versiyasi topilmadi" />;
-
-  const version = versionQuery.data;
-  const period = periodsQuery.data?.find((item) => item.id === version.periodId);
-  const canEdit =
-    version.status === 'draft' &&
-    period?.status === 'open' &&
-    Boolean(meQuery.data?.permissions.includes('budget.create_edit'));
-  const canSubmit =
-    version.status === 'draft' &&
-    period?.status === 'open' &&
-    Boolean(meQuery.data?.permissions.includes('budget.submit'));
-  const canApprove =
-    version.status === 'submitted' &&
-    period?.status === 'open' &&
-    Boolean(meQuery.data?.permissions.includes('budget.approve'));
-  const siblingVersions = siblingVersionsQuery.data ?? [];
-  const sourceVersion = siblingVersions
-    .filter((candidate) => candidate.status === 'approved' || candidate.status === 'locked')
-    .sort((a, b) => b.revisionNo - a.revisionNo)[0];
-  const inProgressVersion = siblingVersions.find(
-    (candidate) => candidate.status === 'draft' || candidate.status === 'submitted',
-  );
-  const hasCreatePermission = Boolean(meQuery.data?.permissions.includes('budget.create_edit'));
-  const revisionBlockedReason =
-    period?.status === 'closed'
-      ? 'Yopiq davr uchun yangi reviziya yaratib bo‘lmaydi.'
-      : siblingVersionsQuery.isLoading
-        ? 'Budjet versiyalari tekshirilmoqda.'
-        : siblingVersionsQuery.isError
-          ? 'Budjet versiyalarini tekshirib bo‘lmadi.'
-          : inProgressVersion
-            ? `#${inProgressVersion.revisionNo} reviziya hali ${inProgressVersion.status === 'draft' ? 'qoralama' : 'tasdiqda'}.`
-            : !sourceVersion
-              ? 'Tasdiqlangan yoki locked manba versiya mavjud emas.'
-              : undefined;
-  const canCreateRevision =
-    hasCreatePermission &&
-    period?.status === 'open' &&
-    Boolean(sourceVersion) &&
-    !inProgressVersion &&
-    !siblingVersionsQuery.isError;
-  const mutationError = saveMutation.error ?? submitMutation.error ?? approveMutation.error;
+  const hasEditPermission = Boolean(meQuery.data?.permissions.includes('budget.create_edit'));
+  const canEdit = hasEditPermission && selectedPeriod?.status === 'open';
 
   return (
     <div>
-      <Breadcrumbs
-        items={[
-          { label: 'Budjet' },
-          { label: `${version.periodLabel} · reviziya ${version.revisionNo}`, current: true },
-        ]}
-      />
+      <Breadcrumbs items={[{ label: 'Rejalashtirish' }, { label: 'Budjet', current: true }]} />
       <PageHeader
-        title={`${version.periodLabel} budjeti`}
-        description={`Reviziya #${version.revisionNo}. ${statusDescription(version.status)}`}
-        badge={<StatusBadge status={version.status} />}
+        title="Budjet"
+        description="Kategoriya × filial × davr bo‘yicha xarajat rejasi. Qiymatlar to‘g‘ridan-to‘g‘ri tahrirlanadi."
         actions={
           <>
-            <Link
-              to={`${routes.budgets}?period=${version.periodId}`}
-              className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-semibold text-ink hover:bg-slate-50"
+            <Button
+              variant="secondary"
+              disabled={!planQuery.data?.lines.length}
+              onClick={() => planQuery.data && exportBudgetPlan(planQuery.data)}
             >
-              <ArrowLeft className="h-4 w-4" /> Versiyalarga qaytish
-            </Link>
-            {hasCreatePermission ? (
-              <Button
-                variant="secondary"
-                disabled={!canCreateRevision}
-                title={revisionBlockedReason}
-                onClick={() => setRevisionPanelOpen(true)}
-              >
-                <CopyPlus className="h-4 w-4" /> Yangi reviziya
-              </Button>
-            ) : null}
+              <Download className="h-4 w-4" /> CSV yuklab olish
+            </Button>
             {canEdit ? (
               <Button loading={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
-                <Save className="h-4 w-4" /> Draftni saqlash
-              </Button>
-            ) : null}
-            {canSubmit ? (
-              <Button
-                variant="secondary"
-                loading={submitMutation.isPending}
-                onClick={() => submitMutation.mutate()}
-              >
-                <Send className="h-4 w-4" /> Tasdiqqa yuborish
-              </Button>
-            ) : null}
-            {canApprove ? (
-              <Button loading={approveMutation.isPending} onClick={() => approveMutation.mutate()}>
-                <ClipboardCheck className="h-4 w-4" /> Tasdiqlash
+                <Save className="h-4 w-4" /> Saqlash
               </Button>
             ) : null}
           </>
         }
       />
 
-      {revisionPanelOpen && canCreateRevision && sourceVersion ? (
-        <CreateBudgetRevisionPanel
-          periodId={version.periodId}
-          periodLabel={version.periodLabel}
-          sourceRevisionNo={sourceVersion.revisionNo}
-          onCancel={() => setRevisionPanelOpen(false)}
-          onCreated={async (created) => {
-            setRevisionPanelOpen(false);
-            queryClient.setQueryData(queryKeys.budget(created.id), created);
-            await queryClient.invalidateQueries({ queryKey: queryKeys.budgets(created.periodId) });
-            navigate(routes.budgetDetail(created.id));
-          }}
-        />
-      ) : null}
-
-      {period?.status === 'closed' || version.status === 'locked' ? (
-        <LockedNotice>
-          Yopilgan davr yoki locked budjet oddiy edit bilan o‘zgarmaydi. Auditli reopen yoki yangi
-          reviziya kerak.
-        </LockedNotice>
-      ) : null}
-      {version.status === 'approved' ? (
-        <Alert title="Tasdiqlangan versiya" tone="success" className="mb-5">
-          Bu qiymatlar tarixiy source of truth. O‘zgartirish overwrite emas, yangi revision oqimi
-          orqali bajariladi.
-        </Alert>
-      ) : null}
-      {inProgressVersion && inProgressVersion.id !== version.id ? (
-        <Alert title="Davom etayotgan reviziya mavjud" tone="warning" className="mb-5">
-          #{inProgressVersion.revisionNo} reviziya{' '}
-          {inProgressVersion.status === 'draft' ? 'qoralama holatida' : 'direktor tasdig‘ida'}.
-          Yangi draft faqat shu oqim yakunlangandan keyin yaratiladi.{' '}
-          <Link
-            to={routes.budgetDetail(inProgressVersion.id)}
-            className="font-semibold underline underline-offset-2"
-          >
-            Reviziyani ochish
-          </Link>
-        </Alert>
-      ) : null}
-      {mutationError ? (
-        <Alert title="Amal bajarilmadi" tone="danger" className="mb-5">
-          {getApiErrorMessage(mutationError)}
-        </Alert>
-      ) : null}
-
-      <Card title="Reviziya sababi" className="mb-5">
-        <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
-          {version.reason ?? 'Reviziya sababi kiritilmagan.'}
-        </p>
+      <Card
+        title="Hisob davri"
+        description="Ochiq va tarixiy davrlarni alohida ko‘ring."
+        className="mb-5"
+      >
+        {periodsQuery.isLoading ? <LoadingState label="Davrlar yuklanmoqda…" /> : null}
+        {periodsQuery.isError ? (
+          <ErrorState
+            message={getApiErrorMessage(periodsQuery.error)}
+            onRetry={() => void periodsQuery.refetch()}
+          />
+        ) : null}
+        {periodsQuery.data ? (
+          <div className="max-w-md">
+            <FormField label="Davr" htmlFor="budget-period-filter">
+              <Select
+                id="budget-period-filter"
+                value={selectedPeriodId}
+                onChange={(event) =>
+                  setSearchParams({ period: event.target.value }, { replace: true })
+                }
+              >
+                {periodsQuery.data.map((period) => (
+                  <option key={period.id} value={period.id}>
+                    {period.label} — {period.status === 'open' ? 'Ochiq' : 'Yopiq'}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+          </div>
+        ) : null}
       </Card>
 
+      {selectedPeriod?.status === 'closed' ? (
+        <LockedNotice>Yopilgan davr budjeti tahrirlanmaydi, faqat ko‘rish mumkin.</LockedNotice>
+      ) : null}
+      {saveMutation.error ? (
+        <Alert title="Saqlanmadi" tone="danger" className="mb-5">
+          {getApiErrorMessage(saveMutation.error)}
+        </Alert>
+      ) : null}
+
+      {planQuery.isLoading ? <LoadingState label="Budjet matritsasi yuklanmoqda…" /> : null}
+      {planQuery.isError ? (
+        <ErrorState
+          message={getApiErrorMessage(planQuery.error)}
+          onRetry={() => void planQuery.refetch()}
+        />
+      ) : null}
+      {planQuery.data ? (
+        <BudgetPageContent
+          plan={planQuery.data}
+          drafts={drafts}
+          editable={canEdit}
+          onChangeLine={(next) => setDrafts((current) => ({ ...current, [next.id]: next }))}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function BudgetPageContent({
+  plan,
+  drafts,
+  editable,
+  onChangeLine,
+}: {
+  plan: BudgetPlan;
+  drafts: Record<string, BudgetLineDraft>;
+  editable: boolean;
+  onChangeLine: (next: BudgetLineDraft) => void;
+}) {
+  const updatedLabel = useMemo(
+    () => `${plan.updatedByName} · ${formatDateTime(plan.updatedAt)}`,
+    [plan.updatedByName, plan.updatedAt],
+  );
+  return (
+    <>
       <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryBlock label="Umumiy" lines={version.lines} />
-        <SummaryBlock label="Doimiy xarajat" type="fixed" lines={version.lines} />
-        <SummaryBlock label="O‘zgaruvchan xarajat" type="variable" lines={version.lines} />
+        <SummaryBlock label="Umumiy" lines={plan.lines} />
+        <SummaryBlock label="Doimiy xarajat" type="fixed" lines={plan.lines} />
+        <SummaryBlock label="O‘zgaruvchan xarajat" type="variable" lines={plan.lines} />
         <div className="rounded-card border border-border bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Workflow</p>
-          <div className="mt-3 space-y-2 text-sm">
-            <p className="flex items-center gap-2">
-              <FilePenLine className="h-4 w-4 text-info" /> Yaratdi: {version.createdByName}
-            </p>
-            <p className="flex items-center gap-2">
-              <Send className="h-4 w-4 text-info" /> Yubordi: {version.submittedByName ?? '—'}
-            </p>
-            <p className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-success" /> Tasdiqladi:{' '}
-              {version.approvedByName ?? '—'}
-            </p>
-          </div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+            Oxirgi saqlash
+          </p>
+          <p className="mt-3 text-sm text-slate-700">{updatedLabel}</p>
         </div>
       </div>
 
       <Card
         title="Filial × kategoriya matritsasi"
         description={
-          canEdit
+          editable
             ? 'Reja qatori mavjudligini alohida boshqaring. 0 va reja yo‘q bir xil emas.'
-            : 'Server qaytargan tasdiq holati sabab matritsa read-only.'
-        }
-        actions={
-          canEdit ? (
-            <span className="inline-flex items-center gap-1 text-xs font-semibold text-info">
-              <Sparkles className="h-4 w-4" /> Draft preview
-            </span>
-          ) : undefined
+            : 'Yopiq davr uchun matritsa read-only.'
         }
         className="overflow-hidden"
       >
         <div className="-m-5 overflow-x-auto">
-          <table className="w-full min-w-[1320px] text-left">
-            <caption className="sr-only">{version.periodLabel} budjet matritsasi</caption>
+          <table className="w-full min-w-[1180px] text-left">
+            <caption className="sr-only">{plan.periodLabel} budjet matritsasi</caption>
             <thead>
               <tr className="border-b border-border bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
                 <th className="sticky left-0 z-20 bg-slate-50 px-4 py-3">Kategoriya</th>
@@ -797,11 +406,10 @@ export function BudgetDetailPage() {
                 <th className="px-4 py-3 text-right">Fakt</th>
                 <th className="px-4 py-3 text-right">Farq</th>
                 <th className="px-4 py-3">Holat</th>
-                <th className="px-4 py-3">Sabab</th>
               </tr>
             </thead>
             <tbody>
-              {version.lines.map((line) => (
+              {plan.lines.map((line) => (
                 <BudgetLineRow
                   key={line.id}
                   line={line}
@@ -812,11 +420,10 @@ export function BudgetDetailPage() {
                       categoryId: line.categoryId,
                       hasPlan: line.hasPlan,
                       plannedAmountUzs: line.plannedAmountUzs,
-                      reason: line.reason,
                     }
                   }
-                  editable={canEdit}
-                  onChange={(next) => setDrafts((current) => ({ ...current, [line.id]: next }))}
+                  editable={editable}
+                  onChange={onChangeLine}
                 />
               ))}
             </tbody>
@@ -834,12 +441,12 @@ export function BudgetDetailPage() {
           rejadan alohida saqlanadi.
         </Alert>
       </div>
-      {version.lines.some((line) => !line.hasPlan) ? (
+      {plan.lines.some((line) => !line.hasPlan) ? (
         <p className="mt-4 inline-flex items-center gap-2 text-xs text-muted">
           <AlertTriangle className="h-4 w-4 text-warning" /> Matritsada kamida bitta rejasiz
           kategoriya bor; u hisobotda yashirilmaydi.
         </p>
       ) : null}
-    </div>
+    </>
   );
 }

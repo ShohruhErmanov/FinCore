@@ -23,11 +23,11 @@ test.describe('FINCORE auth va route permissionlari', () => {
     expect(suspiciousStorageKeys).toEqual([]);
   });
 
-  test('[FE-AUTH-03] cashier direct audit routega kira olmaydi', async ({ page }) => {
+  test('[FE-AUTH-03] cashier direct rollar routega kira olmaydi', async ({ page }) => {
     await login(page, demoAccounts.xalqlarCashier);
-    await page.goto('/audit');
+    await page.goto('/admin/roles');
 
     await expect(page.getByRole('heading', { name: 'Ruxsat yo‘q' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Audit log' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Rollar' })).toHaveCount(0);
   });
 });

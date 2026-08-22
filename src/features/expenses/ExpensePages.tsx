@@ -1,28 +1,19 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  ArrowLeft,
-  Download,
-  FileClock,
-  FilePlus2,
-  FilterX,
-  History,
-  Pencil,
-  RotateCcw,
-  Save,
-  ShieldCheck,
-} from 'lucide-react';
+import { ArrowLeft, Download, FilePlus2, FilterX, Pencil, Save, ShieldCheck } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
+import { useAuth } from '@/features/auth/auth-context';
 import { authApi, expenseApi, referenceApi } from '@/shared/api/contracts';
 import { getApiErrorMessage } from '@/shared/api/client';
 import { invalidateExpenseAggregates } from '@/shared/api/invalidation';
 import { queryKeys } from '@/shared/api/query-keys';
 import { routes } from '@/shared/config/routes';
+import { downloadCsv } from '@/shared/lib/csv';
 import { formatDate, formatDateTime } from '@/shared/lib/format';
-import type { Expense, ExpenseStatus, ExpenseType } from '@/shared/types/domain';
+import type { Expense, ExpenseType } from '@/shared/types/domain';
 import {
   Alert,
   Breadcrumbs,
@@ -40,7 +31,6 @@ import {
   PageHeader,
   Pagination,
   Select,
-  StatusBadge,
   Textarea,
   type Column,
 } from '@/shared/ui';
@@ -65,14 +55,6 @@ const expenseFormSchema = z.object({
 });
 
 type ExpenseFormValues = z.infer<typeof expenseFormSchema>;
-
-const expenseStatusOptions: Array<{ value: ExpenseStatus; label: string }> = [
-  { value: 'draft', label: 'Qoralama' },
-  { value: 'submitted', label: 'Yuborilgan' },
-  { value: 'approved', label: 'Tasdiqlangan' },
-  { value: 'rejected', label: 'Rad etilgan' },
-  { value: 'reversed', label: 'Bekor qilingan' },
-];
 
 function updateQueryParam(
   current: URLSearchParams,
@@ -99,34 +81,29 @@ function exportCurrentPage(rows: Expense[]) {
       'To‘lov usuli',
       'Bo‘lim',
       'Mas’ul',
-      'Status',
+      'Kiritgan',
+      'Izoh',
     ],
     ...rows.map((row) => [
       row.transactionDate,
       row.branchName,
       row.categoryNameSnapshot,
-      row.expenseTypeSnapshot,
+      row.expenseTypeSnapshot === 'fixed' ? 'Doimiy' : 'O\u2018zgaruvchan',
       row.description,
       row.amountUzs,
       row.paymentMethodName,
       row.departmentName,
       row.responsibleUserName,
-      row.status,
+      row.enteredByName,
+      row.comment,
     ]),
   ];
-  const csv = cells
-    .map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(','))
-    .join('\n');
-  const url = URL.createObjectURL(new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' }));
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `fincore-xarajatlar-${new Date().toISOString().slice(0, 10)}.csv`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadCsv('xarajatlar', cells);
 }
 
 export function ExpenseLedgerPage() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1);
   const pageSize = [10, 20, 50].includes(Number(searchParams.get('pageSize')))
@@ -151,7 +128,6 @@ export function ExpenseLedgerPage() {
           paymentMethodId: searchParams.get('paymentMethod') ?? undefined,
           responsibleUserId: searchParams.get('responsible') ?? undefined,
           enteredByUserId: searchParams.get('enteredBy') ?? undefined,
-          status: searchParams.get('status') ?? undefined,
           sort: searchParams.get('sort') ?? 'transactionDate:desc',
           page,
           pageSize,
@@ -222,7 +198,6 @@ export function ExpenseLedgerPage() {
           <MoneyText value={row.amountUzs} className="whitespace-nowrap font-bold text-ink" />
         ),
       },
-      { key: 'status', header: 'Holat', cell: (row) => <StatusBadge status={row.status} /> },
     ],
     [],
   );
@@ -247,12 +222,14 @@ export function ExpenseLedgerPage() {
             >
               <Download className="h-4 w-4" /> Joriy sahifa CSV
             </Button>
-            <Link
-              to={routes.expenseNew}
-              className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-blue-700"
-            >
-              <FilePlus2 className="h-4 w-4" /> Yangi xarajat
-            </Link>
+            {hasPermission('expense.create') ? (
+              <Link
+                to={routes.expenseNew}
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-blue-700"
+              >
+                <FilePlus2 className="h-4 w-4" /> Yangi xarajat
+              </Link>
+            ) : null}
           </>
         }
       />
@@ -389,22 +366,6 @@ export function ExpenseLedgerPage() {
               {(usersQuery.data ?? []).map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.fullName}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-          <FormField label="Holat" htmlFor="expense-status">
-            <Select
-              id="expense-status"
-              value={searchParams.get('status') ?? ''}
-              onChange={(event) =>
-                updateQueryParam(searchParams, setSearchParams, 'status', event.target.value)
-              }
-            >
-              <option value="">Barcha holatlar</option>
-              {expenseStatusOptions.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
                 </option>
               ))}
             </Select>
@@ -1059,10 +1020,7 @@ function ExpenseEditForm({ expense, onDone }: { expense: Expense; onDone: () => 
 
 export function ExpenseDetailPage() {
   const { expenseId = '' } = useParams();
-  const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
-  const [reverseOpen, setReverseOpen] = useState(false);
-  const [reverseReason, setReverseReason] = useState('');
   const query = useQuery({
     queryKey: queryKeys.expense(expenseId),
     queryFn: ({ signal }) => expenseApi.detail(expenseId, signal),
@@ -1074,17 +1032,6 @@ export function ExpenseDetailPage() {
     staleTime: 60_000,
   });
   const meQuery = useQuery({ queryKey: queryKeys.me, queryFn: ({ signal }) => authApi.me(signal) });
-  const reverseMutation = useMutation({
-    mutationFn: () => expenseApi.reverse(expenseId, reverseReason.trim()),
-    onSuccess: async () => {
-      setReverseOpen(false);
-      setReverseReason('');
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.expense(expenseId) }),
-        invalidateExpenseAggregates(queryClient),
-      ]);
-    },
-  });
 
   if (query.isLoading) return <LoadingState label="Xarajat tafsilotlari yuklanmoqda…" />;
   if (query.isError)
@@ -1101,14 +1048,10 @@ export function ExpenseDetailPage() {
 
   const expense = query.data;
   const period = periodsQuery.data?.find((item) => item.id === expense.periodId);
-  const isLocked = period?.status === 'closed' || expense.isReversed;
   const canWriteBranch = Boolean(meQuery.data?.writeBranchScopes.includes(expense.branchId));
   const canEdit =
-    Boolean(meQuery.data?.permissions.includes('expense.edit')) && canWriteBranch && !isLocked;
-  const canReverse =
-    Boolean(meQuery.data?.permissions.includes('expense.correct_reverse')) &&
+    Boolean(meQuery.data?.permissions.includes('expense.edit')) &&
     canWriteBranch &&
-    !expense.isReversed &&
     period?.status !== 'closed';
 
   return (
@@ -1117,7 +1060,6 @@ export function ExpenseDetailPage() {
       <PageHeader
         title={expense.description}
         description={`Xarajat ID: ${expense.id}`}
-        badge={<StatusBadge status={expense.status} />}
         actions={
           <>
             <Link
@@ -1131,66 +1073,14 @@ export function ExpenseDetailPage() {
                 <Pencil className="h-4 w-4" /> {editing ? 'Ko‘rish rejimi' : 'Tahrirlash'}
               </Button>
             ) : null}
-            {canReverse ? (
-              <Button variant="danger" onClick={() => setReverseOpen(true)}>
-                <RotateCcw className="h-4 w-4" /> Bekor qilish
-              </Button>
-            ) : null}
           </>
         }
       />
 
       {period?.status === 'closed' ? (
         <LockedNotice>
-          {period.label} yopilgan. Original xarajat tahrirlanmaydi; direktor auditli reopen oqimidan
-          foydalanadi.
+          {period.label} yopilgan. Original xarajat tahrirlanmaydi.
         </LockedNotice>
-      ) : null}
-      {expense.isReversed ? (
-        <Alert title="Bekor qilingan tranzaksiya" tone="danger" className="mb-5">
-          Original yozuv audit uchun saqlangan. Sabab:{' '}
-          {expense.reversalReason ?? 'Sabab ko‘rsatilmagan'}.
-        </Alert>
-      ) : null}
-
-      {reverseOpen ? (
-        <Card
-          title="Xarajatni reversal qilish"
-          description="Bu hard-delete emas: original yozuv va sabab auditda saqlanadi."
-          className="mb-5 border-red-200"
-        >
-          {reverseMutation.isError ? (
-            <Alert title="Reversal bajarilmadi" tone="danger" className="mb-4">
-              {getApiErrorMessage(reverseMutation.error)}
-            </Alert>
-          ) : null}
-          <FormField
-            label="Majburiy sabab"
-            htmlFor="expense-reversal-reason"
-            required
-            hint="Kamida 5 ta belgi kiriting."
-          >
-            <Textarea
-              id="expense-reversal-reason"
-              value={reverseReason}
-              onChange={(event) => setReverseReason(event.target.value)}
-              autoFocus
-            />
-          </FormField>
-          <div className="mt-4 flex justify-end gap-3">
-            <Button variant="secondary" onClick={() => setReverseOpen(false)}>
-              Bekor qilish
-            </Button>
-            <Button
-              variant="danger"
-              disabled={reverseReason.trim().length < 5}
-              loading={reverseMutation.isPending}
-              onClick={() => reverseMutation.mutate()}
-            >
-              <RotateCcw className="h-4 w-4" /> Reversalni tasdiqlash
-            </Button>
-          </div>
-        </Card>
       ) : null}
 
       {editing ? (
@@ -1208,7 +1098,11 @@ export function ExpenseDetailPage() {
                 <DefinitionItem label="Sana">{formatDate(expense.transactionDate)}</DefinitionItem>
                 <DefinitionItem label="Hisob davri">
                   {period?.label ?? expense.periodId}{' '}
-                  {period ? <StatusBadge status={period.status} /> : null}
+                  {period ? (
+                    <span className="text-xs text-muted">
+                      ({period.status === 'open' ? 'ochiq' : 'yopiq'})
+                    </span>
+                  ) : null}
                 </DefinitionItem>
                 <DefinitionItem label="Filial">{expense.branchName}</DefinitionItem>
                 <DefinitionItem label="Kategoriya">{expense.categoryNameSnapshot}</DefinitionItem>
@@ -1237,59 +1131,14 @@ export function ExpenseDetailPage() {
                 </div>
               ) : null}
             </Card>
-            <Card
-              title="Audit tarixi"
-              description="Append-only operatsiyalar ketma-ketligi."
-              actions={<History className="h-5 w-5 text-muted" />}
-            >
-              {expense.audit.length ? (
-                <ol className="relative border-l border-border pl-5">
-                  {expense.audit.map((event) => (
-                    <li key={event.id} className="relative pb-6 last:pb-0">
-                      <span className="absolute -left-[25px] top-1 h-2.5 w-2.5 rounded-full bg-primary ring-4 ring-blue-50" />
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="font-semibold text-ink">{event.action}</p>
-                        <time className="text-xs text-muted">
-                          {formatDateTime(event.occurredAt)}
-                        </time>
-                      </div>
-                      <p className="mt-1 text-sm text-slate-600">
-                        {event.actorName} ·{' '}
-                        {event.result === 'success' ? 'muvaffaqiyatli' : event.result}
-                      </p>
-                      {event.reason ? (
-                        <p className="mt-1 text-sm text-muted">Sabab: {event.reason}</p>
-                      ) : null}
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <EmptyState title="Audit hodisasi yo‘q" />
-              )}
-            </Card>
           </div>
           <div className="space-y-5">
             <Card title="Manba va izchillik">
-              <div className="space-y-4">
-                <div className="flex gap-3">
-                  <ShieldCheck className="mt-0.5 h-5 w-5 text-success" />
-                  <div>
-                    <p className="text-sm font-semibold text-ink">Server hosil qilgan ID</p>
-                    <p className="mt-1 break-all text-xs text-muted">{expense.id}</p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <FileClock className="mt-0.5 h-5 w-5 text-info" />
-                  <div>
-                    <p className="text-sm font-semibold text-ink">
-                      {expense.sourceSheet ? 'Migration manbasi' : 'Platformada yaratilgan'}
-                    </p>
-                    <p className="mt-1 text-xs text-muted">
-                      {expense.sourceSheet
-                        ? `${expense.sourceSheet}, ${expense.sourceRow}-qator`
-                        : 'Source sheet qatori mavjud emas.'}
-                    </p>
-                  </div>
+              <div className="flex gap-3">
+                <ShieldCheck className="mt-0.5 h-5 w-5 text-success" />
+                <div>
+                  <p className="text-sm font-semibold text-ink">Server hosil qilgan ID</p>
+                  <p className="mt-1 break-all text-xs text-muted">{expense.id}</p>
                 </div>
               </div>
             </Card>

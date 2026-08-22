@@ -33,18 +33,18 @@ describe('[FE-AUTH-03] permission va direct-route himoyasi', () => {
     useAuthMock.mockReturnValue(authState());
 
     render(
-      <MemoryRouter initialEntries={['/audit?period=august&branch=sayxun']}>
+      <MemoryRouter initialEntries={['/admin/roles?period=august&branch=sayxun']}>
         <Routes>
           <Route path={routes.login} element={<LoginRedirectProbe />} />
           <Route element={<ProtectedRoute />}>
-            <Route path={routes.audit} element={<h1>Audit log</h1>} />
+            <Route path={routes.roles} element={<h1>Rollar</h1>} />
           </Route>
         </Routes>
       </MemoryRouter>,
     );
 
     expect(screen.getByTestId('redirect-from')).toHaveTextContent(
-      '/audit?period=august&branch=sayxun',
+      '/admin/roles?period=august&branch=sayxun',
     );
   });
 
@@ -57,47 +57,45 @@ describe('[FE-AUTH-03] permission va direct-route himoyasi', () => {
     );
 
     render(
-      <MemoryRouter initialEntries={[routes.audit]}>
+      <MemoryRouter initialEntries={[routes.roles]}>
         <Routes>
-          <Route element={<PermissionRoute permission="audit.view" />}>
-            <Route path={routes.audit} element={<h1>Maxfiy audit</h1>} />
+          <Route element={<PermissionRoute permission="role.manage" />}>
+            <Route path={routes.roles} element={<h1>Maxfiy rollar</h1>} />
           </Route>
         </Routes>
       </MemoryRouter>,
     );
 
     expect(screen.getByRole('heading', { name: 'Ruxsat yo‘q' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Maxfiy audit' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Maxfiy rollar' })).not.toBeInTheDocument();
   });
 
   it('permission mavjud bo‘lsa nested route kontentini ko‘rsatadi', () => {
     useAuthMock.mockReturnValue(
       authState({
         isAuthenticated: true,
-        hasPermission: vi.fn((permission: PermissionCode) => permission === 'audit.view'),
+        hasPermission: vi.fn((permission: PermissionCode) => permission === 'role.manage'),
       }),
     );
 
     render(
-      <MemoryRouter initialEntries={[routes.audit]}>
+      <MemoryRouter initialEntries={[routes.roles]}>
         <Routes>
-          <Route element={<PermissionRoute permission="audit.view" />}>
-            <Route path={routes.audit} element={<h1>Audit ochildi</h1>} />
+          <Route element={<PermissionRoute permission="role.manage" />}>
+            <Route path={routes.roles} element={<h1>Rollar ochildi</h1>} />
           </Route>
         </Routes>
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole('heading', { name: 'Audit ochildi' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Rollar ochildi' })).toBeInTheDocument();
   });
 
-  it('cashier navigatsiyasidan admin va audit bo‘limlarini chiqarib tashlaydi', () => {
+  it('cashier navigatsiyasidan admin bo‘limlarini chiqarib tashlaydi', () => {
     const cashierPermissions: PermissionCode[] = [
       'dashboard.view',
       'expense.view_own_branch',
       'expense.create',
-      'revenue.view_own',
-      'revenue.create',
       'reports.view',
     ];
     const visibleLabels = navigation
@@ -107,8 +105,7 @@ describe('[FE-AUTH-03] permission va direct-route himoyasi', () => {
 
     expect(visibleLabels).toContain('Dashboard');
     expect(visibleLabels).toContain('Xarajatlar');
-    expect(visibleLabels).not.toContain('Audit log');
+    expect(visibleLabels).not.toContain('Rollar');
     expect(visibleLabels).not.toContain('Foydalanuvchilar');
-    expect(visibleLabels).not.toContain('Davrni yopish');
   });
 });

@@ -7,28 +7,21 @@ export const routes = {
   expenseNew: '/expenses/new',
   expenseDetail: (id: string) => `/expenses/${id}`,
   budgets: '/budgets',
-  budgetDetail: (id: string) => `/budgets/${id}`,
+  revenues: '/revenue',
+  revenueNew: '/revenue/new',
+  revenueDetail: (id: string) => `/revenue/${id}`,
+  revenuePlans: '/revenue/plans',
   monthlyReport: '/reports/monthly',
   branchReport: '/reports/branches',
-  profitLoss: '/reports/profit-loss',
-  dataQuality: '/data-quality',
-  imports: '/data-quality/imports',
-  periods: '/periods',
-  periodDetail: (id: string) => `/periods/${id}`,
+  cashierReport: '/reports/cashiers',
   categories: '/settings/categories',
   departments: '/settings/departments',
   paymentMethods: '/settings/payment-methods',
   branches: '/settings/branches',
   users: '/admin/users',
   roles: '/admin/roles',
-  audit: '/audit',
-  revenuePlans: '/revenue/plans',
-  revenuePlanDetail: (id: string) => `/revenue/plans/${id}`,
-  revenueNew: '/revenue/new',
-  revenueTransactions: '/revenue/transactions',
-  revenueDetail: (id: string) => `/revenue/transactions/${id}`,
-  revenueReport: '/reports/revenue',
-  cashiersReport: '/reports/cashiers',
+  imports: '/settings/import',
+  notifications: '/settings/notifications',
 } as const;
 
 export interface NavigationItem {
@@ -53,15 +46,15 @@ export const navigation: NavigationGroup[] = [
   {
     label: 'Operatsiyalar',
     items: [
+      { label: 'Kunlik tushum', to: routes.revenues, permission: 'revenue.view_own_branch' },
       { label: 'Xarajatlar', to: routes.expenses, permission: 'expense.view_own_branch' },
-      { label: 'Tushumlar', to: routes.revenueTransactions, permission: 'revenue.view_own' },
     ],
   },
   {
     label: 'Rejalashtirish',
     items: [
+      { label: 'Tushum rejasi', to: routes.revenuePlans, permission: 'revenue_plan.manage' },
       { label: 'Budjet', to: routes.budgets, permission: 'budget.view' },
-      { label: 'Tushum rejasi', to: routes.revenuePlans, permission: 'revenue_plan.create_edit' },
     ],
   },
   {
@@ -69,28 +62,22 @@ export const navigation: NavigationGroup[] = [
     items: [
       { label: 'Oylik hisobot', to: routes.monthlyReport, permission: 'reports.view' },
       { label: 'Filiallar taqqoslash', to: routes.branchReport, permission: 'reports.view' },
-      { label: 'Foyda / zarar', to: routes.profitLoss, permission: 'reports.view' },
-      { label: 'Tushum hisoboti', to: routes.revenueReport, permission: 'reports.view' },
+      { label: 'Kassirlar', to: routes.cashierReport, permission: 'reports.view_cashiers' },
       {
-        label: 'Kassirlar hisoboti',
-        to: routes.cashiersReport,
-        permission: 'reports.view_cashiers',
+        label: 'Mening natijam',
+        to: routes.cashierReport,
+        permission: 'reports.view_own_performance',
       },
-      { label: 'Data quality', to: routes.dataQuality, permission: 'import.run' },
-    ],
-  },
-  {
-    label: 'Nazorat',
-    items: [
-      { label: 'Davrni yopish', to: routes.periods, permission: 'period.close' },
-      { label: 'Audit log', to: routes.audit, permission: 'audit.view' },
     ],
   },
   {
     label: 'Boshqaruv',
     items: [
       { label: 'Sozlamalar', to: routes.categories, permission: 'master_data.manage' },
+      { label: 'Excel’dan import', to: routes.imports, permission: 'import.run' },
+      { label: 'Bildirishnoma', to: routes.notifications, permission: 'notification.manage' },
       { label: 'Foydalanuvchilar', to: routes.users, permission: 'user.manage' },
+      { label: 'Rollar', to: routes.roles, permission: 'role.manage' },
     ],
   },
 ];

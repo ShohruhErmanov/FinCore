@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   asMoneyUzs,
   formatDate,
+  formatDateLong,
   formatDateTime,
   formatMoney,
   formatPercent,
@@ -55,15 +56,20 @@ describe('[AC-07, AC-15, AC-16] foiz semantikasi', () => {
 
 describe('[FE-TIME-01] Asia/Tashkent sana va vaqt', () => {
   it('UTC timestampni operatsion +05:00 vaqt zonasida ko‘rsatadi', () => {
-    const rendered = formatDateTime('2026-08-20T00:30:00Z');
-    expect(rendered).toContain('20-avg');
-    expect(rendered).toContain('2026');
-    expect(rendered).toContain('05:30');
+    expect(formatDateTime('2026-08-20T00:30:00Z')).toBe('20.08.2026 05:30');
+  });
+
+  it('UTC yarim tunidan keyingi timestamp Toshkentda ertangi kunga o‘tadi', () => {
+    expect(formatDateTime('2026-08-20T20:30:00Z')).toBe('21.08.2026 01:30');
   });
 
   it('date-only qiymatni brauzer lokal zonasiga siljitmaydi', () => {
-    const rendered = formatDate('2026-08-20');
-    expect(rendered).toContain('20-avg');
-    expect(rendered).toContain('2026');
+    expect(formatDate('2026-08-20')).toBe('20.08.2026');
+  });
+
+  it('to‘liq sanani o‘zbekcha oy nomi bilan ko‘rsatadi', () => {
+    expect(formatDateLong('2026-08-20')).toBe('20-avgust 2026');
+    expect(formatDateLong('2026-01-01')).toBe('1-yanvar 2026');
+    expect(formatDateLong('2026-12-31')).toBe('31-dekabr 2026');
   });
 });

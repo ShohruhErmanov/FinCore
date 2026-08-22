@@ -1,14 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import {
-  BarChart3,
   BookOpenCheck,
+  Bell,
   Building2,
-  CalendarCheck2,
+  CalendarPlus,
   ChevronDown,
-  CircleDollarSign,
   ClipboardList,
-  DatabaseZap,
   FileBarChart,
+  FileSpreadsheet,
   Landmark,
   LayoutDashboard,
   LogOut,
@@ -34,20 +33,18 @@ import { Button, Select, StatusBadge } from '@/shared/ui';
 
 const iconByPath: Record<string, typeof LayoutDashboard> = {
   [routes.dashboard]: LayoutDashboard,
+  [routes.revenues]: CalendarPlus,
   [routes.expenses]: ReceiptText,
-  [routes.revenueTransactions]: CircleDollarSign,
-  [routes.budgets]: ClipboardList,
   [routes.revenuePlans]: WalletCards,
+  [routes.budgets]: ClipboardList,
   [routes.monthlyReport]: FileBarChart,
   [routes.branchReport]: Building2,
-  [routes.profitLoss]: BarChart3,
-  [routes.revenueReport]: BarChart3,
-  [routes.cashiersReport]: UsersRound,
-  [routes.dataQuality]: DatabaseZap,
-  [routes.periods]: CalendarCheck2,
-  [routes.audit]: ShieldCheck,
+  [routes.cashierReport]: UsersRound,
   [routes.categories]: Settings,
   [routes.users]: UserRound,
+  [routes.roles]: ShieldCheck,
+  [routes.imports]: FileSpreadsheet,
+  [routes.notifications]: Bell,
 };
 
 function NavigationLink({
@@ -205,10 +202,9 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
     searchParams.get('period') ??
     periodsQuery.data?.find((period) => period.status === 'open')?.id ??
     '';
-  const defaultBranch =
-    hasPermission('expense.view_all_branches') || hasPermission('revenue.view_all')
-      ? 'all'
-      : (accessibleBranches[0]?.id ?? '');
+  const defaultBranch = hasPermission('expense.view_all_branches')
+    ? 'all'
+    : (accessibleBranches[0]?.id ?? '');
   const selectedBranch = searchParams.get('branch') ?? defaultBranch;
 
   function updateFilter(key: 'period' | 'branch', value: string) {
@@ -248,7 +244,7 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
             onChange={(event) => updateFilter('branch', event.target.value)}
             className="w-44 border-0 bg-slate-100 font-medium"
           >
-            {hasPermission('expense.view_all_branches') || hasPermission('revenue.view_all') ? (
+            {hasPermission('expense.view_all_branches') ? (
               <option value="all">Barcha filiallar</option>
             ) : null}
             {accessibleBranches.map((branch) => (
@@ -315,22 +311,22 @@ function MobileBottomNav() {
   const items = [
     { ...navigation[0]!.items[0]!, icon: LayoutDashboard },
     {
+      label: 'Tushum',
+      to: routes.revenues,
+      permission: 'revenue.view_own_branch' as const,
+      icon: CalendarPlus,
+    },
+    {
       label: 'Xarajat',
       to: routes.expenses,
       permission: 'expense.view_own_branch' as const,
       icon: ReceiptText,
     },
     {
-      label: 'Tushum',
-      to: routes.revenueTransactions,
-      permission: 'revenue.view_own' as const,
-      icon: CircleDollarSign,
-    },
-    {
       label: 'Hisobot',
-      to: routes.revenueReport,
+      to: routes.monthlyReport,
       permission: 'reports.view' as const,
-      icon: BarChart3,
+      icon: FileBarChart,
     },
   ]
     .filter((item) => hasPermission(item.permission))

@@ -1,19 +1,13 @@
 import type {
   AccountingPeriod,
-  AuditEvent,
   AuthenticatedUser,
   Branch,
-  BudgetVersion,
-  CashierSummary,
-  DashboardResponse,
-  DataQualityException,
+  BudgetPlan,
+  DailyRevenue,
   Expense,
   ExpenseCategory,
   MasterItem,
-  PeriodCloseReadiness,
-  ReconciliationResult,
-  RevenuePlan,
-  RevenueTransaction,
+  MoneyUzs,
 } from '@/shared/types/domain';
 
 export const ids = {
@@ -31,7 +25,7 @@ export const ids = {
   card: '40000000-0000-0000-0000-000000000003',
   general: '50000000-0000-0000-0000-000000000001',
   admin: '50000000-0000-0000-0000-000000000002',
-  marketing: '50000000-0000-0000-0000-000000000003',
+  marketing: '50000000-0000-0000-0000-000000000007',
 } as const;
 
 export const branches: Branch[] = [
@@ -60,38 +54,47 @@ export const periods: AccountingPeriod[] = [
   },
 ];
 
-const allPermissions: AuthenticatedUser['permissions'] = [
+/**
+ * Direktor — nazorat va rejalashtirish roli: kunlik xarajat/tushum kiritmaydi,
+ * faqat oy boshida reja qo‘yadi va hamma narsani ko‘radi.
+ */
+const directorPermissions: AuthenticatedUser['permissions'] = [
+  'dashboard.view',
+  'expense.view_own_branch',
+  'expense.view_all_branches',
+  'budget.view',
+  'budget.create_edit',
+  'revenue.view_own_branch',
+  'revenue.view_all_branches',
+  'revenue_plan.manage',
+  'import.run',
+  'notification.manage',
+  'reports.view',
+  'reports.view_cashiers',
+  'master_data.manage',
+  'user.manage',
+  'role.manage',
+];
+
+/** Moliya rahbari — kundalik operatsiyalarni kiritadi va rejani tayyorlaydi. */
+const financeManagerPermissions: AuthenticatedUser['permissions'] = [
   'dashboard.view',
   'expense.view_own_branch',
   'expense.view_all_branches',
   'expense.create',
   'expense.edit',
-  'expense.correct_reverse',
-  'expense.submit',
-  'expense.approve',
-  'expense.reject',
   'budget.view',
   'budget.create_edit',
-  'budget.submit',
-  'budget.approve',
-  'revenue.view_own',
-  'revenue.view_all',
+  'revenue.view_own_branch',
+  'revenue.view_all_branches',
   'revenue.create',
-  'revenue.reverse',
-  'revenue.enter_on_behalf',
-  'revenue_plan.create_edit',
-  'revenue_plan.submit',
-  'revenue_plan.approve',
+  'revenue.edit',
+  'revenue_plan.manage',
+  'import.run',
+  'notification.manage',
   'reports.view',
   'reports.view_cashiers',
-  'period.close',
-  'period.reopen',
   'master_data.manage',
-  'user.manage',
-  'role.manage',
-  'audit.view',
-  'import.run',
-  'import.resolve_exception',
 ];
 
 export const users: AuthenticatedUser[] = [
@@ -103,9 +106,10 @@ export const users: AuthenticatedUser[] = [
     roles: [
       { id: 'role-d', role: 'director', roleName: 'Direktor', branchId: null, branchName: null },
     ],
-    permissions: allPermissions,
+    permissions: directorPermissions,
     branchScopes: [ids.sayxun, ids.xalqlar],
     writeBranchScopes: [ids.sayxun, ids.xalqlar],
+    fixedSalaryUzs: '15000000',
     lastLoginAt: '2026-08-20T09:10:00+05:00',
   },
   {
@@ -129,19 +133,10 @@ export const users: AuthenticatedUser[] = [
         branchName: 'Sayxun',
       },
     ],
-    permissions: allPermissions.filter(
-      (permission) =>
-        ![
-          'period.close',
-          'period.reopen',
-          'user.manage',
-          'role.manage',
-          'budget.approve',
-          'revenue_plan.approve',
-        ].includes(permission),
-    ),
+    permissions: financeManagerPermissions,
     branchScopes: [ids.sayxun, ids.xalqlar],
     writeBranchScopes: [ids.sayxun],
+    fixedSalaryUzs: '8000000',
     lastLoginAt: '2026-08-20T08:42:00+05:00',
   },
   {
@@ -162,13 +157,14 @@ export const users: AuthenticatedUser[] = [
       'dashboard.view',
       'expense.view_own_branch',
       'expense.create',
-      'expense.edit',
-      'revenue.view_own',
+      'revenue.view_own_branch',
       'revenue.create',
       'reports.view',
+      'reports.view_own_performance',
     ],
     branchScopes: [ids.xalqlar],
     writeBranchScopes: [ids.xalqlar],
+    fixedSalaryUzs: '4500000',
     lastLoginAt: '2026-08-19T17:25:00+05:00',
   },
   {
@@ -189,13 +185,14 @@ export const users: AuthenticatedUser[] = [
       'dashboard.view',
       'expense.view_own_branch',
       'expense.create',
-      'expense.edit',
-      'revenue.view_own',
+      'revenue.view_own_branch',
       'revenue.create',
       'reports.view',
+      'reports.view_own_performance',
     ],
     branchScopes: [ids.sayxun],
     writeBranchScopes: [ids.sayxun],
+    fixedSalaryUzs: '4500000',
     lastLoginAt: '2026-08-20T07:54:00+05:00',
   },
   {
@@ -215,6 +212,7 @@ export const users: AuthenticatedUser[] = [
     permissions: [],
     branchScopes: [],
     writeBranchScopes: [],
+    fixedSalaryUzs: '4200000',
     lastLoginAt: '2026-08-12T18:12:00+05:00',
   },
 ];
@@ -302,29 +300,7 @@ export const departments: MasterItem[] = [
   { id: ids.general, code: 'GENERAL', name: 'Umumiy', isActive: true },
 ];
 
-function audit(
-  id: string,
-  actorName: string,
-  action: string,
-  entityType: string,
-  entityId: string,
-): AuditEvent {
-  return {
-    id,
-    occurredAt: '2026-08-18T14:20:00+05:00',
-    actorId: ids.finance,
-    actorName,
-    action,
-    entityType,
-    entityId,
-    branchId: ids.sayxun,
-    branchName: 'Sayxun',
-    result: 'success',
-    reason: null,
-  };
-}
-
-export const expenses: Expense[] = [
+const augustExpenses: Expense[] = [
   [
     'exp-001',
     '2026-08-18',
@@ -494,435 +470,156 @@ export const expenses: Expense[] = [
       enteredBy: index % 2 ? ids.cashierX : ids.finance,
       enteredByName: index % 2 ? 'Dilnoza Qodirova' : 'Madina Karimova',
       comment: null,
-      status: String(id) === 'exp-008' ? 'reversed' : 'approved',
-      isReversed: String(id) === 'exp-008',
-      reversalReason: String(id) === 'exp-008' ? 'Noto‘g‘ri kategoriya tanlangan' : null,
-      sourceSheet: index === 6 ? 'Xalqlar_kassa' : null,
-      sourceRow: index === 6 ? 31 : null,
+      sourceSheet: null,
+      sourceRow: null,
       createdAt: `${date}T10:20:00+05:00`,
       updatedAt: `${date}T10:20:00+05:00`,
-      audit: [
-        audit(
-          `audit-exp-${index}`,
-          index % 2 ? 'Dilnoza Qodirova' : 'Madina Karimova',
-          'expenses.create',
-          'expense',
-          String(id),
-        ),
-      ],
     } as Expense;
   },
 );
 
-export const revenueTransactions: RevenueTransaction[] = [
-  {
-    id: 'rev-001',
-    receiptNo: '100001',
-    paymentAt: '2026-08-10T10:15:00+05:00',
-    amountUzs: '60000000',
-    paymentMethodId: ids.cash,
-    paymentMethodName: 'Naqd pul',
-    collectorUserId: ids.cashierA,
-    collectorName: 'Aziza Rahimova',
-    branchId: ids.sayxun,
-    branchName: 'Sayxun',
-  },
-  {
-    id: 'rev-002',
-    receiptNo: '100002',
-    paymentAt: '2026-08-11T12:40:00+05:00',
-    amountUzs: '10000000',
-    paymentMethodId: ids.card,
-    paymentMethodName: 'Plastik karta',
-    collectorUserId: ids.cashierA,
-    collectorName: 'Aziza Rahimova',
-    branchId: ids.sayxun,
-    branchName: 'Sayxun',
-  },
-  {
-    id: 'rev-003',
-    receiptNo: '100003',
-    paymentAt: '2026-08-12T09:30:00+05:00',
-    amountUzs: '40000000',
-    paymentMethodId: ids.card,
-    paymentMethodName: 'Plastik karta',
-    collectorUserId: ids.cashierB,
-    collectorName: 'Komil Normurodov',
-    branchId: ids.sayxun,
-    branchName: 'Sayxun',
-  },
-  {
-    id: 'rev-004',
-    receiptNo: '100004',
-    paymentAt: '2026-08-13T16:05:00+05:00',
-    amountUzs: '40000000',
-    paymentMethodId: ids.bank,
-    paymentMethodName: 'Bank o‘tkazmasi',
-    collectorUserId: ids.cashierB,
-    collectorName: 'Komil Normurodov',
-    branchId: ids.sayxun,
-    branchName: 'Sayxun',
-  },
-  {
-    id: 'rev-005',
-    receiptNo: '100005',
-    paymentAt: '2026-08-14T11:55:00+05:00',
-    amountUzs: '30000000',
-    paymentMethodId: ids.cash,
-    paymentMethodName: 'Naqd pul',
-    collectorUserId: ids.cashierX,
-    collectorName: 'Dilnoza Qodirova',
-    branchId: ids.xalqlar,
-    branchName: "Xalqlar do'stligi",
-  },
-].map((item, index) => ({
-  ...item,
-  paymentBusinessDate: item.paymentAt.slice(0, 10),
-  timePrecision: 'exact',
-  periodId: ids.periodAug,
-  enteredBy: item.collectorUserId,
-  enteredByName: item.collectorName,
-  enteredOnBehalf: false,
-  onBehalfReason: null,
-  externalReference: item.paymentMethodId === ids.cash ? null : `BANK-${index + 101}`,
-  description: 'Filial oylik tushumi',
-  status: 'posted',
-  reversalReason: null,
-  createdAt: item.paymentAt,
-  audit: [
-    audit(
-      `audit-rev-${index}`,
-      item.collectorName,
-      'revenue_transactions.create',
-      'revenue_transaction',
-      item.id,
+/** Iyul davri uchun tarixiy nusxa — yopiq davr hisobotlari bo‘sh qolmasligi uchun. */
+const julyExpenses: Expense[] = augustExpenses.map((row) => {
+  const transactionDate = `2026-07-${row.transactionDate.slice(8, 10)}`;
+  const amountUzs = (((BigInt(row.amountUzs) * 92n) / 100n / 1000n) * 1000n).toString();
+  return {
+    ...row,
+    id: `${row.id}-jul`,
+    transactionDate,
+    periodId: ids.periodJul,
+    amountUzs,
+    createdAt: `${transactionDate}T10:20:00+05:00`,
+    updatedAt: `${transactionDate}T10:20:00+05:00`,
+  };
+});
+
+export const expenses: Expense[] = [...augustExpenses, ...julyExpenses];
+
+function seedBudgetPlan(
+  periodId: string,
+  periodLabel: string,
+  updatedAt: string,
+  factorPercent: bigint,
+): BudgetPlan {
+  return {
+    id: `budget-${periodId}`,
+    periodId,
+    periodLabel,
+    updatedAt,
+    updatedByName: 'Madina Karimova',
+    lines: categories.slice(0, 10).flatMap((category, index) =>
+      branches.map((branch) => {
+        const hasPlan = !(category.code === 'SECURITY' && branch.id === ids.xalqlar);
+        const base = BigInt((index + 1) * (branch.id === ids.sayxun ? 1_650_000 : 1_400_000));
+        const plan =
+          category.code === 'CLEANING'
+            ? '0'
+            : hasPlan
+              ? ((base * factorPercent) / 100n).toString()
+              : null;
+        const actual = String((index + 1) * (branch.id === ids.sayxun ? 600000 : 400000));
+        return {
+          id: `bl-${periodId}-${category.code}-${branch.code}`,
+          branchId: branch.id,
+          branchName: branch.name,
+          categoryId: category.id,
+          categoryCodeSnapshot: category.code,
+          categoryNameSnapshot: category.name,
+          expenseTypeSnapshot: category.expenseType,
+          plannedAmountUzs: plan,
+          actualAmountUzs: actual,
+          varianceUzs: plan === null ? null : String(BigInt(plan) - BigInt(actual)),
+          hasPlan,
+        };
+      }),
     ),
-  ],
-})) as RevenueTransaction[];
+  };
+}
 
-export const budgetVersion: BudgetVersion = {
-  id: 'budget-v1',
-  periodId: ids.periodAug,
-  periodLabel: 'Avgust 2026',
-  revisionNo: 2,
-  status: 'submitted',
-  reason: 'Avgust operatsion budjeti',
-  createdByName: 'Madina Karimova',
-  submittedByName: 'Madina Karimova',
-  approvedByName: null,
-  createdAt: '2026-08-01T09:00:00+05:00',
-  lines: categories.slice(0, 10).flatMap((category, index) =>
-    branches.map((branch) => {
-      const hasPlan = !(category.code === 'SECURITY' && branch.id === ids.xalqlar);
-      const plan =
-        category.code === 'CLEANING'
-          ? '0'
-          : hasPlan
-            ? String((index + 1) * (branch.id === ids.sayxun ? 900000 : 700000))
-            : null;
-      const actual = String((index + 1) * (branch.id === ids.sayxun ? 600000 : 400000));
-      return {
-        id: `bl-${category.code}-${branch.code}`,
-        branchId: branch.id,
-        branchName: branch.name,
-        categoryId: category.id,
-        categoryCodeSnapshot: category.code,
-        categoryNameSnapshot: category.name,
-        expenseTypeSnapshot: category.expenseType,
-        plannedAmountUzs: plan,
-        actualAmountUzs: actual,
-        varianceUzs: plan === null ? null : String(BigInt(plan) - BigInt(actual)),
-        reason: plan === null ? null : 'Oylik reja',
-        hasPlan,
-      };
-    }),
-  ),
-};
-
-export const budgetHistoricalVersion: BudgetVersion = {
-  ...budgetVersion,
-  id: 'budget-v1-history',
-  revisionNo: 1,
-  status: 'approved',
-  reason: 'Avgust budjetining birinchi tasdiqlangan reviziyasi',
-  createdByName: 'Madina Karimova',
-  submittedByName: 'Madina Karimova',
-  approvedByName: 'Shohrux Ermanov',
-  createdAt: '2026-07-30T15:00:00+05:00',
-  lines: budgetVersion.lines.map((line) => ({ ...line, id: `${line.id}-r1` })),
-};
-
-export const revenuePlans: RevenuePlan[] = [
-  {
-    id: 'rp-sayxun',
-    periodId: ids.periodAug,
-    periodLabel: 'Avgust 2026',
-    branchId: ids.sayxun,
-    branchName: 'Sayxun',
-    plannedAmountUzs: '160000000',
-    revisionNo: 2,
-    status: 'approved',
-    reason: 'Avgust qabul rejasi',
-    submittedByName: 'Madina Karimova',
-    approvedByName: 'Shohrux Ermanov',
-    updatedAt: '2026-08-02T10:00:00+05:00',
-  },
-  {
-    id: 'rp-xalqlar',
-    periodId: ids.periodAug,
-    periodLabel: 'Avgust 2026',
-    branchId: ids.xalqlar,
-    branchName: "Xalqlar do'stligi",
-    plannedAmountUzs: '140000000',
-    revisionNo: 1,
-    status: 'approved',
-    reason: 'Avgust qabul rejasi',
-    submittedByName: 'Madina Karimova',
-    approvedByName: 'Shohrux Ermanov',
-    updatedAt: '2026-08-02T10:10:00+05:00',
-  },
+export const budgetPlans: BudgetPlan[] = [
+  seedBudgetPlan(ids.periodAug, 'Avgust 2026', '2026-08-01T09:00:00+05:00', 100n),
+  seedBudgetPlan(ids.periodJul, 'Iyul 2026', '2026-07-01T09:00:00+05:00', 94n),
 ];
 
-export const dashboard: DashboardResponse = {
-  isDemo: true,
-  period: periods[0]!,
-  branchId: null,
-  expensePlanUzs: '125000000',
-  expenseActualUzs: '110000000',
-  expenseVarianceUzs: '15000000',
-  expenseCompletionPct: 88,
-  revenuePlanUzs: '300000000',
-  revenueActualUzs: '180000000',
-  revenueGapUzs: '120000000',
-  revenueOverPlanUzs: '0',
-  collectionPct: 60,
-  netResultUzs: '70000000',
-  netMarginPct: 38.89,
-  fixedExpenseUzs: '74000000',
-  variableExpenseUzs: '36000000',
-  channels: [
-    { id: ids.cash, name: 'Naqd', amountUzs: '90000000', sharePct: 50 },
-    { id: ids.card, name: 'Plastik karta', amountUzs: '50000000', sharePct: 27.78 },
-    { id: ids.bank, name: 'Bank', amountUzs: '40000000', sharePct: 22.22 },
-  ],
-  monthlyTrend: ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyun', 'Iyul', 'Avg'].map((month, index) => ({
+/** Oylik tushum rejasi (filial × davr). Kunlik/haftalik reja shu summadan bo‘linadi. */
+export const revenuePlanSeedUzs: Record<string, Record<string, MoneyUzs>> = {
+  [ids.periodAug]: { [ids.sayxun]: '160000000', [ids.xalqlar]: '140000000' },
+  [ids.periodJul]: { [ids.sayxun]: '150000000', [ids.xalqlar]: '130000000' },
+};
+
+function splitChannels(total: number): { cashUzs: string; cardUzs: string; transferUzs: string } {
+  const cash = Math.floor((total * 45) / 100);
+  const card = Math.floor((total * 35) / 100);
+  return { cashUzs: String(cash), cardUzs: String(card), transferUzs: String(total - cash - card) };
+}
+
+function seedDailyRevenues(): DailyRevenue[] {
+  const months = [
+    { periodId: ids.periodJul, year: 2026, month: 7, lastDay: 31 },
+    // Avgust — ochiq davr; demo “bugun” ~20-avgust, shuning uchun oy yarmi to‘ldirilgan.
+    { periodId: ids.periodAug, year: 2026, month: 8, lastDay: 20 },
+  ];
+  const perBranch = [
+    {
+      branch: branches[0]!,
+      base: 4_950_000,
+      enteredBy: ids.cashierA,
+      enteredByName: 'Aziza Rahimova',
+    },
+    {
+      branch: branches[1]!,
+      base: 4_300_000,
+      enteredBy: ids.cashierX,
+      enteredByName: 'Dilnoza Qodirova',
+    },
+  ];
+  const rows: DailyRevenue[] = [];
+  for (const { periodId, year, month, lastDay } of months) {
+    for (let day = 1; day <= lastDay; day += 1) {
+      const businessDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      for (const { branch, base, enteredBy, enteredByName } of perBranch) {
+        const wobble = ((day * 7919 + month * 13) % 13) - 6;
+        const total = base + wobble * 90_000;
+        const at = `${businessDate}T19:30:00+05:00`;
+        rows.push({
+          id: `rev-${branch.code.toLowerCase()}-${businessDate}`,
+          businessDate,
+          periodId,
+          branchId: branch.id,
+          branchName: branch.name,
+          ...splitChannels(total),
+          totalUzs: String(total),
+          comment: null,
+          enteredBy,
+          enteredByName,
+          createdAt: at,
+          updatedAt: at,
+        });
+      }
+    }
+  }
+  return rows;
+}
+
+export const dailyRevenues: DailyRevenue[] = seedDailyRevenues();
+
+/** Yanvar–Iyun 2026 tarixiy oylik agregatlari — oylik diagramma to‘liq ko‘rinishi uchun. */
+export const historicalMonthly: Array<{
+  month: number;
+  expensePlanUzs: MoneyUzs;
+  expenseActualUzs: MoneyUzs;
+  expenseFixedUzs: MoneyUzs;
+  revenuePlanUzs: MoneyUzs;
+  revenueActualUzs: MoneyUzs;
+}> = [1, 2, 3, 4, 5, 6].map((month, index) => {
+  const expenseActualUzs = 101_000_000 + index * 3_400_000;
+  return {
     month,
-    planUzs: String(220000000 + index * 10000000),
-    actualUzs: String(170000000 + index * 5000000),
-  })),
-  branches: [
-    {
-      branchId: ids.sayxun,
-      name: 'Sayxun',
-      planUzs: '160000000',
-      actualUzs: '150000000',
-      collectionPct: 93.75,
-    },
-    {
-      branchId: ids.xalqlar,
-      name: "Xalqlar do'stligi",
-      planUzs: '140000000',
-      actualUzs: '30000000',
-      collectionPct: 21.43,
-    },
-  ],
-  dataQuality: { status: 'mismatch', openCount: 4, excludedAmountUzs: '6318400' },
-};
-
-export const cashierSummaries: CashierSummary[] = [
-  {
-    collectorUserId: ids.cashierA,
-    collectorName: 'Aziza Rahimova',
-    branchId: ids.sayxun,
-    branchName: 'Sayxun',
-    isActive: true,
-    totalUzs: '70000000',
-    transactionCount: 2,
-    cashUzs: '60000000',
-    cardUzs: '10000000',
-    bankUzs: '0',
-    branchSharePct: 46.67,
-  },
-  {
-    collectorUserId: ids.cashierB,
-    collectorName: 'Komil Normurodov',
-    branchId: ids.sayxun,
-    branchName: 'Sayxun',
-    isActive: false,
-    totalUzs: '80000000',
-    transactionCount: 2,
-    cashUzs: '0',
-    cardUzs: '40000000',
-    bankUzs: '40000000',
-    branchSharePct: 53.33,
-  },
-  {
-    collectorUserId: ids.cashierX,
-    collectorName: 'Dilnoza Qodirova',
-    branchId: ids.xalqlar,
-    branchName: "Xalqlar do'stligi",
-    isActive: true,
-    totalUzs: '30000000',
-    transactionCount: 1,
-    cashUzs: '30000000',
-    cardUzs: '0',
-    bankUzs: '0',
-    branchSharePct: 100,
-  },
-];
-
-export const dqExceptions: DataQualityException[] = [
-  {
-    id: 'dq-1',
-    severity: 'error',
-    issueType: 'invalid_date',
-    title: 'Matn formatidagi sana',
-    sourceSheet: 'Xalqlar_kassa',
-    sourceRow: 31,
-    branchId: ids.xalqlar,
-    branchName: "Xalqlar do'stligi",
-    transactionDate: '15.08.2026',
-    amountUzs: '6068400',
-    detail: '43 ta text-date satrining bir qismi eski QUERY natijasidan tushib qolgan.',
-    ownerName: 'Madina Karimova',
-    status: 'open',
-    createdAt: '2026-08-20T08:00:00+05:00',
-  },
-  {
-    id: 'dq-2',
-    severity: 'error',
-    issueType: 'unknown_category',
-    title: 'Kategoriya aniqlanmagan',
-    sourceSheet: 'Xalqlar_kassa',
-    sourceRow: 27,
-    branchId: ids.xalqlar,
-    branchName: "Xalqlar do'stligi",
-    transactionDate: '2026-08-14',
-    amountUzs: '250000',
-    detail: '250 000 so‘mlik satr qo‘lda klassifikatsiya qilinishi kerak.',
-    ownerName: null,
-    status: 'open',
-    createdAt: '2026-08-20T08:02:00+05:00',
-  },
-  {
-    id: 'dq-3',
-    severity: 'warning',
-    issueType: 'category_alias',
-    title: 'Kategoriya aliasi',
-    sourceSheet: 'Budjet_tarixi',
-    sourceRow: 118,
-    branchId: ids.sayxun,
-    branchName: 'Sayxun',
-    transactionDate: null,
-    amountUzs: '1200000',
-    detail: 'Terminal,server,sms canonical nomga moslashtirilishi kerak.',
-    ownerName: 'Madina Karimova',
-    status: 'open',
-    createdAt: '2026-08-20T08:04:00+05:00',
-  },
-];
-
-export const reconciliations: ReconciliationResult[] = [
-  {
-    id: 'rec-legacy',
-    scope: 'Legacy jurnal vs kassa',
-    sourceCount: 92,
-    sourceSumUzs: '52433400',
-    targetCount: 49,
-    targetSumUzs: '46115000',
-    diffCount: 43,
-    diffSumUzs: '6318400',
-    status: 'mismatch',
-    checkedAt: '2026-08-20T08:05:00+05:00',
-  },
-  {
-    id: 'rec-revenue',
-    scope: 'Avgust tushum kesimlari',
-    sourceCount: 5,
-    sourceSumUzs: '180000000',
-    targetCount: 5,
-    targetSumUzs: '180000000',
-    diffCount: 0,
-    diffSumUzs: '0',
-    status: 'match',
-    checkedAt: '2026-08-20T08:06:00+05:00',
-  },
-];
-
-export const closeReadiness: PeriodCloseReadiness = {
-  period: periods[0]!,
-  canClose: false,
-  snapshot: null,
-  checks: [
-    {
-      id: 'expense-rec',
-      label: 'Xarajatlar reconciliation',
-      description: 'Kassa va ledger orasida 6 318 400 so‘m tafovut bor.',
-      status: 'blocked',
-      count: 43,
-      amountUzs: '6318400',
-    },
-    {
-      id: 'revenue-rec',
-      label: 'Tushum kesimlari',
-      description: 'Filial, kanal va kassir summalari teng.',
-      status: 'passed',
-    },
-    {
-      id: 'dq',
-      label: 'Data quality xatolari',
-      description: '2 ta kritik exception ochiq.',
-      status: 'blocked',
-      count: 2,
-      amountUzs: '6318400',
-    },
-    {
-      id: 'unplanned',
-      label: 'Budjetsiz xarajatlar',
-      description: 'Direktor ko‘rib chiqishi kerak.',
-      status: 'warning',
-      count: 1,
-      amountUzs: '1600000',
-    },
-    {
-      id: 'plans',
-      label: 'Rejalar tasdiqlangan',
-      description: 'Ikki filial tushum rejalari tasdiqlangan.',
-      status: 'passed',
-    },
-  ],
-  history: [
-    {
-      id: 'ph-1',
-      action: 'closed',
-      actorName: 'Shohrux Ermanov',
-      occurredAt: '2026-08-03T09:12:00+05:00',
-      reason: 'Iyul yakuni tasdiqlandi',
-    },
-    {
-      id: 'ph-2',
-      action: 'reopened',
-      actorName: 'Shohrux Ermanov',
-      occurredAt: '2026-08-03T10:02:00+05:00',
-      reason: 'Bank xarajati tuzatildi',
-    },
-  ],
-};
-
-export const auditEvents: AuditEvent[] = [
-  ...expenses.flatMap((item) => item.audit),
-  ...revenueTransactions.flatMap((item) => item.audit),
-  {
-    id: 'audit-close',
-    occurredAt: '2026-08-03T09:12:00+05:00',
-    actorId: ids.director,
-    actorName: 'Shohrux Ermanov',
-    action: 'period.close',
-    entityType: 'accounting_period',
-    entityId: ids.periodJul,
-    branchId: null,
-    branchName: null,
-    result: 'success',
-    reason: 'Iyul yakuni tasdiqlandi',
-  },
-];
+    expensePlanUzs: String(118_000_000 + index * 4_000_000),
+    expenseActualUzs: String(expenseActualUzs),
+    // Excel «Xulosa»da doimiy ulush ~65–70% atrofida bo‘ladi.
+    expenseFixedUzs: String(Math.round((expenseActualUzs * 67) / 100)),
+    revenuePlanUzs: String(255_000_000 + index * 6_000_000),
+    revenueActualUzs: String(238_000_000 + index * 5_200_000),
+  };
+});

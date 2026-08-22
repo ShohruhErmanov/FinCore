@@ -1,22 +1,8 @@
-import {
-  ArrowDownRight,
-  ArrowUpRight,
-  BadgeAlert,
-  CheckCircle2,
-  CircleMinus,
-  LockKeyhole,
-  RotateCcw,
-} from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, BadgeAlert, CheckCircle2, LockKeyhole } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/shared/lib/cn';
 import { formatMoney, formatPercent } from '@/shared/lib/format';
-import type {
-  ExpenseStatus,
-  MoneyUzs,
-  PeriodStatus,
-  PlanStatus,
-  RevenueStatus,
-} from '@/shared/types/domain';
+import type { MoneyUzs, PeriodStatus } from '@/shared/types/domain';
 
 type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'info';
 const toneClass: Record<Tone, string> = {
@@ -30,35 +16,16 @@ const toneClass: Record<Tone, string> = {
 export function StatusBadge({
   status,
 }: {
-  status:
-    | ExpenseStatus
-    | PlanStatus
-    | RevenueStatus
-    | PeriodStatus
-    | 'match'
-    | 'mismatch'
-    | 'active'
-    | 'blocked'
-    | 'resolved'
-    | 'open';
+  status: PeriodStatus | 'active' | 'inactive' | 'blocked';
 }) {
   const meta: Record<string, { label: string; tone: Tone; icon: React.ReactNode }> = {
-    draft: { label: 'Qoralama', tone: 'neutral', icon: <CircleMinus /> },
-    submitted: { label: 'Yuborilgan', tone: 'info', icon: <ArrowUpRight /> },
-    approved: { label: 'Tasdiqlangan', tone: 'success', icon: <CheckCircle2 /> },
-    rejected: { label: 'Rad etilgan', tone: 'danger', icon: <BadgeAlert /> },
-    locked: { label: 'Qulflangan', tone: 'neutral', icon: <LockKeyhole /> },
-    posted: { label: 'Qabul qilingan', tone: 'success', icon: <CheckCircle2 /> },
-    reversed: { label: 'Bekor qilingan', tone: 'danger', icon: <RotateCcw /> },
     closed: { label: 'Yopiq davr', tone: 'neutral', icon: <LockKeyhole /> },
     open: { label: 'Ochiq', tone: 'success', icon: <CheckCircle2 /> },
-    match: { label: 'Mos', tone: 'success', icon: <CheckCircle2 /> },
-    mismatch: { label: 'Tafovut', tone: 'danger', icon: <BadgeAlert /> },
     active: { label: 'Faol', tone: 'success', icon: <CheckCircle2 /> },
+    inactive: { label: 'Nofaol', tone: 'neutral', icon: <ArrowDownRight /> },
     blocked: { label: 'Bloklangan', tone: 'danger', icon: <BadgeAlert /> },
-    resolved: { label: 'Hal qilingan', tone: 'success', icon: <CheckCircle2 /> },
   };
-  const item = meta[status] ?? { label: status, tone: 'neutral' as const, icon: <CircleMinus /> };
+  const item = meta[status] ?? { label: status, tone: 'neutral' as const, icon: <ArrowUpRight /> };
   return (
     <span
       className={cn(

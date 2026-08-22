@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CirclePlus, KeyRound, UserCog } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { getApiErrorMessage } from '@/shared/api/client';
-import { adminApi } from '@/shared/api/contracts';
+import { adminApi, referenceApi } from '@/shared/api/contracts';
 import { queryKeys } from '@/shared/api/query-keys';
 import { formatDateTime } from '@/shared/lib/format';
 import type { AuthenticatedUser, RoleCode, UserStatus } from '@/shared/types/domain';
@@ -10,6 +10,7 @@ import {
   Alert,
   Button,
   Card,
+  CurrencyInput,
   DataTable,
   ErrorState,
   FormField,
@@ -19,10 +20,13 @@ import {
   Select,
   type Column,
 } from '@/shared/ui';
-import { useRevenueReferences } from '@/features/revenue/revenue-shared';
 
 export function UsersPage() {
-  const references = useRevenueReferences();
+  const branchesQuery = useQuery({
+    queryKey: queryKeys.branches,
+    queryFn: ({ signal }) => referenceApi.branches(signal),
+    staleTime: 300_000,
+  });
   const users = useQuery({
     queryKey: queryKeys.users,
     queryFn: ({ signal }) => adminApi.users(signal),
@@ -55,6 +59,12 @@ export function UsersPage() {
       ),
     },
     { key: 'status', header: 'Holat', cell: (row) => <UserStatusBadge value={row.status} /> },
+    {
+      key: 'salary',
+      header: 'Fix oylik',
+      className: 'text-right',
+      cell: (row) => <SalaryCell user={row} />,
+    },
     {
       key: 'lastLogin',
       header: 'Oxirgi kirish',
@@ -108,7 +118,7 @@ export function UsersPage() {
       </Alert>
       {creating ? (
         <CreateUserPanel
-          branches={references.branches.data ?? []}
+          branches={branchesQuery.data ?? []}
           onClose={() => setCreating(false)}
         />
       ) : null}
@@ -116,7 +126,7 @@ export function UsersPage() {
         <EditUserAccessPanel
           key={editingAccess.id}
           user={editingAccess}
-          branches={references.branches.data ?? []}
+          branches={branchesQuery.data ?? []}
           onClose={() => setEditingAccess(null)}
         />
       ) : null}
@@ -372,6 +382,39 @@ function CreateUserPanel({
         </div>
       </form>
     </Card>
+  );
+}
+
+function SalaryCell({ user }: { user: AuthenticatedUser }) {
+  const queryClient = useQueryClient();
+  const [value, setValue] = useState(user.fixedSalaryUzs);
+  const mutation = useMutation({
+    mutationFn: () => adminApi.updateUserSalary(user.id, value),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.users });
+      await queryClient.invalidateQueries({ queryKey: ['report'] });
+    },
+  });
+  return (
+    <div className="flex min-w-44 items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+      <CurrencyInput
+        aria-label={`${user.fullName} fix oyligi`}
+        className="text-right"
+        value={value}
+        onChange={(event) => {
+          if (/^\d*$/.test(event.target.value)) setValue(event.target.value || '0');
+        }}
+      />
+      <Button
+        size="sm"
+        variant="secondary"
+        disabled={value === user.fixedSalaryUzs}
+        loading={mutation.isPending}
+        onClick={() => mutation.mutate()}
+      >
+        Saqlash
+      </Button>
+    </div>
   );
 }
 

@@ -74,8 +74,7 @@ export function LoginPage() {
             Ikki filial moliyasini bitta ishonchli ledgerda boshqaring.
           </h1>
           <p className="mt-6 max-w-lg text-base leading-7 text-slate-300">
-            Budjet, xarajat, tushum, kassir va reconciliation bir-biriga bog‘langan. Har KPI manba
-            tranzaksiyasigacha ochiladi.
+            Budjet va xarajat bitta ledgerda bog‘langan. Har KPI manba tranzaksiyasigacha ochiladi.
           </p>
         </div>
         <div className="relative flex gap-8 text-sm text-slate-300">
