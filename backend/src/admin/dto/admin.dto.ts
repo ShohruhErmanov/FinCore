@@ -41,6 +41,21 @@ export class UserCreateDto {
   @ValidateIf((dto: UserCreateDto) => dto.cashierBranchId !== null && dto.cashierBranchId !== undefined)
   @IsUUID()
   cashierBranchId?: string | null;
+
+  /**
+   * Minimum 12 characters — the same policy `npm run bootstrap:users` enforces,
+   * so an account created through the UI is no weaker than a seeded one.
+   * writeOnly: it is hashed on arrival and never appears in any response.
+   */
+  @ApiProperty({ writeOnly: true, minLength: 12, description: 'Kamida 12 belgi' })
+  @IsString()
+  @MinLength(12, { message: 'Parol kamida 12 belgidan iborat bo‘lishi kerak' })
+  @MaxLength(200)
+  password!: string;
+
+  @ApiProperty({ writeOnly: true, description: 'Parol bilan bir xil bo‘lishi shart' })
+  @IsString()
+  confirmPassword!: string;
 }
 
 export class RoleAssignmentDto {

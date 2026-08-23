@@ -276,6 +276,8 @@ function CreateUserPanel({
   const [role, setRole] = useState<RoleCode>('cashier');
   const [alsoCashier, setAlsoCashier] = useState(false);
   const [branchId, setBranchId] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const mutation = useMutation({
     mutationFn: () =>
@@ -285,6 +287,8 @@ function CreateUserPanel({
         role,
         branchId: role === 'cashier' ? branchId : null,
         cashierBranchId: role === 'finance_manager' && alsoCashier ? branchId : null,
+        password,
+        confirmPassword,
       }),
     onSuccess: async () => {
       await Promise.all([
@@ -301,6 +305,8 @@ function CreateUserPanel({
       return setError('Telefon +998XXXXXXXXX formatida bo‘lsin.');
     if ((role === 'cashier' || (role === 'finance_manager' && alsoCashier)) && !branchId)
       return setError('Kassir roli uchun filial scope majburiy.');
+    if (password.length < 12) return setError('Parol kamida 12 belgidan iborat bo‘lsin.');
+    if (password !== confirmPassword) return setError('Parol va tasdiqlash mos emas.');
     setError(null);
     mutation.mutate();
   };
@@ -320,6 +326,29 @@ function CreateUserPanel({
             type="tel"
             value={phone}
             onChange={(event) => setPhone(event.target.value)}
+          />
+        </FormField>
+        <FormField
+          label="Parol"
+          htmlFor="user-password"
+          required
+          hint="Kamida 12 belgi‑ xodimga alohida yetkazing"
+        >
+          <Input
+            id="user-password"
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </FormField>
+        <FormField label="Parolni tasdiqlang" htmlFor="user-password-confirm" required>
+          <Input
+            id="user-password-confirm"
+            type="password"
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
           />
         </FormField>
         <FormField label="Rol" htmlFor="user-role" required>

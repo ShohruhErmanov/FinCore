@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { AuthService } from '@/auth';
+import { AuthService, hashPassword } from '@/auth';
 import { ApiException, type AuthenticatedUser } from '@/common';
 import { ActorContextService, PrismaService } from '@/database';
 import type { UserAccessDto, UserCreateDto, UserStatusDto } from './dto/admin.dto';
@@ -74,6 +74,11 @@ export class AdminUsersService {
         'Direktor rolini faqat amaldagi direktor biriktirishi mumkin.',
       );
 
+    // Checked server-side too: the browser can be bypassed, and a mismatch here
+    // would silently give the new account a password nobody knows.
+    if (input.password !== input.confirmPassword)
+      throw new ApiException(422, 'PASSWORD_MISMATCH', 'Parol va tasdiqlash mos emas.');
+
     const phone = normalizePhone(input.phone.trim());
     const digits = phone.replace(/\D/g, '');
     // Compared digits-only so "+998 90 …" and "+99890…" collide, which the
@@ -106,6 +111,9 @@ export class AdminUsersService {
       grants.push({ role: 'cashier', branchId: branch.id });
 
     const roleIds = await this.resolveRoleIds(grants.map((grant) => grant.role));
+    // Same helper the login path verifies against, so a freshly created account
+    // can sign in immediately with phone + password.
+    const password_hash = await hashPassword(input.password);
 
     const created = await this.prisma
       .withActor(this.actor.mint(actor.id), async (tx) => {
@@ -114,11 +122,7 @@ export class AdminUsersService {
             full_name: input.fullName.trim(),
             phone,
             email: null,
-            // The frontend never collects a password, and the contract has no
-            // endpoint to set one, so the account ships unusable — exactly the
-            // convention 002_seed_reference.sql uses for its system account.
-            // A password is issued separately via `npm run bootstrap:users`.
-            password_hash: '!disabled!',
+            password_hash,
             status: 'active',
             is_system: false,
           },

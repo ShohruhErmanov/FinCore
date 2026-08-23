@@ -66,6 +66,9 @@ export interface UserCreateInput {
   role: RoleCode;
   branchId: UUID | null;
   cashierBranchId: UUID | null;
+  /** Kamida 12 belgi. Server bcrypt bilan xeshlaydi; javobda hech qachon qaytmaydi. */
+  password: string;
+  confirmPassword: string;
 }
 
 export interface UserAccessUpdateInput {
