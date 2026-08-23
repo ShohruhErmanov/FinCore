@@ -14,18 +14,22 @@ test.describe('Budjet frontend acceptance ssenariylari', () => {
       .getByRole('row')
       .filter({ hasText: 'Tozalash' })
       .filter({ hasText: 'Sayxun' });
-    await expect(zeroPlanRow).toContainText(/0.?so'm/);
+    // Reja qatori BOR, summasi 0 — bu «Nol reja», «reja yo‘q» emas.
+    await expect(zeroPlanRow.getByRole('checkbox')).toBeChecked();
     await expect(zeroPlanRow).toContainText('0 so‘m — valid nol reja');
-    await expect(zeroPlanRow).toContainText('Rejadan tashqari / Unplanned');
+    await expect(zeroPlanRow).toContainText('Nol reja');
+    await expect(zeroPlanRow).not.toContainText('Reja mavjud emas');
     await expect(zeroPlanRow).toContainText(/Bajarilish:\s*—/);
     await expect(zeroPlanRow).not.toContainText(/Infinity|NaN/);
 
+    // Reja qatori YO‘Q — foiz ham, farq ham hisoblanmaydi.
     const noPlanRow = budgetTable
       .getByRole('row')
       .filter({ hasText: 'Qo‘riqlash' })
       .filter({ hasText: "Xalqlar do'stligi" });
-    await expect(noPlanRow).toContainText('Mavjud emas');
+    await expect(noPlanRow.getByRole('checkbox')).not.toBeChecked();
     await expect(noPlanRow).toContainText('Reja mavjud emas');
+    await expect(noPlanRow).not.toContainText('Nol reja');
     await expect(noPlanRow).toContainText(/Bajarilish:\s*—/);
   });
 });

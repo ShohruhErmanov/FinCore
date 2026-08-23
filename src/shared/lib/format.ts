@@ -8,26 +8,36 @@ export function asMoneyUzs(value: string | number | bigint): MoneyUzs {
   return normalized;
 }
 
+/**
+ * Uch xonalik guruhlar uzilmas bo‘shliq bilan ajratiladi: 1 732 500.
+ * `Intl`ga tayanilmaydi — brauzerlarda `uz-UZ` uchun raqam ma’lumoti yo‘q va
+ * u inglizcha «1,732,500» ga qaytadi (Node’dagi ICU’da esa bo‘shliq chiqadi,
+ * ya’ni xato faqat foydalanuvchida ko‘rinardi).
+ */
+function groupDigits(digits: string): string {
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+}
+
 export function formatMoney(value: MoneyUzs | null | undefined, compact = false): string {
   if (value === null || value === undefined) return 'Reja mavjud emas';
   const amount = BigInt(value);
-  if (compact && (amount >= 1_000_000n || amount <= -1_000_000n)) {
-    const absolute = amount < 0n ? -amount : amount;
+  const negative = amount < 0n;
+  const absolute = negative ? -amount : amount;
+  const sign = negative ? '−' : '';
+  if (compact && absolute >= 1_000_000n) {
     const whole = absolute / 1_000_000n;
     const decimal = (absolute % 1_000_000n) / 100_000n;
-    const prefix = amount < 0n ? '−' : '';
-    return `${prefix}${whole}${decimal > 0n ? `.${decimal}` : ''} mln so'm`;
+    return `${sign}${groupDigits(whole.toString())}${decimal > 0n ? `,${decimal}` : ''} mln so'm`;
   }
-  return `${new Intl.NumberFormat('uz-UZ').format(amount)} so'm`;
+  return `${sign}${groupDigits(absolute.toString())} so'm`;
 }
 
-export function formatInteger(value: number | bigint): string {
-  return new Intl.NumberFormat('uz-UZ').format(value);
-}
-
+/** Kasr qismi vergul bilan: 93,75% — o‘zbek/CIS yozuvi. */
 export function formatPercent(value: number | null | undefined, digits = 2): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';
-  return `${new Intl.NumberFormat('uz-UZ', { maximumFractionDigits: digits }).format(value)}%`;
+  const [whole = '0', fraction = ''] = Math.abs(value).toFixed(digits).split('.');
+  const trimmed = fraction.replace(/0+$/, '');
+  return `${value < 0 ? '−' : ''}${groupDigits(whole)}${trimmed ? `,${trimmed}` : ''}%`;
 }
 
 const monthNamesUz = [

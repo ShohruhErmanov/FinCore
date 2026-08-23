@@ -260,6 +260,9 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
           type="button"
           onClick={() => setAccountOpen((value) => !value)}
           className="flex min-h-11 items-center gap-3 rounded-lg px-2 text-left hover:bg-slate-100"
+          // Mobil ekranda ism yashiriladi va faqat bosh harflar qoladi —
+          // tugmaning nomi baribir to‘liq bo‘lishi kerak.
+          aria-label={user ? `${user.fullName} — hisob menyusi` : 'Hisob menyusi'}
           aria-expanded={accountOpen}
           aria-haspopup="menu"
         >

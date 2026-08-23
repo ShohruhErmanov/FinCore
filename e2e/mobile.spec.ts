@@ -1,12 +1,13 @@
 import { expect, test } from '@playwright/test';
-import { login } from './support/auth';
+import { demoAccounts, login } from './support/auth';
 
 test.describe('Cashier mobile viewport', () => {
   test('[FE-MOBILE-01] 390px xarajat formasida sahifa gorizontal chiqib ketmaydi', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await login(page);
+    // Direktor xarajat kiritmaydi — forma kassir/moliya roli uchun.
+    await login(page, demoAccounts.financeCashier);
     await page.goto('/expenses/new');
 
     await expect(page.getByRole('heading', { name: 'Yangi xarajat' })).toBeVisible();

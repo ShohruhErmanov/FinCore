@@ -5,7 +5,7 @@ import { getApiErrorMessage } from '@/shared/api/client';
 import { referenceApi, reportApi } from '@/shared/api/contracts';
 import { queryKeys } from '@/shared/api/query-keys';
 import { downloadCsv } from '@/shared/lib/csv';
-import { formatMoney } from '@/shared/lib/format';
+import { formatMoney, formatPercent } from '@/shared/lib/format';
 import type { CashierReport } from './cashier-report';
 import {
   Alert,
@@ -231,7 +231,7 @@ function OwnPerformance({ report }: { report: CashierReport }) {
           <Tile
             label="Reja bajarilishi"
             value={<PercentText value={row.completionPct} />}
-            helper={`Markaz tushumidagi ulushingiz ${row.branchSharePct === null ? '—' : `${row.branchSharePct}%`}`}
+            helper={`Markaz tushumidagi ulushingiz ${formatPercent(row.branchSharePct)}`}
           />
         </div>
 
@@ -300,7 +300,7 @@ function CashierReportContent({ report }: { report: CashierReport }) {
         <Tile
           label="Rejadan farq"
           value={<VarianceText value={report.total.varianceUzs} />}
-          helper={`Bajarilish ${report.total.completionPct === null ? '—' : `${report.total.completionPct}%`}`}
+          helper={`Bajarilish ${formatPercent(report.total.completionPct)}`}
         />
         <Tile
           label="Fix oyliklar jami"

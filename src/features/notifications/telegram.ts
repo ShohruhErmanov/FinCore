@@ -11,7 +11,7 @@ export function telegramMoney(value: MoneyUzs | null | undefined): string {
 export function telegramPercent(value: number | null | undefined): string {
   return value === null || value === undefined || !Number.isFinite(value)
     ? '—'
-    : `${Math.round(value * 10) / 10}%`;
+    : `${String(Math.round(value * 10) / 10).replace('.', ',')}%`;
 }
 
 function uzDate(value: IsoDate): string {

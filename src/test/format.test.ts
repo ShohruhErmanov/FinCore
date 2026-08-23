@@ -18,7 +18,10 @@ describe('[FE-MONEY-01] UZS formatterlari', () => {
       "9 007 199 254 740 993 000 so'm",
     );
     expect(formatMoney('300000000', true)).toBe("300 mln so'm");
-    expect(formatMoney('-1250000', true)).toBe("−1.2 mln so'm");
+    expect(formatMoney('-1250000', true)).toBe("−1,2 mln so'm");
+    // Guruh ajratgichi — bo‘shliq, kasr ajratgichi — vergul (o‘zbek yozuvi).
+    expect(normalizeSpaces(formatMoney('1732500'))).toBe("1 732 500 so'm");
+    expect(normalizeSpaces(formatMoney('-27100000'))).toBe("−27 100 000 so'm");
   });
 
   it('yo‘q reja va signed moliyaviy qiymatni aniq ajratadi', () => {
@@ -51,6 +54,9 @@ describe('[AC-07, AC-15, AC-16] foiz semantikasi', () => {
     expect(formatPercent(60)).toBe('60%');
     expect(formatPercent(93.75)).toBe('93,75%');
     expect(formatPercent(33.333, 2)).toBe('33,33%');
+    expect(formatPercent(61.73)).toBe('61,73%');
+    expect(normalizeSpaces(formatPercent(3111.11))).toBe('3 111,11%');
+    expect(formatPercent(-5.5)).toBe('−5,5%');
   });
 });
 

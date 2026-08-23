@@ -41,7 +41,7 @@ describe('[FE-TG-01] summa va foiz formati', () => {
   });
 
   it('foizni bir xona aniqlikda beradi', () => {
-    expect(telegramPercent(61.73)).toBe('61.7%');
+    expect(telegramPercent(61.73)).toBe('61,7%');
     expect(telegramPercent(null)).toBe('—');
   });
 });
@@ -124,8 +124,8 @@ describe('[FE-TG-03] xabar matnlari', () => {
 
     expect(message).toContain('Avgust 2026 — oylik yakun');
     expect(message).toContain("Amalda:  185 100 000 so'm");
-    expect(message).toContain('Bajarilish: 61.7%');
-    expect(message).toContain("Doimiy: 74 000 000 so'm (66.3%)");
+    expect(message).toContain('Bajarilish: 61,7%');
+    expect(message).toContain("Doimiy: 74 000 000 so'm (66,3%)");
     // Sof natija = tushum − xarajat
     expect(message).toContain("NATIJA: 73 500 000 so'm");
     expect(message).toContain('• Sayxun');
