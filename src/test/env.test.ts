@@ -13,6 +13,9 @@ describe('shared/config/env', () => {
   });
 
   it('falls back to /api when VITE_API_BASE_URL is unset', async () => {
+    // Forced rather than assumed: a developer running against a local backend
+    // has VITE_API_BASE_URL set in .env.local, and Vitest loads that file.
+    vi.stubEnv('VITE_API_BASE_URL', undefined);
     const environment = await loadEnvironment();
     expect(environment.apiBaseUrl).toBe('/api');
   });

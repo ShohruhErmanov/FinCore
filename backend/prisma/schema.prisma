@@ -1,0 +1,326 @@
+// FinCore — Prisma schema, Phase 18.1 (foundation scope only).
+//
+// Source of truth for the physical schema is docs/database/001_reference_schema.sql.
+// This file MAPS onto it; it does not define or redesign it. Only the models the
+// authentication foundation needs are declared here. The remaining tables
+// (expenses, budgets, revenue, imports, audit_logs, views, …) are intentionally
+// absent and will be added by the phase that owns them — see
+// docs/PHASE_18_1_BACKEND_FOUNDATION.md §16.
+//
+// Migrations are NOT generated from this file. The SQL scripts remain
+// authoritative; use `prisma db pull` to re-derive models from a live database.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["fincore"]
+}
+
+enum user_status {
+  active
+  inactive
+  blocked
+
+  @@schema("fincore")
+}
+
+enum expense_type {
+  fixed
+  variable
+
+  @@schema("fincore")
+}
+
+enum period_status {
+  open
+  closed
+
+  @@schema("fincore")
+}
+
+model users {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  full_name     String
+  phone         String?     @unique
+  email         String?     @unique
+  password_hash String
+  status        user_status @default(active)
+  is_system     Boolean     @default(false)
+  last_login_at DateTime?   @db.Timestamptz(6)
+  created_at    DateTime    @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime    @default(now()) @db.Timestamptz(6)
+  version       Int         @default(1)
+
+  user_roles user_roles[] @relation("user_roles_user")
+
+  @@schema("fincore")
+}
+
+model roles {
+  id                      String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                    String   @unique
+  name                    String
+  is_active               Boolean  @default(true)
+  allows_all_branch_scope Boolean  @default(false)
+  created_at              DateTime @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime @default(now()) @db.Timestamptz(6)
+
+  role_permissions role_permissions[]
+  user_roles       user_roles[]
+
+  @@schema("fincore")
+}
+
+model permissions {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String   @unique
+  category    String
+  description String
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  role_permissions role_permissions[]
+
+  @@schema("fincore")
+}
+
+model role_permissions {
+  role_id       String @db.Uuid
+  permission_id String @db.Uuid
+
+  role       roles       @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  permission permissions @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+
+  @@id([role_id, permission_id])
+  @@schema("fincore")
+}
+
+model user_roles {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String    @db.Uuid
+  role_id    String    @db.Uuid
+  branch_id  String?   @db.Uuid
+  is_active  Boolean   @default(true)
+  granted_by String    @db.Uuid
+  granted_at DateTime  @default(now()) @db.Timestamptz(6)
+  revoked_by String?   @db.Uuid
+  revoked_at DateTime? @db.Timestamptz(6)
+
+  // No cascade here: 001_reference_schema.sql declares plain REFERENCES on
+  // user_id and role_id. Role grants are revoked (revoked_at), never deleted.
+  user users @relation("user_roles_user", fields: [user_id], references: [id])
+  role roles @relation(fields: [role_id], references: [id])
+  // branch_id carries no database foreign key in the approved schema; the
+  // relation exists only so the auth projection can read branches.name.
+  branch branches? @relation(fields: [branch_id], references: [id])
+
+  @@schema("fincore")
+}
+
+model branches {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code       String   @unique
+  name       String
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+
+  user_roles user_roles[]
+  expenses   expenses[]
+  budget_lines budget_lines[]
+
+  @@schema("fincore")
+}
+
+// ---------------------------------------------------------------------------
+// Reference / master data — Phase 18.2 (read-only).
+// Mapped onto the existing tables from 001_reference_schema.sql; no new table.
+// ---------------------------------------------------------------------------
+
+model departments {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code       String   @unique
+  name       String
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+
+  expenses expenses[]
+
+  @@schema("fincore")
+}
+
+model payment_methods {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code       String   @unique
+  name       String
+  is_active  Boolean  @default(true)
+  sort_order Int      @default(0)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+
+  expenses expenses[]
+
+  @@schema("fincore")
+}
+
+model expense_categories {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code         String       @unique
+  name         String
+  expense_type expense_type
+  is_active    Boolean      @default(true)
+  sort_order   Int          @default(0)
+  created_at   DateTime     @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime     @default(now()) @db.Timestamptz(6)
+
+  category_aliases category_aliases[]
+  expenses         expenses[]
+  budget_lines     budget_lines[]
+
+  @@schema("fincore")
+}
+
+model category_aliases {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  category_id      String   @db.Uuid
+  alias_text       String
+  normalized_alias String?
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+
+  category expense_categories @relation(fields: [category_id], references: [id], onDelete: Cascade)
+
+  @@schema("fincore")
+}
+
+model accounting_periods {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  year          Int           @db.SmallInt
+  month         Int           @db.SmallInt
+  status        period_status @default(open)
+  closed_at     DateTime?     @db.Timestamptz(6)
+  closed_by     String?       @db.Uuid
+  closed_note   String?
+  reopened_at   DateTime?     @db.Timestamptz(6)
+  reopened_by   String?       @db.Uuid
+  reopen_reason String?
+  created_at    DateTime      @default(now()) @db.Timestamptz(6)
+
+  expenses        expenses[]
+  budget_versions budget_versions[]
+
+  @@schema("fincore")
+}
+
+enum expense_status {
+  draft
+  submitted
+  approved
+  rejected
+  reversed
+
+  @@schema("fincore")
+}
+
+/// Append-only expense ledger. Period id and category snapshots are filled by
+/// trg_expenses_derive_period_snapshot; closed-period locking by trg_expenses_guard.
+model expenses {
+  id                     String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  transaction_date       DateTime       @db.Date
+  accounting_period_id   String         @db.Uuid
+  branch_id              String         @db.Uuid
+  category_id            String         @db.Uuid
+  expense_type_snapshot  expense_type
+  category_code_snapshot String
+  category_name_snapshot String
+  description            String
+  amount_uzs             BigInt
+  payment_method_id      String         @db.Uuid
+  department_id          String         @db.Uuid
+  responsible_user_id    String         @db.Uuid
+  comment                String?
+  entered_by             String         @db.Uuid
+  status                 expense_status @default(approved)
+  is_reversed            Boolean        @default(false)
+  idempotency_key        String?
+  source_workbook        String?
+  source_sheet           String?
+  source_row             Int?
+  import_batch_id        String?        @db.Uuid
+  created_at             DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime       @default(now()) @db.Timestamptz(6)
+  version                Int            @default(1)
+
+  branch         branches           @relation(fields: [branch_id], references: [id])
+  category       expense_categories @relation(fields: [category_id], references: [id])
+  payment_method payment_methods    @relation(fields: [payment_method_id], references: [id])
+  department     departments        @relation(fields: [department_id], references: [id])
+  period         accounting_periods @relation(fields: [accounting_period_id], references: [id])
+
+  @@schema("fincore")
+}
+
+enum budget_status {
+  draft
+  submitted
+  approved
+  locked
+
+  @@schema("fincore")
+}
+
+/// One working plan per period. The frontend model has no approval workflow, so
+/// the backend keeps a single revision in `draft` — the only status
+/// trg_budget_lines_guard allows lines to be written under.
+model budget_versions {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  period_id    String        @db.Uuid
+  revision_no  Int
+  status       budget_status @default(draft)
+  is_applicable Boolean      @default(false)
+  reason       String?
+  created_by   String        @db.Uuid
+  submitted_by String?       @db.Uuid
+  submitted_at DateTime?     @db.Timestamptz(6)
+  approved_by  String?       @db.Uuid
+  approved_at  DateTime?     @db.Timestamptz(6)
+  locked_by    String?       @db.Uuid
+  locked_at    DateTime?     @db.Timestamptz(6)
+  created_at   DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime      @default(now()) @db.Timestamptz(6)
+  version      Int           @default(1)
+
+  period accounting_periods @relation(fields: [period_id], references: [id])
+  lines  budget_lines[]
+
+  @@unique([period_id, revision_no])
+  @@schema("fincore")
+}
+
+/// Snapshot columns are filled by trg_budget_lines_derive_snapshot.
+model budget_lines {
+  id                     String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  version_id             String       @db.Uuid
+  branch_id              String       @db.Uuid
+  category_id            String       @db.Uuid
+  expense_type_snapshot  expense_type
+  category_code_snapshot String
+  category_name_snapshot String
+  planned_amount_uzs     BigInt
+  reason                 String?
+  created_by             String       @db.Uuid
+  updated_by             String?      @db.Uuid
+  created_at             DateTime     @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime     @default(now()) @db.Timestamptz(6)
+
+  budget_version budget_versions    @relation(fields: [version_id], references: [id], onDelete: Cascade)
+  branch         branches           @relation(fields: [branch_id], references: [id])
+  category       expense_categories @relation(fields: [category_id], references: [id])
+
+  @@unique([version_id, branch_id, category_id])
+  @@schema("fincore")
+}

@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { getApiErrorMessage } from '@/shared/api/client';
+import { environment } from '@/shared/config/env';
 import { routes } from '@/shared/config/routes';
 import { Alert, Button, FormField, Input } from '@/shared/ui';
 import { useAuth } from './auth-context';
@@ -34,7 +35,11 @@ export function LoginPage() {
     formState: { errors, isSubmitting },
   } = useForm<LoginValues>({
     resolver: zodResolver(schema),
-    defaultValues: { login: '+998901112233', password: 'demo123' },
+    // Prefilled only in mock mode. Against a real backend these credentials do
+    // not exist, and a pre-filled form that always fails is worse than an empty one.
+    defaultValues: environment.enableMocks
+      ? { login: '+998901112233', password: 'demo123' }
+      : { login: '', password: '' },
   });
   if (auth.isAuthenticated) return <Navigate to={routes.dashboard} replace />;
   const destination = (location.state as { from?: string } | null)?.from ?? routes.dashboard;
@@ -153,29 +158,33 @@ export function LoginPage() {
                 Kirish
               </Button>
             </form>
-            <div className="mt-7 border-t border-border pt-5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                Demo hisoblar · parol: demo123
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {demoAccounts.map((account) => (
-                  <button
-                    key={account.phone}
-                    type="button"
-                    onClick={() => {
-                      setValue('login', account.phone);
-                      setValue('password', 'demo123');
-                    }}
-                    className="rounded-full border border-border bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-blue-300 hover:bg-blue-50"
-                  >
-                    {account.label}
-                  </button>
-                ))}
+            {environment.enableMocks && (
+              <div className="mt-7 border-t border-border pt-5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                  Demo hisoblar · parol: demo123
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {demoAccounts.map((account) => (
+                    <button
+                      key={account.phone}
+                      type="button"
+                      onClick={() => {
+                        setValue('login', account.phone);
+                        setValue('password', 'demo123');
+                      }}
+                      className="rounded-full border border-border bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-blue-300 hover:bg-blue-50"
+                    >
+                      {account.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
           <p className="mt-5 text-center text-xs text-slate-400">
-            Demo muhit. Production sessiya HTTP-only cookie orqali boshqariladi.
+            {environment.enableMocks
+              ? 'Demo muhit. Production sessiya HTTP-only cookie orqali boshqariladi.'
+              : 'Sessiya HTTP-only cookie orqali boshqariladi.'}
           </p>
         </div>
       </section>

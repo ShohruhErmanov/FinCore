@@ -97,7 +97,7 @@ SELECT
   rt.id, rt.receipt_no,
   ap.year, ap.month, ap.id AS accounting_period_id, ap.status AS period_status,
   rt.branch_id, b.name AS branch_name,
-  rt.payment_date, rt.amount_uzs,
+  rt.payment_business_date, rt.amount_uzs,
   rt.payment_method_id, pm.name AS payment_method_name,
   rt.collector_user_id, cu.full_name AS collector_name,
   rt.entered_by, eb.full_name AS entered_by_name,

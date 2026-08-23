@@ -34,7 +34,9 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
-    exclude: ['e2e/**', 'node_modules/**', 'dist/**'],
+    // backend/ has its own Vitest suite and its own node_modules; without this
+    // the frontend run picks up both and fails on server-only imports.
+    exclude: ['e2e/**', 'node_modules/**', 'dist/**', 'backend/**'],
     css: true,
     coverage: { provider: 'v8', reporter: ['text', 'html'] },
   },
