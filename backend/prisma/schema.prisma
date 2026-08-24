@@ -132,6 +132,7 @@ model branches {
   user_roles user_roles[]
   expenses   expenses[]
   budget_lines budget_lines[]
+  revenue_plans revenue_plans[]
 
   @@schema("fincore")
 }
@@ -212,6 +213,7 @@ model accounting_periods {
 
   expenses        expenses[]
   budget_versions budget_versions[]
+  revenue_plans   revenue_plans[]
 
   @@schema("fincore")
 }
@@ -322,5 +324,44 @@ model budget_lines {
   category       expense_categories @relation(fields: [category_id], references: [id])
 
   @@unique([version_id, branch_id, category_id])
+  @@schema("fincore")
+}
+
+enum revenue_plan_status {
+  draft
+  submitted
+  approved
+  locked
+
+  @@schema("fincore")
+}
+
+/// One plan row per period × branch. trg_revenue_plans_guard keeps a `draft`
+/// row mutable and blocks any write once the accounting period is closed;
+/// v_applicable_revenue_plan only sees rows flagged is_applicable.
+model revenue_plans {
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  period_id          String              @db.Uuid
+  branch_id          String              @db.Uuid
+  revision_no        Int
+  planned_amount_uzs BigInt
+  status             revenue_plan_status @default(draft)
+  is_applicable      Boolean             @default(false)
+  reason             String?
+  created_by         String              @db.Uuid
+  submitted_by       String?             @db.Uuid
+  submitted_at       DateTime?           @db.Timestamptz(6)
+  approved_by        String?             @db.Uuid
+  approved_at        DateTime?           @db.Timestamptz(6)
+  locked_by          String?             @db.Uuid
+  locked_at          DateTime?           @db.Timestamptz(6)
+  created_at         DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime            @default(now()) @db.Timestamptz(6)
+  version            Int                 @default(1)
+
+  period accounting_periods @relation(fields: [period_id], references: [id])
+  branch branches           @relation(fields: [branch_id], references: [id])
+
+  @@unique([period_id, branch_id, revision_no])
   @@schema("fincore")
 }

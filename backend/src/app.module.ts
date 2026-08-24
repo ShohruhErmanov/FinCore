@@ -11,6 +11,7 @@ import { ExpensesModule } from './expenses/expenses.module';
 import { BudgetModule } from './budget/budget.module';
 import { ReportsModule } from './reports/reports.module';
 import { AdminModule } from './admin/admin.module';
+import { RevenuePlansModule } from './revenue-plans/revenue-plans.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { AdminModule } from './admin/admin.module';
     BudgetModule,
     ReportsModule,
     AdminModule,
+    RevenuePlansModule,
   ],
   providers: [
     // Order matters: authenticate, then check permissions, then rate-limit.
