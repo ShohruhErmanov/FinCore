@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ApiException, type AuthenticatedUser, type RoleAssignment, type UserStatus } from '@/common';
-import { toIsoDateTime } from '@/common/serialization/financial';
+import { toIsoDateTime, toMoneyUzs } from '@/common/serialization/financial';
 import { PrismaService } from '@/database';
 import { burnPasswordTiming, verifyPassword } from './password';
 
@@ -65,6 +65,7 @@ export class AuthService {
         full_name: true,
         phone: true,
         status: true,
+        fixed_salary_uzs: true,
         last_login_at: true,
         user_roles: {
           where: ACTIVE_ASSIGNMENT,
@@ -135,11 +136,9 @@ export class AuthService {
       permissions,
       branchScopes,
       writeBranchScopes,
-      // GAP-01: fincore.users has no fixed-salary column, and this phase may not
-      // add one. "0" is a contract-shaped placeholder, not a real figure — the
-      // cashier report will be wrong until the source of this value is decided.
-      // See docs/PHASE_18_1_BACKEND_FOUNDATION.md §16.
-      fixedSalaryUzs: '0',
+      // PHASE 19 / DECISION 2 closed GAP-01: this is the real stored figure
+      // from fincore.users.fixed_salary_uzs, no longer a placeholder.
+      fixedSalaryUzs: toMoneyUzs(user.fixed_salary_uzs)!,
       lastLoginAt: toIsoDateTime(user.last_login_at),
     };
   }

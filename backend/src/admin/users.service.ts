@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { AuthService, hashPassword } from '@/auth';
 import { ApiException, type AuthenticatedUser } from '@/common';
 import { ActorContextService, PrismaService } from '@/database';
-import type { UserAccessDto, UserCreateDto, UserStatusDto } from './dto/admin.dto';
+import type { UserAccessDto, UserCreateDto, UserSalaryDto, UserStatusDto } from './dto/admin.dto';
 
 /** Mirrors the frontend UserDirectoryItem (src/shared/types/domain.ts:77). */
 export interface UserDirectoryItemDto {
@@ -19,6 +19,7 @@ export interface UserDirectoryItemDto {
 }
 
 const ACTIVE = { is_active: true, revoked_at: null } as const;
+const MAX_UZS = 9_223_372_036_854_775_807n;
 
 /** Same normalisation AuthService uses, so a duplicate is caught in any format. */
 function normalizePhone(value: string): string {
@@ -246,6 +247,40 @@ export class AdminUsersService {
     return this.auth.getAuthenticatedUser(userId, false);
   }
 
+  /**
+   * PHASE 19 / DECISION 2: fixed salary lives on fincore.users, one current
+   * value per user. The column is a uzs_amount_nonnegative domain, so a
+   * negative figure is refused by the database as well as by the DTO.
+   */
+  async updateSalary(
+    actor: AuthenticatedUser,
+    userId: string,
+    input: UserSalaryDto,
+  ): Promise<AuthenticatedUser> {
+    await this.requireUser(userId);
+    if (!/^\d+$/.test(input.fixedSalaryUzs) || BigInt(input.fixedSalaryUzs) > MAX_UZS)
+      throw new ApiException(
+        422,
+        'AMOUNT_INVALID',
+        'Oylik manfiy bo‘lmagan va BIGINT chegarasidagi butun so‘m bo‘lishi kerak.',
+      );
+    const fixedSalaryUzs = BigInt(input.fixedSalaryUzs);
+
+    await this.prisma
+      .withActor(this.actor.mint(actor.id), (tx) =>
+        tx.users.update({
+          where: { id: userId },
+          data: { fixed_salary_uzs: fixedSalaryUzs },
+        }),
+      )
+      .catch((error: unknown) => {
+        throw this.translateWriteError(error);
+      });
+
+    // requireActive=false: an admin may set the salary of a blocked employee.
+    return this.auth.getAuthenticatedUser(userId, false);
+  }
+
   // -------------------------------------------------------------------------
 
   private directorySelect() {
@@ -345,6 +380,8 @@ export class AdminUsersService {
       return new ApiException(409, 'DUPLICATE_REFERENCE', 'Bu qiymat allaqachon mavjud.');
     if (/actor context|signing key/i.test(message))
       return new ApiException(500, 'ACTOR_CONTEXT_INVALID', 'Server identifikatsiya konteksti noto‘g‘ri.');
+    if (/bigint.*range|out of range/i.test(message))
+      return new ApiException(422, 'AMOUNT_INVALID', 'Oylik ruxsat etilgan chegaradan oshdi.');
     return error;
   }
 }

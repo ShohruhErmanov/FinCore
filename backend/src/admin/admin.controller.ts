@@ -1,10 +1,20 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Put } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiCookieAuth,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { CurrentUser, RequirePermissions, type AuthenticatedUser } from '@/common';
 import {
   RolePermissionsDto,
+  AuthenticatedUserResponseDto,
   UserAccessDto,
   UserCreateDto,
+  UserSalaryDto,
   UserStatusDto,
 } from './dto/admin.dto';
 import { AdminRolesService, type RolePermissionMatrix } from './roles.service';
@@ -15,6 +25,7 @@ import { AdminUsersService, type UserDirectoryItemDto } from './users.service';
  * user (scope-filtered), everything else needs user.manage or role.manage.
  */
 @ApiTags('admin')
+@ApiCookieAuth('cookie')
 @Controller()
 export class AdminController {
   constructor(
@@ -86,6 +97,28 @@ export class AdminController {
     @Body() body: UserStatusDto,
   ): Promise<AuthenticatedUser> {
     return this.users.updateStatus(actor, id, body);
+  }
+
+  @Patch('users/:id/salary')
+  @RequirePermissions('user.manage')
+  @ApiOperation({ summary: 'Foydalanuvchining belgilangan oyligini o‘zgartirish' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({ type: UserSalaryDto })
+  @ApiOkResponse({
+    type: AuthenticatedUserResponseDto,
+    description: 'AuthenticatedUser — yangilangan fixedSalaryUzs bilan',
+  })
+  @ApiResponse({ status: 400, description: 'VALIDATION_ERROR' })
+  @ApiResponse({ status: 401, description: 'UNAUTHENTICATED' })
+  @ApiResponse({ status: 403, description: 'FORBIDDEN — user.manage yo‘q' })
+  @ApiResponse({ status: 404, description: 'USER_NOT_FOUND' })
+  @ApiResponse({ status: 422, description: 'AMOUNT_INVALID' })
+  updateSalary(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: UserSalaryDto,
+  ): Promise<AuthenticatedUser> {
+    return this.users.updateSalary(actor, id, body);
   }
 
   @Get('roles/permissions')

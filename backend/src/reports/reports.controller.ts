@@ -1,7 +1,21 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiCookieAuth,
+  ApiOkResponse,
+  ApiOperation,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { CurrentUser, RequirePermissions, type AuthenticatedUser } from '@/common';
-import { DashboardQueryDto, MonthlyQueryDto, YearQueryDto } from './dto/reports.dto';
+import {
+  CashierReportResponseDto,
+  CashiersQueryDto,
+  DashboardQueryDto,
+  MonthlyQueryDto,
+  YearQueryDto,
+} from './dto/reports.dto';
+import { CashierReportService, type CashierReportDto } from './cashier-report.service';
 import { DashboardService, type DashboardResponse } from './dashboard.service';
 import { ReportsService, type BranchComparisonReport, type MonthlyReport } from './reports.service';
 
@@ -11,11 +25,13 @@ import { ReportsService, type BranchComparisonReport, type MonthlyReport } from 
  * reports.view for both reports, dashboard.view for the dashboard.
  */
 @ApiTags('reports')
+@ApiCookieAuth('cookie')
 @Controller('reports')
 export class ReportsController {
   constructor(
     private readonly reports: ReportsService,
     private readonly dashboard: DashboardService,
+    private readonly cashiers: CashierReportService,
   ) {}
 
   @Get('dashboard')
@@ -63,5 +79,25 @@ export class ReportsController {
     @Query() query: YearQueryDto,
   ): Promise<BranchComparisonReport> {
     return this.reports.branchComparison(user, Number(query.year));
+  }
+
+  @Get('cashiers')
+  @ApiOperation({ summary: 'Kassirlar kesimi: oylik, reja ulushi, yig‘ilgan tushum' })
+  @ApiQuery({ name: 'period', description: 'Hisob davri UUID' })
+  @ApiQuery({ name: 'branch', required: false, description: 'Filial UUID yoki "all"' })
+  @ApiOkResponse({ type: CashierReportResponseDto })
+  @ApiResponse({ status: 400, description: 'VALIDATION_ERROR' })
+  @ApiResponse({ status: 401, description: 'UNAUTHENTICATED' })
+  @ApiResponse({
+    status: 403,
+    description:
+      'FORBIDDEN — reports.view_cashiers yoki reports.view_own_performance kerak / BRANCH_SCOPE_DENIED',
+  })
+  @ApiResponse({ status: 404, description: 'PERIOD_NOT_FOUND' })
+  getCashiers(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: CashiersQueryDto,
+  ): Promise<CashierReportDto> {
+    return this.cashiers.get(user, query.period, query.branch);
   }
 }

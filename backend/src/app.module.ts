@@ -12,6 +12,9 @@ import { BudgetModule } from './budget/budget.module';
 import { ReportsModule } from './reports/reports.module';
 import { AdminModule } from './admin/admin.module';
 import { RevenuePlansModule } from './revenue-plans/revenue-plans.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { ImportsModule } from './imports/imports.module';
+import { DailyRevenuesModule } from './daily-revenues/daily-revenues.module';
 
 @Module({
   imports: [
@@ -36,6 +39,9 @@ import { RevenuePlansModule } from './revenue-plans/revenue-plans.module';
     ReportsModule,
     AdminModule,
     RevenuePlansModule,
+    NotificationsModule,
+    ImportsModule,
+    DailyRevenuesModule,
   ],
   providers: [
     // Order matters: authenticate, then check permissions, then rate-limit.

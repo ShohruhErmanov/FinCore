@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   MaxLength,
   MinLength,
   ValidateIf,
@@ -81,6 +82,63 @@ export class UserStatusDto {
   @ApiProperty({ enum: ['active', 'inactive', 'blocked'] })
   @IsIn(['active', 'inactive', 'blocked'])
   status!: 'active' | 'inactive' | 'blocked';
+}
+
+export class UserSalaryDto {
+  @ApiProperty({ example: '4500000', description: 'Belgilangan oylik, butun so‘m string' })
+  @Matches(/^\d+$/, {
+    message: 'fixedSalaryUzs manfiy bo‘lmagan butun son-string bo‘lishi kerak',
+  })
+  fixedSalaryUzs!: string;
+}
+
+export class RoleAssignmentResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty()
+  role!: string;
+
+  @ApiProperty()
+  roleName!: string;
+
+  @ApiProperty({ format: 'uuid', nullable: true })
+  branchId!: string | null;
+
+  @ApiProperty({ nullable: true })
+  branchName!: string | null;
+}
+
+export class AuthenticatedUserResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty()
+  fullName!: string;
+
+  @ApiProperty()
+  phone!: string;
+
+  @ApiProperty({ enum: ['active', 'inactive', 'blocked'] })
+  status!: 'active' | 'inactive' | 'blocked';
+
+  @ApiProperty({ type: [RoleAssignmentResponseDto] })
+  roles!: RoleAssignmentResponseDto[];
+
+  @ApiProperty({ type: [String] })
+  permissions!: string[];
+
+  @ApiProperty({ type: [String], format: 'uuid' })
+  branchScopes!: string[];
+
+  @ApiProperty({ type: [String], format: 'uuid' })
+  writeBranchScopes!: string[];
+
+  @ApiProperty({ example: '4500000' })
+  fixedSalaryUzs!: string;
+
+  @ApiProperty({ format: 'date-time', nullable: true })
+  lastLoginAt!: string | null;
 }
 
 export class RolePermissionsDto {
