@@ -148,6 +148,9 @@ export class ExpensesService {
       select: ROW_SELECT,
     });
     if (replay) {
+      if (!user.writeBranchScopes.includes(replay.branch_id))
+        throw new ApiException(403, 'BRANCH_SCOPE_DENIED', 'Filial scope mos emas.');
+      await this.assertBranchActive(replay.branch_id);
       const [dto] = await this.toDtos([replay]);
       return dto!;
     }

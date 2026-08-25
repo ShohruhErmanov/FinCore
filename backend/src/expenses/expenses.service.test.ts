@@ -78,7 +78,9 @@ function expectApiCode(error: unknown, status: number, code: string): void {
 }
 
 function harness() {
-  const expenseFindFirst = vi.fn(async () => null);
+  const expenseFindFirst = vi.fn(
+    async (): Promise<ReturnType<typeof expenseRow> | null> => null,
+  );
   const expenseFindUnique = vi.fn(async () => expenseRow());
   const branchFindUnique = vi.fn(async () => ({ is_active: true }));
   const categoryCount = vi.fn(async () => 1);
@@ -176,6 +178,84 @@ describe('ExpensesService branch write guards', () => {
       .then(() => expect.unreachable('inactive branch must reject the edit'))
       .catch((error: unknown) => expectApiCode(error, 422, 'REFERENCE_INVALID'));
 
+    expect(test.withActor).not.toHaveBeenCalled();
+  });
+
+  it('returns an active in-scope idempotent replay without creating another expense', async () => {
+    const test = harness();
+    test.expenseFindFirst.mockResolvedValueOnce(expenseRow());
+
+    await expect(test.service.create(user(), 'expense-key', input())).resolves.toMatchObject({
+      id: EXPENSE_ID,
+      branchId: BRANCH_ID,
+    });
+
+    expect(test.branchFindUnique).toHaveBeenCalledWith({
+      where: { id: BRANCH_ID },
+      select: { is_active: true },
+    });
+    expect(test.withActor).not.toHaveBeenCalled();
+    expect(test.mint).not.toHaveBeenCalled();
+  });
+
+  it('rejects a historical replay after its stored branch leaves current write scope', async () => {
+    const test = harness();
+    test.expenseFindFirst.mockResolvedValueOnce(expenseRow());
+    const { branchId: submittedBranchId, ...inputWithoutBranch } = input(OTHER_BRANCH_ID);
+    expect(submittedBranchId).toBe(OTHER_BRANCH_ID);
+
+    await test.service
+      .create(
+        user({ branchScopes: [OTHER_BRANCH_ID], writeBranchScopes: [OTHER_BRANCH_ID] }),
+        'expense-key',
+        inputWithoutBranch,
+      )
+      .then(() => expect.unreachable('revoked stored branch replay must fail'))
+      .catch((error: unknown) => expectApiCode(error, 403, 'BRANCH_SCOPE_DENIED'));
+
+    expect(test.branchFindUnique).not.toHaveBeenCalled();
+    expect(test.withActor).not.toHaveBeenCalled();
+  });
+
+  it('rejects an idempotent replay whose stored branch is inactive', async () => {
+    const test = harness();
+    test.expenseFindFirst.mockResolvedValueOnce(expenseRow());
+    test.branchFindUnique.mockResolvedValueOnce({ is_active: false });
+
+    await test.service
+      .create(user(), 'expense-key', input())
+      .then(() => expect.unreachable('inactive stored branch replay must fail'))
+      .catch((error: unknown) => expectApiCode(error, 422, 'REFERENCE_INVALID'));
+
+    expect(test.withActor).not.toHaveBeenCalled();
+  });
+
+  it('does not let a writable submitted branch authorize another branch replay', async () => {
+    const test = harness();
+    test.expenseFindFirst.mockResolvedValueOnce(expenseRow());
+
+    await test.service
+      .create(
+        user({ branchScopes: [OTHER_BRANCH_ID], writeBranchScopes: [OTHER_BRANCH_ID] }),
+        'expense-key',
+        input(OTHER_BRANCH_ID),
+      )
+      .then(() => expect.unreachable('submitted branch must not authorize stored branch'))
+      .catch((error: unknown) => expectApiCode(error, 403, 'BRANCH_SCOPE_DENIED'));
+
+    expect(test.branchFindUnique).not.toHaveBeenCalled();
+    expect(test.withActor).not.toHaveBeenCalled();
+  });
+
+  it('preserves header and body idempotency-key validation', async () => {
+    const test = harness();
+
+    await test.service
+      .create(user(), 'different-key', input())
+      .then(() => expect.unreachable('mismatched idempotency keys must fail'))
+      .catch((error: unknown) => expectApiCode(error, 422, 'IDEMPOTENCY_KEY_REQUIRED'));
+
+    expect(test.expenseFindFirst).not.toHaveBeenCalled();
     expect(test.withActor).not.toHaveBeenCalled();
   });
 });
