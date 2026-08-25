@@ -11,6 +11,7 @@ import { getApiErrorMessage } from '@/shared/api/client';
 import { invalidateExpenseAggregates } from '@/shared/api/invalidation';
 import { queryKeys } from '@/shared/api/query-keys';
 import { routes } from '@/shared/config/routes';
+import { getActiveWritableBranches } from '@/shared/lib/branch-scopes';
 import { downloadCsv } from '@/shared/lib/csv';
 import { formatDate, formatDateTime } from '@/shared/lib/format';
 import type { Expense, ExpenseType } from '@/shared/types/domain';
@@ -497,9 +498,14 @@ export function ExpenseCreatePage() {
   const watchedCategory = watch('categoryId');
   const watchedDate = watch('transactionDate');
   const currentUser = references.me.data;
+  const writableBranches = getActiveWritableBranches(
+    references.branches.data ?? [],
+    currentUser?.writeBranchScopes,
+  );
   const fixedWriteBranch =
-    currentUser?.writeBranchScopes.length === 1 ? (currentUser.writeBranchScopes[0] ?? null) : null;
-  const canChooseBranch = (currentUser?.writeBranchScopes.length ?? 0) > 1;
+    writableBranches.length === 1 ? (writableBranches[0] ?? null) : null;
+  const canChooseBranch = writableBranches.length > 1;
+  const hasNoWritableBranch = Boolean(currentUser) && writableBranches.length === 0;
   const selectedCategory = references.categories.data?.find((item) => item.id === watchedCategory);
   const selectedPeriod = references.periods.data?.find(
     (period) =>
@@ -507,7 +513,7 @@ export function ExpenseCreatePage() {
   );
 
   useEffect(() => {
-    if (!canChooseBranch && fixedWriteBranch) setValue('branchId', fixedWriteBranch);
+    if (!canChooseBranch && fixedWriteBranch) setValue('branchId', fixedWriteBranch.id);
     if (!watch('responsibleUserId') && currentUser?.id)
       setValue('responsibleUserId', currentUser.id);
   }, [canChooseBranch, fixedWriteBranch, currentUser?.id, setValue, watch]);
@@ -540,8 +546,8 @@ export function ExpenseCreatePage() {
   };
 
   const onSubmit = handleSubmit((values) => {
-    const branchId = canChooseBranch ? values.branchId : (fixedWriteBranch ?? values.branchId);
-    if (!branchId || !currentUser?.writeBranchScopes.includes(branchId)) {
+    const branchId = canChooseBranch ? values.branchId : (fixedWriteBranch?.id ?? values.branchId);
+    if (!branchId || !writableBranches.some((branch) => branch.id === branchId)) {
       setError('branchId', { message: 'Yozish ruxsati bor filialni tanlang.' });
       return;
     }
@@ -578,6 +584,12 @@ export function ExpenseCreatePage() {
             {mutation.isError ? (
               <Alert title="Xarajat saqlanmadi" tone="danger" className="mb-5">
                 {getApiErrorMessage(mutation.error)}
+              </Alert>
+            ) : null}
+            {hasNoWritableBranch ? (
+              <Alert title="Xarajat kiritish bloklangan" tone="danger" className="mb-5">
+                Sizga yozish mumkin bo‘lgan aktiv filial biriktirilmagan. Administratorga murojaat
+                qiling.
               </Alert>
             ) : null}
             {selectedPeriod?.status === 'closed' ? (
@@ -619,27 +631,26 @@ export function ExpenseCreatePage() {
                     {...register('branchId')}
                   >
                     <option value="">Filialni tanlang</option>
-                    {(references.branches.data ?? [])
-                      .filter((branch) => branch.isActive)
-                      .map((branch) => (
-                        <option key={branch.id} value={branch.id}>
-                          {branch.name}
-                        </option>
-                      ))}
+                    {writableBranches.map((branch) => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </option>
+                    ))}
                   </Select>
                 </FormField>
               ) : (
                 <FormField
                   label="Filial"
                   htmlFor="expense-form-branch-readonly"
+                  error={errors.branchId?.message}
                   hint="Filial login scope’idan olinadi va qo‘lda almashtirilmaydi."
                 >
                   <Input
                     id="expense-form-branch-readonly"
                     readOnly
                     value={
-                      references.branches.data?.find((branch) => branch.id === fixedWriteBranch)
-                        ?.name ?? 'Filial aniqlanmoqda'
+                      fixedWriteBranch?.name ??
+                      'Yozish mumkin bo‘lgan aktiv filial mavjud emas'
                     }
                   />
                 </FormField>
@@ -814,7 +825,7 @@ export function ExpenseCreatePage() {
               <Button
                 type="submit"
                 loading={mutation.isPending}
-                disabled={selectedPeriod?.status === 'closed'}
+                disabled={hasNoWritableBranch || selectedPeriod?.status === 'closed'}
               >
                 <Save className="h-4 w-4" /> Xarajatni saqlash
               </Button>

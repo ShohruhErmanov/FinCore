@@ -317,6 +317,48 @@ describe('DailyRevenuesService create validation and transaction order', () => {
     expect(test.withActor).not.toHaveBeenCalled();
   });
 
+  it('rejects an inactive target branch before opening a write transaction', async () => {
+    const test = harness();
+    test.dbQueryRaw.mockResolvedValueOnce([]);
+    test.branchFindUnique.mockResolvedValueOnce({ is_active: false });
+
+    await test.service
+      .create(user(), 'request-key', {
+        businessDate: BUSINESS_DATE,
+        branchId: BRANCH_ID,
+        cashUzs: '1',
+        cardUzs: '0',
+        transferUzs: '0',
+        idempotencyKey: 'request-key',
+      })
+      .then(() => expect.unreachable('inactive branch must reject the write'))
+      .catch((error: unknown) => expectApiCode(error, 422, 'REFERENCE_INVALID'));
+
+    expect(test.periodFindFirst).not.toHaveBeenCalled();
+    expect(test.withActor).not.toHaveBeenCalled();
+  });
+
+  it('rejects a target outside current write scope before any database lookup', async () => {
+    const test = harness();
+    const otherBranch = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+
+    await test.service
+      .create(user(), 'request-key', {
+        businessDate: BUSINESS_DATE,
+        branchId: otherBranch,
+        cashUzs: '1',
+        cardUzs: '0',
+        transferUzs: '0',
+        idempotencyKey: 'request-key',
+      })
+      .then(() => expect.unreachable('out-of-scope branch must reject the write'))
+      .catch((error: unknown) => expectApiCode(error, 403, 'BRANCH_SCOPE_DENIED'));
+
+    expect(test.dbQueryRaw).not.toHaveBeenCalled();
+    expect(test.branchFindUnique).not.toHaveBeenCalled();
+    expect(test.withActor).not.toHaveBeenCalled();
+  });
+
   it('serialises idempotency before the day lock, checks duplicates, and inserts only non-zero channels', async () => {
     const test = harness();
     const events: string[] = [];
@@ -458,6 +500,20 @@ describe('DailyRevenuesService create validation and transaction order', () => {
 });
 
 describe('DailyRevenuesService PATCH safety', () => {
+  it('rejects an inactive target branch before reversing any transactions', async () => {
+    const test = harness();
+    test.dbQueryRaw.mockResolvedValueOnce([aggregateRow()]);
+    test.branchFindUnique.mockResolvedValueOnce({ is_active: false });
+
+    await test.service
+      .update(user(), DAILY_ID, { cashUzs: '500' })
+      .then(() => expect.unreachable('inactive branch must reject the edit'))
+      .catch((error: unknown) => expectApiCode(error, 422, 'REFERENCE_INVALID'));
+
+    expect(test.periodFindFirst).not.toHaveBeenCalled();
+    expect(test.withActor).not.toHaveBeenCalled();
+  });
+
   it('reverses only managed channels, records reversals, and preserves the original cashier', async () => {
     const test = harness();
     const current = aggregateRow();

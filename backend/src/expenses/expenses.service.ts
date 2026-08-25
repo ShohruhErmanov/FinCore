@@ -152,6 +152,7 @@ export class ExpensesService {
       return dto!;
     }
 
+    await this.assertBranchActive(branchId);
     await this.assertReferencesActive(input);
 
     const created = await this.prisma.withActor(this.actor.mint(user.id), async (tx) => {
@@ -195,6 +196,7 @@ export class ExpensesService {
     if (!user.writeBranchScopes.includes(existing.branch_id))
       throw new ApiException(403, 'BRANCH_SCOPE_DENIED', 'Filial scope mos emas.');
 
+    await this.assertBranchActive(existing.branch_id);
     await this.assertReferencesActive(input);
 
     const data: Prisma.expensesUncheckedUpdateInput = {};
@@ -263,6 +265,15 @@ export class ExpensesService {
   }
 
   /** The mock rejects inactive or unknown references before writing; so do we. */
+  private async assertBranchActive(branchId: string): Promise<void> {
+    const branch = await this.prisma.db.branches.findUnique({
+      where: { id: branchId },
+      select: { is_active: true },
+    });
+    if (!branch?.is_active)
+      throw new ApiException(422, 'REFERENCE_INVALID', 'Filial faol emas yoki topilmadi.');
+  }
+
   private async assertReferencesActive(
     input: Partial<Pick<ExpenseCreateDto, 'categoryId' | 'paymentMethodId' | 'departmentId' | 'responsibleUserId'>>,
   ): Promise<void> {

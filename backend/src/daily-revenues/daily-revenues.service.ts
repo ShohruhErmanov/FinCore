@@ -314,6 +314,7 @@ export class DailyRevenuesService {
     if (!user.writeBranchScopes.includes(current.branch_id))
       throw new ApiException(403, 'BRANCH_SCOPE_DENIED', 'Filial scope mos emas.');
 
+    await this.assertBranchActive(key.branchId);
     await this.assertPeriodOpen(key.businessDate, 'Yopilgan davrdagi tushum tahrirlanmaydi.');
 
     return this.prisma

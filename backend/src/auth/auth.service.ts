@@ -10,6 +10,7 @@ function normalizePhone(value: string): string {
 }
 
 const ACTIVE_ASSIGNMENT = { is_active: true, revoked_at: null } as const;
+const GLOBAL_WRITE_ROLE_CODES = new Set(['director']);
 
 @Injectable()
 export class AuthService {
@@ -72,7 +73,7 @@ export class AuthService {
           select: {
             id: true,
             branch_id: true,
-            branch: { select: { name: true } },
+            branch: { select: { name: true, is_active: true } },
             role: {
               select: {
                 code: true,
@@ -106,15 +107,22 @@ export class AuthService {
       ),
     ].sort();
 
-    // Derivation follows the seed's own rule (002_seed_reference.sql, "Roles"):
-    // a role granted with branch_id = NULL carries company-wide READ scope,
-    // while write access only ever comes from a branch-scoped assignment.
+    // A NULL assignment remains company-wide READ scope for every role whose
+    // role policy allows it. Global WRITE is deliberately narrower: only an
+    // explicitly eligible role identity receives it, so `allows_all_branch_scope`
+    // alone can never widen Finance Manager or another global reader.
     const scopedBranchIds = assignments
       .map((item) => item.branch_id)
       .filter((id): id is string => id !== null);
+    const activeScopedBranchIds = assignments
+      .filter((item) => item.branch_id !== null && item.branch?.is_active)
+      .map((item) => item.branch_id as string);
     const hasAllBranchRead = assignments.some((item) => item.role.allows_all_branch_scope);
+    const hasAllBranchWrite = assignments.some(
+      (item) => item.branch_id === null && GLOBAL_WRITE_ROLE_CODES.has(item.role.code),
+    );
 
-    const readableBranchIds = hasAllBranchRead
+    const globalBranchIds = hasAllBranchRead || hasAllBranchWrite
       ? (
           await this.prisma.db.branches.findMany({
             where: { is_active: true },
@@ -124,8 +132,10 @@ export class AuthService {
         ).map((branch) => branch.id)
       : [];
 
-    const branchScopes = [...new Set([...readableBranchIds, ...scopedBranchIds])];
-    const writeBranchScopes = [...new Set(scopedBranchIds)];
+    const branchScopes = [...new Set([...globalBranchIds, ...scopedBranchIds])];
+    const writeBranchScopes = [
+      ...new Set(hasAllBranchWrite ? globalBranchIds : activeScopedBranchIds),
+    ];
 
     return {
       id: user.id,
