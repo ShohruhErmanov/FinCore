@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Put } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Put,
+} from '@nestjs/common';
 import {
   ApiBody,
   ApiCookieAuth,
@@ -22,7 +33,7 @@ import { AdminUsersService, type UserDirectoryItemDto } from './users.service';
 
 /**
  * Permission codes are the mock's: the directory is readable by any signed-in
- * user (scope-filtered), everything else needs user.manage or role.manage.
+ * user (scope-filtered), mutations use their explicit user/role permission.
  */
 @ApiTags('admin')
 @ApiCookieAuth('cookie')
@@ -84,19 +95,40 @@ export class AdminController {
   }
 
   @Patch('users/:id/status')
-  @RequirePermissions('user.manage')
+  @RequirePermissions('user.deactivate')
   @ApiOperation({ summary: 'Foydalanuvchi statusini o‘zgartirish' })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'AuthenticatedUser' })
-  @ApiResponse({ status: 403, description: 'PRIVILEGE_ESCALATION_DENIED' })
+  @ApiResponse({ status: 403, description: 'FORBIDDEN / PRIVILEGE_ESCALATION_DENIED' })
   @ApiResponse({ status: 404, description: 'USER_NOT_FOUND' })
-  @ApiResponse({ status: 409, description: 'LAST_DIRECTOR_REQUIRED' })
+  @ApiResponse({ status: 409, description: 'SELF_DEACTIVATION_DENIED / LAST_DIRECTOR_REQUIRED' })
   updateStatus(
     @CurrentUser() actor: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: UserStatusDto,
   ): Promise<AuthenticatedUser> {
     return this.users.updateStatus(actor, id, body);
+  }
+
+  @Delete('users/:id')
+  @HttpCode(204)
+  @RequirePermissions('user.delete')
+  @ApiOperation({ summary: 'Foydalanuvchi hisobini tarixini saqlagan holda o‘chirish' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 204, description: 'Foydalanuvchi butunlay o‘chirildi' })
+  @ApiResponse({ status: 401, description: 'UNAUTHENTICATED' })
+  @ApiResponse({ status: 403, description: 'FORBIDDEN — user.delete yo‘q' })
+  @ApiResponse({ status: 404, description: 'USER_NOT_FOUND' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'SELF_DELETE_DENIED / SYSTEM_USER_DELETE_DENIED / LAST_DIRECTOR_REQUIRED / USER_DELETE_NOT_ALLOWED (unmanaged FK safety backstop)',
+  })
+  deleteUser(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<void> {
+    return this.users.deleteUser(actor, id);
   }
 
   @Patch('users/:id/salary')

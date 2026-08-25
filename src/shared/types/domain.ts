@@ -23,6 +23,8 @@ export type PermissionCode =
   | 'reports.view'
   | 'master_data.manage'
   | 'user.manage'
+  | 'user.deactivate'
+  | 'user.delete'
   | 'role.manage';
 
 export type RoleCode = 'cashier' | 'finance_manager' | 'director';
@@ -141,8 +143,27 @@ export interface Expense {
 export interface TelegramRecipient {
   userId: UUID;
   fullName: string;
-  /** Telegram chat ID — bo‘sh bo‘lsa, bu xodimga xabar yuborilmaydi. */
-  chatId: string;
+  /**
+   * Xodim o‘z Telegramini tasdiqlaganmi. Serverda hisoblanadi — chat ID hech
+   * qachon mijozga berilmaydi va mijozdan qabul qilinmaydi.
+   */
+  linked: boolean;
+}
+
+/** O‘z hisobing uchun Telegram ulanish holati. Hech qanday identifikator qaytmaydi. */
+export interface TelegramLinkStatus {
+  status: 'linked' | 'unlinked' | 'disabled' | 'pending';
+  /** Faqat ko‘rsatish uchun. */
+  telegramUsername: string | null;
+  displayName: string | null;
+  linkedAt: IsoDateTime | null;
+  pendingExpiresAt: IsoDateTime | null;
+}
+
+/** Bir martalik havola — saqlanmaydi, faqat foydalanuvchiga ko‘rsatiladi. */
+export interface TelegramLinkCreated {
+  deepLink: string;
+  expiresAt: IsoDateTime;
 }
 
 export interface TelegramSettings {
@@ -160,7 +181,7 @@ export interface TelegramSettings {
 
 export interface TelegramSettingsInput {
   enabled: boolean;
-  botToken?: string | undefined;
+  /** Bot tokeni bu yerda yo‘q va bo‘lmaydi — u faqat server muhitida yashaydi. */
   dailyReminderEnabled: boolean;
   reminderTimeLocal: string;
   monthlyReportEnabled: boolean;

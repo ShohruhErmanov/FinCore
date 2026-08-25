@@ -17,6 +17,8 @@ import type {
   ReminderPreview,
   TelegramSettings,
   TelegramSettingsInput,
+  TelegramLinkStatus,
+  TelegramLinkCreated,
   MoneyUzs,
   PaginatedResponse,
   BranchComparisonReport,
@@ -97,11 +99,18 @@ export const notificationApi = {
     api.get<ReminderPreview>('/notifications/reminder-preview', { date }, signal),
   monthlyPreview: (period: string, signal?: AbortSignal) =>
     api.get<MonthlyReportPreview>('/notifications/monthly-preview', { period }, signal),
-  sendTest: (chatId: string) =>
-    api.post<{ delivered: boolean; chatId: string; note: string }>(
-      '/notifications/telegram/test',
-      { chatId },
-    ),
+  /** No destination: the backend always sends to the caller's own verified chat. */
+  sendTest: () =>
+    api.post<{ delivered: boolean; note: string }>('/notifications/telegram/test', {}),
+
+  /**
+   * Self-service Telegram linking. The deep link is returned once and is never
+   * stored — the frontend hands it straight to the user and forgets it.
+   */
+  linkStatus: (signal?: AbortSignal) =>
+    api.get<TelegramLinkStatus>('/notifications/telegram/link', undefined, signal),
+  createLink: () => api.post<TelegramLinkCreated>('/notifications/telegram/link', {}),
+  unlink: () => api.delete<void>('/notifications/telegram/link'),
 };
 
 export const importApi = {
@@ -144,4 +153,5 @@ export const adminApi = {
     api.patch<AuthenticatedUser>(`/users/${id}/salary`, { fixedSalaryUzs }),
   updateUserStatus: (id: string, status: UserStatus) =>
     api.patch<AuthenticatedUser>(`/users/${id}/status`, { status }),
+  deleteUser: (id: string) => api.delete<void>(`/users/${id}`),
 };

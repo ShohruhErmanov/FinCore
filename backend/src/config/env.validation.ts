@@ -61,6 +61,32 @@ const schema = z
       .min(32, 'ACTOR_SIGNING_KEY must be the base64 of at least 24 random bytes'),
     /** Only has to outlive a single transaction. */
     ACTOR_TOKEN_TTL_SECONDS: z.coerce.number().int().min(5).max(300).default(60),
+
+    /**
+     * Telegram integration. Off by default so development and test never reach
+     * the network and never need real credentials. Every secret below lives
+     * ONLY here — never in fincore.system_settings, never in an API response,
+     * never in a log line or audit payload.
+     */
+    TELEGRAM_ENABLED: booleanish.default('false'),
+    TELEGRAM_BOT_TOKEN: z.string().min(1).optional(),
+    /** Without the leading @ — used to build https://t.me/<username>?start=… */
+    TELEGRAM_BOT_USERNAME: z
+      .string()
+      .regex(/^[A-Za-z0-9_]{5,32}$/, 'TELEGRAM_BOT_USERNAME must be 5-32 chars of A-Z, 0-9 or _')
+      .optional(),
+    /** Compared against X-Telegram-Bot-Api-Secret-Token on every webhook call. */
+    TELEGRAM_WEBHOOK_SECRET: z
+      .string()
+      .min(32, 'TELEGRAM_WEBHOOK_SECRET must be at least 32 characters')
+      .optional(),
+    /** HMAC key for link tokens: the raw token is never stored, only its digest. */
+    TELEGRAM_LINK_TOKEN_PEPPER: z
+      .string()
+      .min(32, 'TELEGRAM_LINK_TOKEN_PEPPER must be at least 32 characters')
+      .optional(),
+    /** Deep links are short-lived by design; a stale link must not stay usable. */
+    TELEGRAM_LINK_TOKEN_TTL_MINUTES: z.coerce.number().int().min(1).max(60).default(10),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production') {
@@ -83,6 +109,23 @@ const schema = z
           message: 'SWAGGER_ENABLED must be false in production',
         });
     }
+
+    // Checked whenever the integration is switched on, not only in production:
+    // an enabled-but-unconfigured Telegram would fail at the first webhook,
+    // long after the misconfiguration was introduced.
+    if (env.TELEGRAM_ENABLED)
+      for (const key of [
+        'TELEGRAM_BOT_TOKEN',
+        'TELEGRAM_BOT_USERNAME',
+        'TELEGRAM_WEBHOOK_SECRET',
+        'TELEGRAM_LINK_TOKEN_PEPPER',
+      ] as const)
+        if (!env[key])
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key],
+            message: `${key} is required when TELEGRAM_ENABLED=true`,
+          });
   });
 
 export type AppEnv = z.infer<typeof schema>;

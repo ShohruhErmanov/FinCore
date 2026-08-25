@@ -24,23 +24,19 @@ export class TelegramRecipientDto {
   @MaxLength(200)
   fullName!: string;
 
-  @ApiProperty({ description: 'Bo‘sh bo‘lsa bu xodimga xabar yuborilmaydi' })
-  @IsString()
-  @MaxLength(64)
-  chatId!: string;
+  @ApiProperty({
+    readOnly: true,
+    description: 'Xodim o‘z Telegramini tasdiqlaganmi. Server hisoblaydi — so‘rovdan qabul qilinmaydi.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  linked?: boolean;
 }
 
 export class TelegramSettingsInputDto {
   @ApiProperty()
   @IsBoolean()
   enabled!: boolean;
-
-  /** writeOnly: the token is stored separately and never returned. */
-  @ApiPropertyOptional({ writeOnly: true, description: 'Faqat yangilashda yuboriladi' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(200)
-  botToken?: string;
 
   @ApiProperty()
   @IsBoolean()
@@ -74,12 +70,12 @@ export class MonthlyPreviewQueryDto {
   period!: string;
 }
 
-export class TelegramTestDto {
-  @ApiProperty({ example: '123456789' })
-  @IsString()
-  @MaxLength(64)
-  chatId!: string;
-}
+/**
+ * Deliberately empty: the test message always goes to the caller's OWN verified
+ * chat. Accepting a destination here would turn the form into an authorisation
+ * mechanism for pushing FinCore messages anywhere.
+ */
+export class TelegramTestDto {}
 
 export class ReminderBranchResponseDto {
   @ApiProperty({ format: 'uuid' })

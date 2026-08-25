@@ -95,12 +95,14 @@ export class NotificationsController {
   @RequirePermissions('notification.manage')
   @ApiOperation({ summary: 'Sinov xabari yuborish' })
   @ApiBody({ type: TelegramTestDto })
-  @ApiResponse({ status: 201, description: '{ delivered, chatId, note }' })
+  @ApiResponse({ status: 201, description: '{ delivered, note }' })
   @ApiResponse({ status: 400, description: 'VALIDATION_ERROR' })
   @ApiResponse({ status: 401, description: 'UNAUTHENTICATED' })
   @ApiResponse({ status: 403, description: 'FORBIDDEN — notification.manage yo‘q' })
-  @ApiResponse({ status: 422, description: 'BOT_TOKEN_REQUIRED / CHAT_ID_INVALID' })
-  sendTest(@Body() body: TelegramTestDto): Promise<TelegramTestResultDto> {
-    return this.notifications.sendTest(body.chatId);
+  @ApiResponse({ status: 404, description: 'TELEGRAM_LINK_NOT_FOUND — o‘z hisobingiz ulanmagan' })
+  @ApiResponse({ status: 409, description: 'TELEGRAM_DISABLED' })
+  sendTest(@CurrentUser() user: AuthenticatedUser): Promise<TelegramTestResultDto> {
+    // No destination parameter by design — always the caller's own chat.
+    return this.notifications.sendTest(user);
   }
 }

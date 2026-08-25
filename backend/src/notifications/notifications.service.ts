@@ -1,6 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ApiException, type AuthenticatedUser } from '@/common';
+import { APP_ENV, type AppEnv } from '@/config';
 import { PrismaService } from '@/database';
+import { TelegramLinkService } from '@/telegram/telegram-link.service';
 import { DashboardService } from '@/reports/dashboard.service';
 import {
   currentTashkentBusinessDate,
@@ -10,13 +12,13 @@ import { buildMonthlyReportMessage, buildReminderMessage } from './telegram-mess
 import type { TelegramSettingsInputDto } from './dto/notification.dto';
 
 /**
- * Telegram configuration lives in the existing fincore.system_settings table —
- * no new table. The bot token is deliberately held under a SEPARATE key from
- * the rest of the configuration, so the read path that builds the API response
- * physically cannot pick it up.
+ * Organisation-level notification settings — schedules and which employees are
+ * on the list. Deliberately NOT a credential store: since PHASE 38 the bot
+ * token, the webhook secret and the link pepper live only in the backend
+ * environment, and a chat id is never accepted from a client. Whether an
+ * employee is reachable is derived from their own verified Telegram link.
  */
 const CONFIG_KEY = 'telegram_notification_settings';
-const TOKEN_KEY = 'telegram_bot_token';
 
 /** Mirrors TelegramSettings (src/shared/types/domain.ts:145). */
 export interface TelegramSettingsDto {
@@ -27,13 +29,13 @@ export interface TelegramSettingsDto {
   reminderTimeLocal: string;
   monthlyReportEnabled: boolean;
   monthlyReportDay: number;
-  recipients: Array<{ userId: string; fullName: string; chatId: string }>;
+  recipients: Array<{ userId: string; fullName: string; linked: boolean }>;
 }
 
 export interface MonthlyReportPreviewDto {
   periodLabel: string;
   message: string;
-  recipients: Array<{ userId: string; fullName: string; chatId: string }>;
+  recipients: Array<{ userId: string; fullName: string; linked: boolean }>;
 }
 
 /** Mirrors ReminderPreview (src/shared/types/domain.ts:171). */
@@ -44,14 +46,14 @@ export interface ReminderPreviewDto {
     branchName: string;
     /** null — bu kuni yozuv umuman kiritilmagan (0 so'm bilan bir xil emas). */
     totalUzs: string | null;
-    recipients: Array<{ userId: string; fullName: string; chatId: string }>;
+    recipients: Array<{ userId: string; fullName: string; linked: boolean }>;
     message: string | null;
   }>;
 }
 
 export interface TelegramTestResultDto {
   delivered: boolean;
-  chatId: string;
+  /** Never carries the destination chat id — the caller already knows it is their own. */
   note: string;
 }
 
@@ -61,7 +63,7 @@ interface StoredConfig {
   reminderTimeLocal: string;
   monthlyReportEnabled: boolean;
   monthlyReportDay: number;
-  recipients: Array<{ userId: string; fullName: string; chatId: string }>;
+  recipients: Array<{ userId: string; fullName: string; linked: boolean }>;
 }
 
 const DEFAULTS: StoredConfig = {
@@ -81,22 +83,33 @@ export class NotificationsService {
     private readonly prisma: PrismaService,
     private readonly dashboard: DashboardService,
     private readonly dailyRevenues: DailyRevenuesService,
+    private readonly links: TelegramLinkService,
+    @Inject(APP_ENV) private readonly env: AppEnv,
   ) {}
 
   async getSettings(): Promise<TelegramSettingsDto> {
-    const [config, hasToken] = await Promise.all([this.readConfig(), this.hasToken()]);
-    return { ...config, botTokenSet: hasToken };
+    const config = await this.readConfig();
+    return {
+      ...config,
+      // Configuration status only — the value itself lives in the environment
+      // and this class never reads it.
+      botTokenSet: this.env.TELEGRAM_ENABLED && Boolean(this.env.TELEGRAM_BOT_TOKEN),
+      recipients: await this.withLinkState(config.recipients),
+    };
   }
 
   async saveSettings(
     actor: AuthenticatedUser,
     input: TelegramSettingsInputDto,
   ): Promise<TelegramSettingsDto> {
-    const tokenAlreadySet = await this.hasToken();
-    // Turning notifications on without a token would leave the scheduler
-    // configured but unable to deliver anything.
-    if (input.enabled && !input.botToken && !tokenAlreadySet)
-      throw new ApiException(422, 'BOT_TOKEN_REQUIRED', 'Bot tokeni kiritilmagan.');
+    // The credential is no longer something an admin can type in: enabling
+    // notifications requires the deployment itself to be configured.
+    if (input.enabled && !this.env.TELEGRAM_ENABLED)
+      throw new ApiException(
+        409,
+        'TELEGRAM_DISABLED',
+        'Telegram integratsiyasi server sozlamalarida yoqilmagan.',
+      );
 
     const config: StoredConfig = {
       enabled: input.enabled,
@@ -104,42 +117,34 @@ export class NotificationsService {
       reminderTimeLocal: input.reminderTimeLocal,
       monthlyReportEnabled: input.monthlyReportEnabled,
       monthlyReportDay: input.monthlyReportDay,
+      // A recipient is a choice of employee, nothing more. Reachability comes
+      // from that employee's own verified link, so a chat id supplied here
+      // could never grant delivery anywhere.
       recipients: (input.recipients ?? []).map((recipient) => ({
         userId: recipient.userId,
         fullName: recipient.fullName,
-        chatId: String(recipient.chatId ?? '').trim(),
+        linked: false,
       })),
     };
 
-    await this.prisma.db.$transaction(async (tx) => {
-      await tx.$executeRaw`
-        INSERT INTO fincore.system_settings (key, value, description, updated_by)
-        VALUES (
-          ${CONFIG_KEY},
-          ${JSON.stringify(config)}::jsonb,
-          'Telegram bildirishnoma sozlamalari (token alohida kalitda).',
-          ${actor.id}::uuid
-        )
-        ON CONFLICT (key) DO UPDATE
-          SET value = EXCLUDED.value, updated_at = now(), updated_by = EXCLUDED.updated_by
-      `;
-      // An omitted botToken means "keep the stored one", which is what lets the
-      // settings form be saved without re-typing the secret every time.
-      if (input.botToken)
-        await tx.$executeRaw`
-          INSERT INTO fincore.system_settings (key, value, description, updated_by)
-          VALUES (
-            ${TOKEN_KEY},
-            ${JSON.stringify(input.botToken)}::jsonb,
-            'Telegram bot tokeni. Hech qachon API javobida qaytarilmaydi.',
-            ${actor.id}::uuid
-          )
-          ON CONFLICT (key) DO UPDATE
-            SET value = EXCLUDED.value, updated_at = now(), updated_by = EXCLUDED.updated_by
-        `;
-    });
+    // `linked` is derived on every read, so it is not part of what is stored.
+    const stored = {
+      ...config,
+      recipients: config.recipients.map(({ userId, fullName }) => ({ userId, fullName })),
+    };
 
-    // Deliberately no request body in this log line: it carries the bot token.
+    await this.prisma.db.$executeRaw`
+      INSERT INTO fincore.system_settings (key, value, description, updated_by)
+      VALUES (
+        ${CONFIG_KEY},
+        ${JSON.stringify(stored)}::jsonb,
+        'Telegram bildirishnoma sozlamalari. Hech qanday sir saqlanmaydi.',
+        ${actor.id}::uuid
+      )
+      ON CONFLICT (key) DO UPDATE
+        SET value = EXCLUDED.value, updated_at = now(), updated_by = EXCLUDED.updated_by
+    `;
+
     this.logger.log(`Telegram sozlamalari yangilandi: actor ${actor.id}`);
     return this.getSettings();
   }
@@ -224,13 +229,31 @@ export class NotificationsService {
     };
   }
 
-  async sendTest(chatId: string): Promise<TelegramTestResultDto> {
-    const token = await this.readToken();
-    if (!token) throw new ApiException(422, 'BOT_TOKEN_REQUIRED', 'Avval bot tokenini saqlang.');
+  /**
+   * Sends to the caller's OWN verified chat. It deliberately takes no
+   * destination: an arbitrary chat id from a form would be an authorisation
+   * mechanism, letting an admin push FinCore messages anywhere.
+   */
+  async sendTest(user: AuthenticatedUser): Promise<TelegramTestResultDto> {
+    if (!this.env.TELEGRAM_ENABLED)
+      throw new ApiException(409, 'TELEGRAM_DISABLED', 'Telegram integratsiyasi yoqilmagan.');
+    const token = this.env.TELEGRAM_BOT_TOKEN;
+    if (!token)
+      throw new ApiException(409, 'TELEGRAM_DISABLED', 'Bot tokeni server sozlamalarida yo‘q.');
 
-    const target = chatId.trim();
-    if (!/^-?\d{5,}$/.test(target))
-      throw new ApiException(422, 'CHAT_ID_INVALID', 'Chat ID raqamlardan iborat bo‘lishi kerak.');
+    const account = await this.prisma.db.telegram_accounts.findFirst({
+      where: { user_id: user.id, status: 'linked' },
+      select: { chat_id: true },
+    });
+    if (!account)
+      throw new ApiException(
+        404,
+        'TELEGRAM_LINK_NOT_FOUND',
+        'Avval o‘z Telegram hisobingizni ulang.',
+      );
+
+    // Only ever the caller's own chat, and never echoed back in the response.
+    const target = account.chat_id.toString();
 
     try {
       const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -244,12 +267,11 @@ export class NotificationsService {
         | null;
 
       if (response.ok && payload?.ok)
-        return { delivered: true, chatId: target, note: 'DELIVERED' };
+        return { delivered: true, note: 'DELIVERED' };
 
       // Telegram's own wording, never the token or the raw URL.
       return {
         delivered: false,
-        chatId: target,
         note: this.redactToken(payload?.description ?? `TELEGRAM_HTTP_${response.status}`, token),
       };
     } catch (error) {
@@ -257,7 +279,6 @@ export class NotificationsService {
       this.logger.warn(`Telegram sinov xabari yuborilmadi: ${this.redactToken(message, token)}`);
       return {
         delivered: false,
-        chatId: target,
         note: this.redactToken(message, token),
       };
     }
@@ -274,29 +295,21 @@ export class NotificationsService {
     return { ...DEFAULTS, ...(stored as Partial<StoredConfig>) };
   }
 
-  /** Existence only — the value never leaves this class except to Telegram. */
-  private async hasToken(): Promise<boolean> {
-    const row = await this.prisma.db.$queryRaw<Array<{ present: boolean }>>`
-      SELECT (value IS NOT NULL AND value::text <> '""') AS present
-      FROM fincore.system_settings WHERE key = ${TOKEN_KEY}
-    `;
-    return row[0]?.present === true;
-  }
-
-  private async readToken(): Promise<string | null> {
-    const row = await this.prisma.db.$queryRaw<Array<{ value: unknown }>>`
-      SELECT value FROM fincore.system_settings WHERE key = ${TOKEN_KEY}
-    `;
-    const value = row[0]?.value;
-    return typeof value === 'string' && value.length > 0 ? value : null;
+  /** Marks each configured employee with whether they have verified a link of their own. */
+  private async withLinkState(
+    recipients: StoredConfig['recipients'],
+  ): Promise<StoredConfig['recipients']> {
+    const linked = await this.links.linkedUserIds(recipients.map((item) => item.userId));
+    return recipients.map((item) => ({ ...item, linked: linked.has(item.userId) }));
   }
 
   /**
-   * A recipient only counts if they have a chat id AND may read reports —
-   * a monthly financial summary must not reach someone without report access.
+   * A recipient only counts if they have verified their own Telegram link AND
+   * may read reports — a monthly financial summary must not reach someone
+   * without report access, and never a chat nobody proved they own.
    */
   private async deliverableRecipients(recipients: StoredConfig['recipients']) {
-    const withChat = recipients.filter((recipient) => recipient.chatId.length > 0);
+    const withChat = await this.reachable(recipients);
     if (withChat.length === 0) return [];
 
     const allowed = await this.prisma.db.users.findMany({
@@ -325,7 +338,7 @@ export class NotificationsService {
   private async reminderRecipients(
     recipients: StoredConfig['recipients'],
   ): Promise<Map<string, StoredConfig['recipients']>> {
-    const withChat = recipients.filter((recipient) => recipient.chatId.length > 0);
+    const withChat = await this.reachable(recipients);
     const grouped = new Map<string, StoredConfig['recipients']>();
     if (withChat.length === 0) return grouped;
 
@@ -351,6 +364,19 @@ export class NotificationsService {
         grouped.set(assignment.branch_id, list);
       }
     return grouped;
+  }
+
+  /**
+   * The only definition of "reachable" in the system: the employee verified a
+   * private chat themselves. Nothing an admin types can put someone on this list.
+   */
+  private async reachable(
+    recipients: StoredConfig['recipients'],
+  ): Promise<StoredConfig['recipients']> {
+    const linked = await this.links.linkedUserIds(recipients.map((item) => item.userId));
+    return recipients
+      .filter((item) => linked.has(item.userId))
+      .map((item) => ({ ...item, linked: true }));
   }
 
   private redactToken(text: string, token: string): string {

@@ -12,6 +12,8 @@ import type {
   PaginatedResponse,
   RevenuePlanBoard,
   TelegramSettings,
+
+  TelegramLinkStatus,
   TelegramSettingsInput,
   TrendGranularity,
   TrendPoint,
@@ -77,10 +79,11 @@ const expenseIdempotency = new Map<string, Expense>();
 const revenueIdempotency = new Map<string, DailyRevenue>();
 
 /** Bot token faqat serverda qoladi — GET javobida hech qachon qaytarilmaydi. */
-let telegramState: TelegramSettings & { botToken: string | null } = {
+// PHASE 38: the bot token is deployment configuration, not something the mock
+// (or any client) can hold. botTokenSet mirrors the backend's env-derived flag.
+let telegramState: TelegramSettings = {
   enabled: false,
-  botTokenSet: false,
-  botToken: null,
+  botTokenSet: true,
   dailyReminderEnabled: true,
   reminderTimeLocal: '20:00',
   monthlyReportEnabled: true,
@@ -88,9 +91,28 @@ let telegramState: TelegramSettings & { botToken: string | null } = {
   recipients: [],
 };
 
+/** Self-service link state for the signed-in demo user. */
+let telegramLink: TelegramLinkStatus = {
+  status: 'unlinked',
+  telegramUsername: null,
+  displayName: null,
+  linkedAt: null,
+  pendingExpiresAt: null,
+};
+
+/** Reachability follows the employee's own verified link, never a typed chat id. */
+function isReachable(userId: string): boolean {
+  return telegramLink.status === 'linked' && userId === signedInUser?.id;
+}
+
 function publicTelegramSettings(): TelegramSettings {
-  const { botToken, ...rest } = telegramState;
-  return { ...rest, botTokenSet: Boolean(botToken) };
+  return {
+    ...telegramState,
+    recipients: telegramState.recipients.map((item) => ({
+      ...item,
+      linked: isReachable(item.userId),
+    })),
+  };
 }
 
 const ok = <T extends JsonBodyType>(body: T, status = 200) => HttpResponse.json(body, { status });
@@ -1276,8 +1298,6 @@ export const handlers = [
       return problem(422, 'TIME_INVALID', 'Eslatma vaqti HH:mm formatida bo‘lsin.');
     if (!Number.isInteger(body.monthlyReportDay) || body.monthlyReportDay < 1 || body.monthlyReportDay > 28)
       return problem(422, 'DAY_INVALID', 'Hisobot kuni 1 va 28 orasida bo‘lsin.');
-    if (body.enabled && !body.botToken && !telegramState.botToken)
-      return problem(422, 'BOT_TOKEN_REQUIRED', 'Bot tokeni kiritilmagan.');
     telegramState = {
       ...telegramState,
       enabled: body.enabled,
@@ -1288,9 +1308,8 @@ export const handlers = [
       recipients: (body.recipients ?? []).map((item) => ({
         userId: item.userId,
         fullName: item.fullName,
-        chatId: String(item.chatId ?? '').trim(),
+        linked: false,
       })),
-      ...(body.botToken ? { botToken: body.botToken } : {}),
     };
     return ok(publicTelegramSettings());
   }),
@@ -1308,7 +1327,8 @@ export const handlers = [
         const recipients = telegramState.recipients.filter((recipient) => {
           const target = userRows.find((row) => row.id === recipient.userId);
           return (
-            Boolean(recipient.chatId) &&
+            recipient.userId === signedInUser?.id &&
+            telegramLink.status === 'linked' &&
             target?.status === 'active' &&
             target.writeBranchScopes.includes(state.branchId)
           );
@@ -1359,24 +1379,62 @@ export const handlers = [
       }),
       recipients: telegramState.recipients.filter((recipient) => {
         const target = userRows.find((row) => row.id === recipient.userId);
-        return Boolean(recipient.chatId) && target?.permissions.includes('reports.view');
+        return isReachable(recipient.userId) && target?.permissions.includes('reports.view');
       }),
     });
   }),
-  http.post(`${API}/notifications/telegram/test`, async ({ request }) => {
+  http.post(`${API}/notifications/telegram/test`, () => {
     const user = requireUser();
     if (user instanceof HttpResponse) return user;
     if (!hasPermission(user, 'notification.manage'))
       return problem(403, 'PERMISSION_DENIED', 'Ruxsat yo‘q.');
-    if (!telegramState.botToken)
-      return problem(422, 'BOT_TOKEN_REQUIRED', 'Avval bot tokenini saqlang.');
-    const body = (await request.json()) as { chatId?: string };
-    const chatId = String(body.chatId ?? '').trim();
-    if (!/^-?\d{5,}$/.test(chatId))
-      return problem(422, 'CHAT_ID_INVALID', 'Chat ID raqamlardan iborat bo‘lishi kerak.');
-    // Demo muhitda haqiqiy yuborish yo‘q — backend qo‘shilgach shu joyda
-    // Telegram Bot API chaqiriladi.
-    return ok({ delivered: false, chatId, note: 'DEMO_NO_BACKEND' });
+    if (!telegramState.botTokenSet)
+      return problem(409, 'TELEGRAM_DISABLED', 'Telegram integratsiyasi yoqilmagan.');
+    // No destination is accepted: the message always goes to the caller’s own
+    // verified chat, so an arbitrary chat id can never be a delivery target.
+    if (telegramLink.status !== 'linked')
+      return problem(404, 'TELEGRAM_LINK_NOT_FOUND', 'Avval o‘z Telegram hisobingizni ulang.');
+    return ok({ delivered: false, note: 'DEMO_NO_BACKEND' });
+  }),
+
+  // --- PHASE 38: self-service Telegram linking -----------------------------
+  http.get(`${API}/notifications/telegram/link`, () => {
+    const user = requireUser();
+    if (user instanceof HttpResponse) return user;
+    return ok(telegramLink);
+  }),
+  http.post(`${API}/notifications/telegram/link`, () => {
+    const user = requireUser();
+    if (user instanceof HttpResponse) return user;
+    if (!telegramState.botTokenSet)
+      return problem(409, 'TELEGRAM_DISABLED', 'Telegram integratsiyasi yoqilmagan.');
+    if (telegramLink.status === 'linked')
+      return problem(409, 'TELEGRAM_ALREADY_LINKED', 'Telegram allaqachon ulangan.');
+    const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
+    telegramLink = { ...telegramLink, status: 'pending', pendingExpiresAt: expiresAt };
+    // The demo token is throwaway: the real one is minted by the backend and
+    // never round-trips through the client.
+    return ok(
+      {
+        deepLink: `https://t.me/fincore_bot?start=demo-${Math.random().toString(36).slice(2, 10)}`,
+        expiresAt,
+      },
+      201,
+    );
+  }),
+  http.delete(`${API}/notifications/telegram/link`, () => {
+    const user = requireUser();
+    if (user instanceof HttpResponse) return user;
+    if (telegramLink.status === 'unlinked')
+      return problem(404, 'TELEGRAM_LINK_NOT_FOUND', 'Ulangan Telegram hisobi topilmadi.');
+    telegramLink = {
+      status: 'unlinked',
+      telegramUsername: null,
+      displayName: null,
+      linkedAt: null,
+      pendingExpiresAt: null,
+    };
+    return noContent();
   }),
 
   http.post(`${API}/imports/expenses`, async ({ request }) => {
@@ -1937,8 +1995,8 @@ export const handlers = [
   http.patch(`${API}/users/:id/status`, async ({ params, request }) => {
     const actor = requireUser();
     if (actor instanceof HttpResponse) return actor;
-    if (!hasPermission(actor, 'user.manage'))
-      return problem(403, 'PERMISSION_DENIED', 'Foydalanuvchini boshqarish huquqi yo‘q.');
+    if (!hasPermission(actor, 'user.deactivate'))
+      return problem(403, 'PERMISSION_DENIED', 'Foydalanuvchini nofaol qilish huquqi yo‘q.');
     const item = userRows.find((row) => row.id === params.id);
     if (!item) return problem(404, 'USER_NOT_FOUND', 'Foydalanuvchi topilmadi.');
     if (hasRole(item, 'director') && !hasRole(actor, 'director'))
@@ -1953,6 +2011,12 @@ export const handlers = [
         422,
         'VALIDATION_ERROR',
         'Yangi status active, inactive yoki blocked bo‘lsin.',
+      );
+    if (actor.id === item.id && body.status !== 'active')
+      return problem(
+        409,
+        'SELF_DEACTIVATION_DENIED',
+        'Foydalanuvchi o‘z hisobini nofaol yoki bloklangan holatga o‘tkaza olmaydi.',
       );
     if (
       item.status === 'active' &&
@@ -1969,6 +2033,38 @@ export const handlers = [
       );
     item.status = body.status;
     return ok(item);
+  }),
+  http.delete(`${API}/users/:id`, ({ params }) => {
+    const actor = requireUser();
+    if (actor instanceof HttpResponse) return actor;
+    if (!hasPermission(actor, 'user.delete'))
+      return problem(403, 'PERMISSION_DENIED', 'Foydalanuvchini o‘chirish huquqi yo‘q.');
+    const index = userRows.findIndex((row) => row.id === params.id);
+    if (index < 0) return problem(404, 'USER_NOT_FOUND', 'Foydalanuvchi topilmadi.');
+    const item = userRows[index]!;
+    if (actor.id === item.id)
+      return problem(
+        409,
+        'SELF_DELETE_DENIED',
+        'Foydalanuvchi o‘z hisobini butunlay o‘chira olmaydi.',
+      );
+    if (
+      item.status === 'active' &&
+      hasRole(item, 'director') &&
+      userRows.filter(
+        (candidate) => candidate.status === 'active' && hasRole(candidate, 'director'),
+      ).length === 1
+    )
+      return problem(
+        409,
+        'LAST_DIRECTOR_REQUIRED',
+        'Oxirgi faol direktorni o‘chirib bo‘lmaydi.',
+      );
+    // Historical mock expense/revenue rows intentionally remain. The real DB
+    // keeps their actor UUIDs through fincore.user_identities; only the account
+    // and its embedded authorization assignments disappear here.
+    userRows.splice(index, 1);
+    return new HttpResponse(null, { status: 204 });
   }),
   http.get(`${API}/roles/permissions`, () => {
     const actor = requireUser();
@@ -1992,6 +2088,17 @@ export const handlers = [
     if (!body.permissions) return problem(422, 'VALIDATION_ERROR', 'Ruxsatlar ro‘yxati majburiy.');
     const role = String(params.role) as AuthenticatedUser['roles'][number]['role'];
     if (!(role in rolePermissionRows)) return problem(404, 'ROLE_NOT_FOUND', 'Rol topilmadi.');
+    if (
+      role !== 'director' &&
+      body.permissions.some(
+        (permission) => permission === 'user.deactivate' || permission === 'user.delete',
+      )
+    )
+      return problem(
+        403,
+        'PRIVILEGE_ESCALATION_DENIED',
+        'Foydalanuvchi lifecycle ruxsatlari faqat Direktor roliga biriktiriladi.',
+      );
     rolePermissionRows[role] = [...new Set(body.permissions)];
     userRows.forEach((user) => {
       user.permissions = [

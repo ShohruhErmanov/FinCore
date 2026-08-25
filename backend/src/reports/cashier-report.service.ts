@@ -138,9 +138,9 @@ export class CashierReportService {
         SELECT cr.branch_id::text        AS branch_id,
                cr.collector_user_id::text AS user_id,
                cr.collector_name          AS full_name,
-               (u.status = 'active') AS is_active
+               (u.id IS NOT NULL AND u.status = 'active') AS is_active
         FROM fincore.v_cashier_report cr
-        JOIN fincore.users u ON u.id = cr.collector_user_id
+        LEFT JOIN fincore.users u ON u.id = cr.collector_user_id
         WHERE cr.period_id = ${periodId}::uuid
           AND cr.branch_id = ANY(${branchIds}::uuid[])
         ORDER BY cr.collector_name, cr.collector_user_id
@@ -151,9 +151,9 @@ export class CashierReportService {
         SELECT cr.branch_id::text AS branch_id,
                cr.collector_user_id::text AS user_id,
                cr.total_uzs,
-               u.fixed_salary_uzs::text AS salary
+               COALESCE(u.fixed_salary_uzs, 0)::text AS salary
         FROM fincore.v_cashier_report cr
-        JOIN fincore.users u ON u.id = cr.collector_user_id
+        LEFT JOIN fincore.users u ON u.id = cr.collector_user_id
         WHERE cr.period_id = ${periodId}::uuid
           AND cr.branch_id = ANY(${branchIds}::uuid[])
           AND (${viewerSqlId}::uuid IS NULL OR cr.collector_user_id = ${viewerSqlId}::uuid)

@@ -14,6 +14,7 @@ import { AdminModule } from './admin/admin.module';
 import { RevenuePlansModule } from './revenue-plans/revenue-plans.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ImportsModule } from './imports/imports.module';
+import { TelegramModule } from './telegram/telegram.module';
 import { DailyRevenuesModule } from './daily-revenues/daily-revenues.module';
 
 @Module({
@@ -40,6 +41,7 @@ import { DailyRevenuesModule } from './daily-revenues/daily-revenues.module';
     AdminModule,
     RevenuePlansModule,
     NotificationsModule,
+    TelegramModule,
     ImportsModule,
     DailyRevenuesModule,
   ],

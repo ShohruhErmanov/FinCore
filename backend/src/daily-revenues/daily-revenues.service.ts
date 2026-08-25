@@ -401,7 +401,7 @@ export class DailyRevenuesService {
         SUM(rt.amount_uzs)::text                    AS total_uzs,
         (array_agg(rt.description ORDER BY rt.receipt_no))[1]   AS comment,
         history.entered_by::text                    AS entered_by,
-        u.full_name                                 AS entered_by_name,
+        fincore.fn_user_identity_name(history.entered_by) AS entered_by_name,
         history.created_at                          AS created_at,
         MAX(rt.updated_at)                          AS updated_at
       FROM fincore.v_revenue_net_rows rt
@@ -417,11 +417,10 @@ export class DailyRevenuesService {
           AND h.payment_business_date = rt.payment_business_date
           AND hpm.code IN ('CASH', 'CARD', 'BANK_TRANSFER')
       ) history ON TRUE
-      JOIN fincore.users u          ON u.id = history.entered_by
       WHERE ${where}
         AND pm.code IN ('CASH', 'CARD', 'BANK_TRANSFER')
       GROUP BY rt.branch_id, rt.payment_business_date, b.name,
-               history.entered_by, history.created_at, u.full_name
+               history.entered_by, history.created_at
     `;
   }
 
@@ -664,16 +663,15 @@ export class DailyRevenuesService {
         SUM(rt.amount_uzs)::text AS total_uzs,
         (array_agg(rt.description ORDER BY rt.receipt_no))[1] AS comment,
         rt.entered_by::text AS entered_by,
-        u.full_name AS entered_by_name,
+        fincore.fn_user_identity_name(rt.entered_by) AS entered_by_name,
         MIN(rt.created_at) AS created_at,
         MIN(rt.created_at) AS updated_at
       FROM fincore.revenue_transactions rt
       JOIN fincore.payment_methods pm ON pm.id = rt.payment_method_id
       JOIN fincore.branches b ON b.id = rt.branch_id
-      JOIN fincore.users u ON u.id = rt.entered_by
       WHERE rt.entered_by = ${userId}::uuid
         AND rt.idempotency_key = ANY(${keys}::text[])
-      GROUP BY rt.branch_id, rt.payment_business_date, b.name, rt.entered_by, u.full_name
+      GROUP BY rt.branch_id, rt.payment_business_date, b.name, rt.entered_by
       ORDER BY MIN(rt.created_at), rt.branch_id
       LIMIT 1
     `;

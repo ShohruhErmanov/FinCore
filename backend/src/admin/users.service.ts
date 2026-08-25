@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { AuthService, hashPassword } from '@/auth';
+import { AuthService, hashPassword, SessionService } from '@/auth';
 import { ApiException, type AuthenticatedUser } from '@/common';
-import { ActorContextService, PrismaService } from '@/database';
+import { ActorContextService, PrismaService, type PrismaTransaction } from '@/database';
 import type { UserAccessDto, UserCreateDto, UserSalaryDto, UserStatusDto } from './dto/admin.dto';
 
 /** Mirrors the frontend UserDirectoryItem (src/shared/types/domain.ts:77). */
@@ -32,6 +32,7 @@ export class AdminUsersService {
     private readonly prisma: PrismaService,
     private readonly actor: ActorContextService,
     private readonly auth: AuthService,
+    private readonly sessions: SessionService,
   ) {}
 
   /**
@@ -154,7 +155,9 @@ export class AdminUsersService {
     input: UserAccessDto,
   ): Promise<AuthenticatedUser> {
     const target = await this.requireUser(userId);
-    const targetIsDirector = target.roles.some((role) => role.code === 'director');
+    const targetIsDirector = target.roles.some(
+      (role) => role.code === 'director' && role.is_active,
+    );
     if (targetIsDirector && !this.hasRole(actor, 'director'))
       throw new ApiException(
         403,
@@ -178,9 +181,6 @@ export class AdminUsersService {
 
     // Removing the last active director would lock the whole organisation out
     // of user and role administration.
-    if (targetIsDirector && !roleCodes.includes('director') && target.status === 'active')
-      await this.assertNotLastActiveDirector(userId);
-
     for (const assignment of input.roles) {
       if (assignment.role === 'cashier' && !assignment.branchId)
         throw new ApiException(422, 'BRANCH_REQUIRED', 'Kassir uchun filial scope majburiy.');
@@ -197,6 +197,9 @@ export class AdminUsersService {
 
     await this.prisma
       .withActor(this.actor.mint(actor.id), async (tx) => {
+        if (targetIsDirector && !roleCodes.includes('director') && target.status === 'active')
+          await this.assertNotLastActiveDirector(tx, userId);
+
         // Grants are revoked, never deleted: user_roles is an audit trail.
         await tx.user_roles.updateMany({
           where: { user_id: userId, ...ACTIVE },
@@ -226,25 +229,101 @@ export class AdminUsersService {
     input: UserStatusDto,
   ): Promise<AuthenticatedUser> {
     const target = await this.requireUser(userId);
-    const targetIsDirector = target.roles.some((role) => role.code === 'director');
+    if (actor.id === userId && input.status !== 'active')
+      throw new ApiException(
+        409,
+        'SELF_DEACTIVATION_DENIED',
+        'Foydalanuvchi o‘z hisobini nofaol yoki bloklangan holatga o‘tkaza olmaydi.',
+      );
+    const targetIsDirector = target.roles.some(
+      (role) => role.code === 'director' && role.is_active,
+    );
     if (targetIsDirector && !this.hasRole(actor, 'director'))
       throw new ApiException(
         403,
         'PRIVILEGE_ESCALATION_DENIED',
         'Direktor statusini faqat direktor boshqarishi mumkin.',
       );
-    if (targetIsDirector && target.status === 'active' && input.status !== 'active')
-      await this.assertNotLastActiveDirector(userId);
-
     await this.prisma
-      .withActor(this.actor.mint(actor.id), (tx) =>
-        tx.users.update({ where: { id: userId }, data: { status: input.status } }),
-      )
+      .withActor(this.actor.mint(actor.id), async (tx) => {
+        if (targetIsDirector && target.status === 'active' && input.status !== 'active')
+          await this.assertNotLastActiveDirector(tx, userId);
+
+        return tx.users.update({ where: { id: userId }, data: { status: input.status } });
+      })
       .catch((error: unknown) => {
         throw this.translateWriteError(error);
       });
 
     return this.auth.getAuthenticatedUser(userId, false);
+  }
+
+  async deleteUser(actor: AuthenticatedUser, userId: string): Promise<void> {
+    if (actor.id === userId)
+      throw new ApiException(
+        409,
+        'SELF_DELETE_DENIED',
+        'Foydalanuvchi o‘z hisobini butunlay o‘chira olmaydi.',
+      );
+    // Dedicated permission remains the controller guard; this role invariant
+    // is defense-in-depth against a stale/manual non-Director permission grant.
+    if (!this.hasRole(actor, 'director'))
+      throw new ApiException(
+        403,
+        'PERMISSION_DENIED',
+        'Foydalanuvchini faqat Direktor butunlay o‘chirishi mumkin.',
+      );
+
+    await this.prisma
+      .withActor(this.actor.mint(actor.id), async (tx) => {
+        // Keep target state, Director lifecycle decision and DELETE in one
+        // serialized transaction. The row lock also prevents status/is_system
+        // from changing between authorization and physical deletion.
+        await this.lockDirectorLifecycle(tx);
+        const targets = await tx.$queryRaw<
+          Array<{ status: string; is_system: boolean; is_director: boolean }>
+        >`
+          SELECT
+            u.status::text AS status,
+            u.is_system,
+            EXISTS (
+              SELECT 1
+              FROM fincore.user_roles ur
+              JOIN fincore.roles r ON r.id = ur.role_id
+              WHERE ur.user_id = u.id
+                AND ur.is_active
+                AND ur.revoked_at IS NULL
+                AND r.code = 'director'
+                AND r.is_active
+            ) AS is_director
+          FROM fincore.users u
+          WHERE u.id = ${userId}::uuid
+          FOR UPDATE OF u
+        `;
+        const target = targets[0];
+        if (!target)
+          throw new ApiException(404, 'USER_NOT_FOUND', 'Foydalanuvchi topilmadi.');
+        if (target.is_system)
+          throw new ApiException(
+            409,
+            'SYSTEM_USER_DELETE_DENIED',
+            'Rezerv tizim aktori servis audit identifikatori bo‘lgani uchun o‘chirib bo‘lmaydi.',
+          );
+        if (target.is_director && target.status === 'active')
+          await this.assertNotLastActiveDirector(tx, userId, true);
+
+        // PHASE 36 migration 009 keeps every historical actor UUID in the
+        // durable user_identities table. Only user_roles is disposable and its
+        // FK cascades from this account row; no financial/history row cascades.
+        await tx.users.delete({ where: { id: userId } });
+      })
+      .catch((error: unknown) => {
+        throw this.translateDeleteError(error);
+      });
+
+    // Sessions are process-local, not database dependants. Revoke them only
+    // after the database transaction has committed successfully.
+    this.sessions.destroyAllForUser(userId);
   }
 
   /**
@@ -333,19 +412,31 @@ export class AdminUsersService {
       select: {
         id: true,
         status: true,
-        user_roles: { where: ACTIVE, select: { role: { select: { code: true } } } },
+        is_system: true,
+        user_roles: {
+          where: ACTIVE,
+          select: { role: { select: { code: true, is_active: true } } },
+        },
       },
     });
     if (!user) throw new ApiException(404, 'USER_NOT_FOUND', 'Foydalanuvchi topilmadi.');
     return { ...user, roles: user.user_roles.map((assignment) => assignment.role) };
   }
 
-  private async assertNotLastActiveDirector(userId: string): Promise<void> {
-    const others = await this.prisma.db.users.count({
+  private async assertNotLastActiveDirector(
+    tx: PrismaTransaction,
+    userId: string,
+    lifecycleLockHeld = false,
+  ): Promise<void> {
+    // Serialize every operation that can remove an active Director. Keeping the
+    // lock, replacement count and mutation in one transaction prevents two
+    // concurrent requests from both observing a replacement and leaving none.
+    if (!lifecycleLockHeld) await this.lockDirectorLifecycle(tx);
+    const others = await tx.users.count({
       where: {
         id: { not: userId },
         status: 'active',
-        user_roles: { some: { ...ACTIVE, role: { code: 'director' } } },
+        user_roles: { some: { ...ACTIVE, role: { code: 'director', is_active: true } } },
       },
     });
     if (others === 0)
@@ -354,6 +445,23 @@ export class AdminUsersService {
         'LAST_DIRECTOR_REQUIRED',
         'Oxirgi faol direktor bloklanmaydi yoki nofaol qilinmaydi.',
       );
+  }
+
+  private async lockDirectorLifecycle(tx: PrismaTransaction): Promise<void> {
+    await tx.$executeRaw`
+      SELECT pg_advisory_xact_lock(
+        hashtextextended('admin:active-director-lifecycle', 0)
+      )
+    `;
+  }
+
+  private userDeleteNotAllowed(dependencyCategories: string[]): ApiException {
+    return new ApiException(
+      409,
+      'USER_DELETE_NOT_ALLOWED',
+      'Foydalanuvchi o‘chirilmadi: boshqarilmagan tashqi kalit xavfsizlik cheklovi mavjud.',
+      { dependencyCategories },
+    );
   }
 
   private hasRole(user: AuthenticatedUser, code: string): boolean {
@@ -383,5 +491,17 @@ export class AdminUsersService {
     if (/bigint.*range|out of range/i.test(message))
       return new ApiException(422, 'AMOUNT_INVALID', 'Oylik ruxsat etilgan chegaradan oshdi.');
     return error;
+  }
+
+  private translateDeleteError(error: unknown): unknown {
+    if (error instanceof ApiException) return error;
+    const code =
+      error && typeof error === 'object' && 'code' in error ? String(error.code) : undefined;
+    const message = error instanceof Error ? error.message : String(error);
+    if (code === 'P2025' || /record.*not found|no record was found for a delete/i.test(message))
+      return new ApiException(404, 'USER_NOT_FOUND', 'Foydalanuvchi topilmadi.');
+    if (code === 'P2003' || code === '23503' || /foreign key constraint/i.test(message))
+      return this.userDeleteNotAllowed(['protected_history']);
+    return this.translateWriteError(error);
   }
 }

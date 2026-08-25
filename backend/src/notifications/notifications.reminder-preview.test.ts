@@ -7,10 +7,20 @@ import {
   isValidBusinessDate,
 } from '@/daily-revenues/daily-revenues.service';
 import type { DashboardService } from '@/reports/dashboard.service';
+import type { AppEnv } from '@/config';
+import type { TelegramLinkService } from '@/telegram/telegram-link.service';
 import { NotificationsService } from './notifications.service';
 
 const BRANCH_ONE = '11111111-1111-4111-8111-111111111111';
 const BRANCH_TWO = '22222222-2222-4222-8222-222222222222';
+
+/** Nobody has verified a Telegram link, so no employee is reachable. */
+const LINK_STUB = {
+  linkedUserIds: async () => new Set<string>(),
+} as unknown as TelegramLinkService;
+
+/** Telegram off: the preview must still render without any credential present. */
+const TELEGRAM_OFF = { TELEGRAM_ENABLED: false } as unknown as AppEnv;
 
 const user: AuthenticatedUser = {
   id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -107,6 +117,8 @@ describe('NotificationsService.reminderPreview', () => {
       prisma,
       {} as DashboardService,
       { totalsByBranch } as unknown as DailyRevenuesService,
+      LINK_STUB,
+      TELEGRAM_OFF,
     );
 
     const result = await notifications.reminderPreview(user);
@@ -145,6 +157,8 @@ describe('NotificationsService.reminderPreview', () => {
       } as unknown as PrismaService,
       {} as DashboardService,
       { totalsByBranch } as unknown as DailyRevenuesService,
+      LINK_STUB,
+      TELEGRAM_OFF,
     );
 
     const result = await notifications.reminderPreview(user, '2026-07-31');

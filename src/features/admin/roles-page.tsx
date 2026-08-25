@@ -59,6 +59,8 @@ const permissionGroups: Array<{
     items: [
       { code: 'master_data.manage', label: 'Master-data' },
       { code: 'user.manage', label: 'Userlar' },
+      { code: 'user.deactivate', label: 'Userni nofaol qilish' },
+      { code: 'user.delete', label: 'Userni butunlay o‘chirish' },
       { code: 'role.manage', label: 'Rollar' },
     ],
   },
@@ -109,6 +111,8 @@ const initialRolePermissions: Record<RoleCode, PermissionCode[]> = {
     'reports.view_cashiers',
     'master_data.manage',
     'user.manage',
+    'user.deactivate',
+    'user.delete',
     'role.manage',
   ],
 };
@@ -225,7 +229,12 @@ export function RolesPage() {
                         type="checkbox"
                         className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
                         checked={matrix[selectedRole].includes(permission.code)}
-                        disabled={!canManage}
+                        disabled={
+                          !canManage ||
+                          ((permission.code === 'user.deactivate' ||
+                            permission.code === 'user.delete') &&
+                            selectedRole !== 'director')
+                        }
                         onChange={() => toggle(permission.code)}
                       />
                       <span>

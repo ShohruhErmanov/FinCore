@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CirclePlus, KeyRound, UserCog } from 'lucide-react';
+import { CirclePlus, KeyRound, Trash2, UserCog } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
+import { useAuth } from '@/features/auth/auth-context';
 import { getApiErrorMessage } from '@/shared/api/client';
 import { adminApi, referenceApi } from '@/shared/api/contracts';
 import { queryKeys } from '@/shared/api/query-keys';
@@ -10,6 +11,7 @@ import {
   Alert,
   Button,
   Card,
+  ConfirmDialog,
   CurrencyInput,
   DataTable,
   ErrorState,
@@ -18,10 +20,14 @@ import {
   LoadingState,
   PageHeader,
   Select,
+  useToast,
   type Column,
 } from '@/shared/ui';
 
 export function UsersPage() {
+  const { user: currentUser, hasPermission } = useAuth();
+  const canDeactivateUsers = hasPermission('user.deactivate');
+  const canDeleteUsers = hasPermission('user.delete');
   const branchesQuery = useQuery({
     queryKey: queryKeys.branches,
     queryFn: ({ signal }) => referenceApi.branches(signal),
@@ -85,7 +91,8 @@ export function UsersPage() {
       header: '',
       cell: (row) => (
         <div className="flex min-w-52 items-center justify-end gap-2">
-          <UserStatusAction user={row} />
+          {canDeactivateUsers && currentUser?.id !== row.id ? <UserStatusAction user={row} /> : null}
+          {canDeleteUsers && currentUser?.id !== row.id ? <DeleteUserAction user={row} /> : null}
           <Button
             size="sm"
             variant="secondary"
@@ -472,6 +479,56 @@ function UserStatusAction({ user }: { user: AuthenticatedUser }) {
     </Select>
   );
 }
+
+function DeleteUserAction({ user }: { user: AuthenticatedUser }) {
+  const queryClient = useQueryClient();
+  const { notify } = useToast();
+  const [open, setOpen] = useState(false);
+  const mutation = useMutation({
+    mutationFn: () => adminApi.deleteUser(user.id),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.users }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.userDirectory }),
+      ]);
+      setOpen(false);
+    },
+    onError: (error) =>
+      notify({
+        title: 'User o‘chirilmadi',
+        message: getApiErrorMessage(error),
+        tone: 'danger',
+      }),
+  });
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="danger"
+        aria-label={`${user.fullName}ni o‘chirish`}
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpen(true);
+        }}
+      >
+        <Trash2 className="h-4 w-4" /> O‘chirish
+      </Button>
+      <ConfirmDialog
+        open={open}
+        title="Foydalanuvchini butunlay o‘chirish"
+        description={`${user.fullName} foydalanuvchisi butunlay o‘chiriladi. Davom etasizmi?`}
+        confirmLabel="Butunlay o‘chirish"
+        danger
+        pending={mutation.isPending}
+        onClose={() => {
+          if (!mutation.isPending) setOpen(false);
+        }}
+        onConfirm={() => mutation.mutate()}
+      />
+    </>
+  );
+}
+
 function UserStatusBadge({ value }: { value: UserStatus }) {
   const label = value === 'active' ? 'Faol' : value === 'inactive' ? 'Nofaol' : 'Bloklangan';
   const style =

@@ -73,6 +73,8 @@ const directorPermissions: AuthenticatedUser['permissions'] = [
   'reports.view_cashiers',
   'master_data.manage',
   'user.manage',
+  'user.deactivate',
+  'user.delete',
   'role.manage',
 ];
 

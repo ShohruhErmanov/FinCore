@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { ApiException, type AuthenticatedUser } from '@/common';
 import { ActorContextService, PrismaService } from '@/database';
 
+const DIRECTOR_ONLY_PERMISSIONS = new Set(['user.deactivate', 'user.delete']);
+
 /** Record<RoleCode, PermissionCode[]> — src/shared/types/domain.ts:75. */
 export type RolePermissionMatrix = Record<string, string[]>;
 
@@ -52,6 +54,14 @@ export class AdminRolesService {
     if (!role) throw new ApiException(404, 'ROLE_NOT_FOUND', 'Rol topilmadi.');
 
     const wanted = [...new Set(permissionCodes)];
+    const directorOnly = wanted.filter((code) => DIRECTOR_ONLY_PERMISSIONS.has(code));
+    if (role.code !== 'director' && directorOnly.length > 0)
+      throw new ApiException(
+        403,
+        'PRIVILEGE_ESCALATION_DENIED',
+        'Foydalanuvchini nofaol qilish ruxsati faqat Direktor roliga biriktiriladi.',
+        { deniedPermissions: directorOnly },
+      );
     const permissions = await this.prisma.db.permissions.findMany({
       where: { code: { in: wanted } },
       select: { id: true, code: true },

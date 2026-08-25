@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, CheckCircle2, Save, Send } from 'lucide-react';
+import { Bell, CheckCircle2, Link2, Save, Send, Unlink } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { getApiErrorMessage } from '@/shared/api/client';
 import { notificationApi, referenceApi } from '@/shared/api/contracts';
 import { queryKeys } from '@/shared/api/query-keys';
-import { formatDate, tashkentBusinessDate } from '@/shared/lib/format';
-import type { TelegramRecipient, TelegramSettings } from '@/shared/types/domain';
+import { formatDate, formatDateTime, tashkentBusinessDate } from '@/shared/lib/format';
+import type { TelegramSettings } from '@/shared/types/domain';
 import {
   Alert,
   Breadcrumbs,
@@ -33,8 +33,7 @@ function MessagePreview({ text }: { text: string }) {
 export function NotificationsPage() {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<TelegramSettings | null>(null);
-  const [botToken, setBotToken] = useState('');
-  const [testChatId, setTestChatId] = useState('');
+
   const [previewDate, setPreviewDate] = useState(() => tashkentBusinessDate());
 
   const settings = useQuery({
@@ -63,6 +62,25 @@ export function NotificationsPage() {
     enabled: Boolean(selectedPeriod),
   });
 
+  // Self-service: this is the caller’s own binding, not an admin setting.
+  const link = useQuery({
+    queryKey: ['notifications', 'telegram', 'link'],
+    queryFn: ({ signal }) => notificationApi.linkStatus(signal),
+  });
+  const invalidateLink = () =>
+    queryClient.invalidateQueries({ queryKey: ['notifications', 'telegram', 'link'] });
+  const createLink = useMutation({
+    mutationFn: () => notificationApi.createLink(),
+    onSuccess: invalidateLink,
+  });
+  const unlink = useMutation({
+    mutationFn: () => notificationApi.unlink(),
+    onSuccess: async () => {
+      createLink.reset();
+      await invalidateLink();
+    },
+  });
+
   useEffect(() => {
     if (settings.data) setDraft(settings.data);
   }, [settings.data]);
@@ -71,7 +89,6 @@ export function NotificationsPage() {
     mutationFn: () =>
       notificationApi.saveSettings({
         enabled: draft?.enabled ?? false,
-        ...(botToken.trim() ? { botToken: botToken.trim() } : {}),
         dailyReminderEnabled: draft?.dailyReminderEnabled ?? false,
         reminderTimeLocal: draft?.reminderTimeLocal ?? '20:00',
         monthlyReportEnabled: draft?.monthlyReportEnabled ?? false,
@@ -80,11 +97,10 @@ export function NotificationsPage() {
       }),
     onSuccess: async (saved) => {
       setDraft(saved);
-      setBotToken('');
       await queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
-  const test = useMutation({ mutationFn: () => notificationApi.sendTest(testChatId.trim()) });
+  const test = useMutation({ mutationFn: () => notificationApi.sendTest() });
 
   if (settings.isLoading || users.isLoading) return <LoadingState label="Sozlamalar yuklanmoqda…" />;
   if (settings.isError)
@@ -96,16 +112,18 @@ export function NotificationsPage() {
     );
   if (!draft) return <LoadingState label="Sozlamalar tayyorlanmoqda…" />;
 
-  const chatIdFor = (userId: string) =>
-    draft.recipients.find((item) => item.userId === userId)?.chatId ?? '';
-  const setChatId = (recipient: Omit<TelegramRecipient, 'chatId'>, chatId: string) =>
+  const isChosen = (userId: string) =>
+    draft.recipients.some((item) => item.userId === userId);
+  // A recipient is only a choice of employee. Whether a message can actually
+  // reach them comes from their own verified link, which the server decides.
+  const toggleRecipient = (user: { id: string; fullName: string }, chosen: boolean) =>
     setDraft((current) => {
       if (!current) return current;
-      const rest = current.recipients.filter((item) => item.userId !== recipient.userId);
+      const rest = current.recipients.filter((item) => item.userId !== user.id);
       return {
         ...current,
-        recipients: chatId.trim()
-          ? [...rest, { ...recipient, chatId: chatId.trim() }]
+        recipients: chosen
+          ? [...rest, { userId: user.id, fullName: user.fullName, linked: false }]
           : rest,
       };
     });
@@ -134,6 +152,74 @@ export function NotificationsPage() {
         Bot tokenini ham faqat server saqlashi mumkin.
       </Alert>
 
+      <Card
+        title="Mening Telegramim"
+        description="Bir martalik havola orqali o‘z hisobingizni ulaysiz. Chat ID kiritilmaydi."
+        className="mb-5"
+        data-testid="telegram-link-card"
+      >
+        {link.isLoading ? (
+          <LoadingState label="Holat tekshirilmoqda…" />
+        ) : link.isError ? (
+          <ErrorState
+            message={getApiErrorMessage(link.error)}
+            onRetry={() => void link.refetch()}
+          />
+        ) : link.data?.status === 'linked' ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm font-semibold text-emerald-700">
+              Telegram ulangan
+              {link.data.telegramUsername ? ` (@${link.data.telegramUsername})` : ''}
+            </span>
+            <Button
+              variant="secondary"
+              loading={unlink.isPending}
+              onClick={() => {
+                // Irreversible for the current binding, so ask first.
+                if (window.confirm('Telegram ulanishini uzasizmi?')) unlink.mutate();
+              }}
+            >
+              <Unlink className="h-4 w-4" /> Uzish
+            </Button>
+          </div>
+        ) : link.data?.status === 'disabled' ? (
+          <Alert title="Ulanish o‘chirilgan" tone="warning">
+            Hisobingiz ulangan, lekin yuborish to‘xtatilgan. Qaytadan ulash uchun avval uzing.
+          </Alert>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-muted">
+              {link.data?.status === 'pending'
+                ? 'Havola yuborilgan — Telegramda botga /start yozing.'
+                : 'Telegram hali ulanmagan.'}
+            </p>
+            <Button loading={createLink.isPending} onClick={() => createLink.mutate()}>
+              <Link2 className="h-4 w-4" />
+              {link.data?.status === 'pending' ? 'Yangi havola olish' : 'Telegramni ulash'}
+            </Button>
+            {createLink.isError ? (
+              <Alert title="Havola olinmadi" tone="danger">
+                {getApiErrorMessage(createLink.error)}
+              </Alert>
+            ) : null}
+            {createLink.data ? (
+              <Alert title="Havola tayyor" tone="info">
+                <a
+                  className="font-semibold underline"
+                  href={createLink.data.deepLink}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Telegramda ochish
+                </a>
+                <span className="ml-2 text-xs">
+                  Amal qiladi: {formatDateTime(createLink.data.expiresAt)}
+                </span>
+              </Alert>
+            ) : null}
+          </div>
+        )}
+      </Card>
       {save.isError ? (
         <Alert title="Saqlanmadi" tone="danger" className="mb-5">
           {getApiErrorMessage(save.error)}
@@ -160,24 +246,17 @@ export function NotificationsPage() {
               <span className="text-sm font-semibold text-ink">Bildirishnomalar yoqilgan</span>
             </label>
 
-            <FormField
-              label="Bot tokeni"
-              htmlFor="tg-token"
-              hint={
-                draft.botTokenSet
-                  ? 'Token saqlangan. O‘zgartirish uchun yangisini kiriting.'
-                  : '@BotFather bergan tokenni kiriting.'
-              }
-            >
-              <Input
-                id="tg-token"
-                type="password"
-                autoComplete="off"
-                placeholder={draft.botTokenSet ? '••••••••••••' : '123456:AA...'}
-                value={botToken}
-                onChange={(event) => setBotToken(event.target.value)}
-              />
-            </FormField>
+            {/* The token is deployment configuration; it is never typed here. */}
+            <div className="rounded-lg border border-border px-3 py-2 text-sm">
+              <span className="font-semibold text-ink">Bot ulanishi: </span>
+              {draft.botTokenSet ? (
+                <span className="text-emerald-700">server sozlamalarida tayyor</span>
+              ) : (
+                <span className="text-amber-700">
+                  server sozlamalarida yoqilmagan (TELEGRAM_ENABLED)
+                </span>
+              )}
+            </div>
 
             <label className="flex min-h-11 items-center gap-3 rounded-lg border border-border px-3">
               <input
@@ -240,51 +319,57 @@ export function NotificationsPage() {
 
         <Card
           title="Qabul qiluvchilar"
-          description="Xodim Telegram’da botga /start yozgach, uning chat ID sini shu yerga kiriting."
+          description="Kimga yuborilsin. Xabar faqat o‘z Telegramini ulagan xodimga boradi."
         >
-          <div className="space-y-3">
+          <div className="space-y-2">
             {(users.data ?? [])
               .filter((user) => user.status === 'active')
-              .map((user) => (
-                <FormField key={user.id} label={user.fullName} htmlFor={`chat-${user.id}`}>
-                  <Input
-                    id={`chat-${user.id}`}
-                    inputMode="numeric"
-                    placeholder="Chat ID, masalan 123456789"
-                    value={chatIdFor(user.id)}
-                    onChange={(event) =>
-                      setChatId({ userId: user.id, fullName: user.fullName }, event.target.value)
-                    }
-                  />
-                </FormField>
-              ))}
+              .map((user) => {
+                const reachable = draft.recipients.find(
+                  (item) => item.userId === user.id,
+                )?.linked;
+                return (
+                  <label
+                    key={user.id}
+                    className="flex min-h-11 items-center gap-3 rounded-lg border border-border px-3"
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                      checked={isChosen(user.id)}
+                      onChange={(event) =>
+                        toggleRecipient(user, event.target.checked)
+                      }
+                    />
+                    <span className="text-sm font-semibold text-ink">{user.fullName}</span>
+                    {isChosen(user.id) ? (
+                      <span
+                        className={`ml-auto text-xs ${reachable ? 'text-emerald-700' : 'text-amber-700'}`}
+                      >
+                        {reachable ? 'Telegram ulangan' : 'Telegram ulanmagan'}
+                      </span>
+                    ) : null}
+                  </label>
+                );
+              })}
           </div>
           <div className="mt-5 border-t border-border pt-4">
-            <FormField label="Sinov xabari" htmlFor="tg-test" hint="Chat ID kiriting va yuboring.">
-              <div className="flex gap-2">
-                <Input
-                  id="tg-test"
-                  inputMode="numeric"
-                  value={testChatId}
-                  onChange={(event) => setTestChatId(event.target.value)}
-                />
-                <Button
-                  variant="secondary"
-                  loading={test.isPending}
-                  onClick={() => test.mutate()}
-                >
-                  <Send className="h-4 w-4" /> Yuborish
-                </Button>
-              </div>
-            </FormField>
+            {/* No destination field: the test always goes to your own chat. */}
+            <Button
+              variant="secondary"
+              loading={test.isPending}
+              onClick={() => test.mutate()}
+            >
+              <Send className="h-4 w-4" /> O‘zimga sinov xabari
+            </Button>
             {test.isError ? (
               <Alert title="Yuborilmadi" tone="danger" className="mt-3">
                 {getApiErrorMessage(test.error)}
               </Alert>
             ) : null}
             {test.isSuccess ? (
-              <Alert title="Backend hali ulanmagan" tone="info" className="mt-3">
-                Chat ID to‘g‘ri ({test.data.chatId}), lekin demo muhitda haqiqiy yuborish yo‘q.
+              <Alert title="So‘rov qabul qilindi" tone="info" className="mt-3">
+                {test.data.note}
               </Alert>
             ) : null}
           </div>

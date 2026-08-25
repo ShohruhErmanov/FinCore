@@ -76,6 +76,69 @@ describe('validateEnv', () => {
     });
   });
 
+  describe('Telegram (PHASE 38)', () => {
+    const telegram = {
+      TELEGRAM_ENABLED: 'true',
+      TELEGRAM_BOT_TOKEN: '123456:AA-real-token',
+      TELEGRAM_BOT_USERNAME: 'fincore_bot',
+      TELEGRAM_WEBHOOK_SECRET: 'w'.repeat(48),
+      TELEGRAM_LINK_TOKEN_PEPPER: 'p'.repeat(48),
+    };
+    const prod = {
+      ...base,
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgresql://u@h/db',
+      COOKIE_SECURE: 'true',
+      SWAGGER_ENABLED: 'false',
+    };
+
+    it('is off by default, so development and test need no Telegram secrets', () => {
+      const env = validateEnv({ ...base });
+      expect(env.TELEGRAM_ENABLED).toBe(false);
+      expect(env.TELEGRAM_BOT_TOKEN).toBeUndefined();
+      expect(env.TELEGRAM_WEBHOOK_SECRET).toBeUndefined();
+      expect(env.TELEGRAM_LINK_TOKEN_TTL_MINUTES).toBe(10);
+    });
+
+    it('stays valid in production while it is switched off', () => {
+      expect(() => validateEnv({ ...prod })).not.toThrow();
+    });
+
+    it('accepts a fully configured production integration', () => {
+      const env = validateEnv({ ...prod, ...telegram });
+      expect(env.TELEGRAM_ENABLED).toBe(true);
+      expect(env.TELEGRAM_BOT_USERNAME).toBe('fincore_bot');
+    });
+
+    it.each([
+      'TELEGRAM_BOT_TOKEN',
+      'TELEGRAM_BOT_USERNAME',
+      'TELEGRAM_WEBHOOK_SECRET',
+      'TELEGRAM_LINK_TOKEN_PEPPER',
+    ])('requires %s once the integration is enabled', (missing) => {
+      const { [missing]: _omitted, ...rest } = telegram as Record<string, string>;
+      expect(() => validateEnv({ ...prod, ...rest })).toThrow(new RegExp(missing));
+    });
+
+    it('refuses a webhook secret that is too short to be worth comparing', () => {
+      expect(() =>
+        validateEnv({ ...prod, ...telegram, TELEGRAM_WEBHOOK_SECRET: 'short' }),
+      ).toThrow(/TELEGRAM_WEBHOOK_SECRET/);
+    });
+
+    it('refuses a link pepper that is too short', () => {
+      expect(() =>
+        validateEnv({ ...prod, ...telegram, TELEGRAM_LINK_TOKEN_PEPPER: 'short' }),
+      ).toThrow(/TELEGRAM_LINK_TOKEN_PEPPER/);
+    });
+
+    it('refuses a bot username Telegram would never issue', () => {
+      expect(() =>
+        validateEnv({ ...prod, ...telegram, TELEGRAM_BOT_USERNAME: '@no-dashes-allowed' }),
+      ).toThrow(/TELEGRAM_BOT_USERNAME/);
+    });
+  });
+
   it('reports every problem at once, not just the first', () => {
     let message = '';
     try {
