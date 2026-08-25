@@ -7,6 +7,7 @@ import {
   formatMoney,
   formatPercent,
   signedTone,
+  tashkentBusinessDate,
   toChartNumber,
 } from '@/shared/lib/format';
 
@@ -61,6 +62,11 @@ describe('[AC-07, AC-15, AC-16] foiz semantikasi', () => {
 });
 
 describe('[FE-TIME-01] Asia/Tashkent sana va vaqt', () => {
+  it('UTC/Tashkent kun chegarasida backend business-date bilan bir xil sanani qaytaradi', () => {
+    expect(tashkentBusinessDate(new Date('2026-08-20T18:59:59.000Z'))).toBe('2026-08-20');
+    expect(tashkentBusinessDate(new Date('2026-08-20T19:00:00.000Z'))).toBe('2026-08-21');
+  });
+
   it('UTC timestampni operatsion +05:00 vaqt zonasida ko‘rsatadi', () => {
     expect(formatDateTime('2026-08-20T00:30:00Z')).toBe('20.08.2026 05:30');
   });

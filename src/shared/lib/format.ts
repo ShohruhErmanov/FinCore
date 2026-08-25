@@ -72,6 +72,13 @@ function tashkentParts(date: Date): { day: number; month: number; year: number }
   return { day, month, year };
 }
 
+/** Backend business-date semantikasi bilan bir xil Asia/Tashkent YYYY-MM-DD sanasi. */
+export function tashkentBusinessDate(date = new Date()): IsoDate {
+  const parts = tashkentParts(date);
+  if (!parts) throw new Error('Asia/Tashkent sanasini aniqlab bo‘lmaydi.');
+  return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
+}
+
 /** Jadval uchun qisqa sana: 20.08.2026 */
 export function formatDate(value: IsoDate): string {
   const [year, month, day] = value.split('-').map(Number);

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { getApiErrorMessage } from '@/shared/api/client';
 import { notificationApi, referenceApi } from '@/shared/api/contracts';
 import { queryKeys } from '@/shared/api/query-keys';
-import { formatDate } from '@/shared/lib/format';
+import { formatDate, tashkentBusinessDate } from '@/shared/lib/format';
 import type { TelegramRecipient, TelegramSettings } from '@/shared/types/domain';
 import {
   Alert,
@@ -35,7 +35,7 @@ export function NotificationsPage() {
   const [draft, setDraft] = useState<TelegramSettings | null>(null);
   const [botToken, setBotToken] = useState('');
   const [testChatId, setTestChatId] = useState('');
-  const [previewDate, setPreviewDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [previewDate, setPreviewDate] = useState(() => tashkentBusinessDate());
 
   const settings = useQuery({
     queryKey: settingsKey,

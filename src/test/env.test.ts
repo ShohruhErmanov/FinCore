@@ -38,6 +38,22 @@ describe('shared/config/env', () => {
     expect(environment.enableMocks).toBe(false);
   });
 
+  it('production buildda localhost API override o‘rniga xavfsiz /api ishlatadi', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.stubEnv('PROD', true);
+    vi.stubEnv('VITE_API_BASE_URL', 'http://localhost:3000/api');
+    const environment = await loadEnvironment();
+    expect(environment.apiBaseUrl).toBe('/api');
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('development rejimida localhost API override ishlashini saqlaydi', async () => {
+    vi.stubEnv('PROD', false);
+    vi.stubEnv('VITE_API_BASE_URL', 'http://localhost:3000/api');
+    const environment = await loadEnvironment();
+    expect(environment.apiBaseUrl).toBe('http://localhost:3000/api');
+  });
+
   it('respects an explicit demo override on a production-style build', async () => {
     vi.stubEnv('VITE_ENABLE_MOCKS', 'true');
     const environment = await loadEnvironment();

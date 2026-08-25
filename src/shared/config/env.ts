@@ -36,6 +36,12 @@ function withDefault(rawValue: string | undefined, fallback: string): string {
   return rawValue && rawValue.length > 0 ? rawValue : fallback;
 }
 
+function isLoopbackApiUrl(value: string): boolean {
+  if (value.startsWith('/')) return false;
+  const hostname = new URL(value).hostname.toLowerCase();
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
+}
+
 const rawEnvironment = {
   apiBaseUrl: withDefault(import.meta.env.VITE_API_BASE_URL, DEFAULT_API_BASE_URL),
   enableMocks: withDefault(import.meta.env.VITE_ENABLE_MOCKS, DEFAULT_ENABLE_MOCKS),
@@ -48,7 +54,15 @@ const parsedEnvironment = environmentSchema.safeParse(rawEnvironment);
 // logged loudly, but it must never white-screen a demo deployment: fall back
 // to the safe defaults above and keep the app bootable.
 function resolveEnvironment(): { apiBaseUrl: string; enableMocks: string } {
-  if (parsedEnvironment.success) return parsedEnvironment.data;
+  if (parsedEnvironment.success) {
+    if (import.meta.env.PROD && isLoopbackApiUrl(parsedEnvironment.data.apiBaseUrl)) {
+      console.warn(
+        'Production build uchun loopback VITE_API_BASE_URL bekor qilindi; /api ishlatiladi.',
+      );
+      return { ...parsedEnvironment.data, apiBaseUrl: DEFAULT_API_BASE_URL };
+    }
+    return parsedEnvironment.data;
+  }
   const details = parsedEnvironment.error.issues.map((issue) => issue.message).join(' ');
   console.error(
     `Frontend environment konfiguratsiyasi noto‘g‘ri, xavfsiz demo default’lar bilan davom etilmoqda: ${details}`,
