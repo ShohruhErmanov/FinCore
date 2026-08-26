@@ -139,6 +139,55 @@ describe('validateEnv', () => {
     });
   });
 
+  describe('notification worker (PHASE 40)', () => {
+    const telegramOn = {
+      TELEGRAM_ENABLED: 'true',
+      TELEGRAM_BOT_TOKEN: '123456:AA-real-token',
+      TELEGRAM_BOT_USERNAME: 'fincore_bot',
+      TELEGRAM_WEBHOOK_SECRET: 'w'.repeat(48),
+      TELEGRAM_LINK_TOKEN_PEPPER: 'p'.repeat(48),
+    };
+
+    it('is off by default with safe bounded defaults', () => {
+      const env = validateEnv({ ...base });
+      expect(env.NOTIFICATION_WORKER_ENABLED).toBe(false);
+      expect(env.NOTIFICATION_WORKER_INTERVAL_MS).toBe(15_000);
+      expect(env.NOTIFICATION_WORKER_BATCH_SIZE).toBe(10);
+      expect(env.NOTIFICATION_WORKER_LEASE_SECONDS).toBe(120);
+      expect(env.NOTIFICATION_MAX_ATTEMPTS).toBe(5);
+      expect(env.NOTIFICATION_RETRY_BASE_MS).toBe(30_000);
+      expect(env.NOTIFICATION_RETRY_MAX_MS).toBe(3_600_000);
+    });
+
+    it('accepts an enabled worker when Telegram is configured', () => {
+      const env = validateEnv({ ...base, ...telegramOn, NOTIFICATION_WORKER_ENABLED: 'true' });
+      expect(env.NOTIFICATION_WORKER_ENABLED).toBe(true);
+    });
+
+    it('refuses an enabled worker with no delivery channel', () => {
+      expect(() => validateEnv({ ...base, NOTIFICATION_WORKER_ENABLED: 'true' })).toThrow(
+        /NOTIFICATION_WORKER_ENABLED/,
+      );
+    });
+
+    it.each([
+      ['NOTIFICATION_WORKER_INTERVAL_MS', '0'],
+      ['NOTIFICATION_WORKER_BATCH_SIZE', '0'],
+      ['NOTIFICATION_WORKER_BATCH_SIZE', '1000'],
+      ['NOTIFICATION_WORKER_LEASE_SECONDS', '1'],
+      ['NOTIFICATION_MAX_ATTEMPTS', '0'],
+      ['NOTIFICATION_RETRY_BASE_MS', '10'],
+    ])('rejects an impossible %s of %s', (key, value) => {
+      expect(() => validateEnv({ ...base, [key]: value })).toThrow(new RegExp(key));
+    });
+
+    it('refuses a retry ceiling below the base delay', () => {
+      expect(() =>
+        validateEnv({ ...base, NOTIFICATION_RETRY_BASE_MS: '60000', NOTIFICATION_RETRY_MAX_MS: '30000' }),
+      ).toThrow(/NOTIFICATION_RETRY_MAX_MS/);
+    });
+  });
+
   it('reports every problem at once, not just the first', () => {
     let message = '';
     try {

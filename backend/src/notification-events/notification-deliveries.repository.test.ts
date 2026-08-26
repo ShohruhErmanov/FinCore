@@ -105,6 +105,12 @@ function makeDb() {
     const row = rows.find((r) => r.id === id);
     if (!row) return 0;
 
+    // "AND lease_owner = $n" — a worker may only finalise its own lease.
+    if (sql.includes('AND lease_owner =')) {
+      const owner = values[values.length - 1] as string;
+      if (row.lease_owner !== owner) return 0;
+    }
+
     if (sql.includes("status = 'cancelled'")) {
       if (TERMINAL.includes(row.status)) return 0;
       row.status = 'cancelled';
@@ -214,8 +220,8 @@ describe('NotificationDeliveriesRepository — claiming', () => {
     const { db, repo } = await seeded();
     const now = new Date('2026-08-20T10:00:00.000Z');
     await repo.claim('worker-1', { now });
-    await repo.markDelivered(db.rows[0]!.id, 'msg-1');
-    await repo.markPermanentlyFailed(db.rows[1]!.id, 'BLOCKED');
+    await repo.markDelivered(db.rows[0]!.id, 'worker-1', 'msg-1');
+    await repo.markPermanentlyFailed(db.rows[1]!.id, 'worker-1', 'BLOCKED');
 
     // Far in the future: any claimable row would be due by now.
     const later = await repo.claim('worker-2', { now: new Date('2027-01-01T00:00:00.000Z') });
@@ -237,8 +243,8 @@ describe('NotificationDeliveriesRepository — claiming', () => {
     const { db, repo } = await seeded();
     const now = new Date('2026-08-20T10:00:00.000Z');
     await repo.claim('worker-1', { now });
-    await repo.markRetry(db.rows[0]!.id, 'TELEGRAM_HTTP_500', new Date('2026-08-20T10:05:00.000Z'));
-    await repo.markDelivered(db.rows[1]!.id);
+    await repo.markRetry(db.rows[0]!.id, 'worker-1', 'TELEGRAM_HTTP_500', new Date('2026-08-20T10:05:00.000Z'));
+    await repo.markDelivered(db.rows[1]!.id, 'worker-1');
 
     const tooEarly = await repo.claim('worker-1', { now: new Date('2026-08-20T10:04:00.000Z') });
     expect(tooEarly).toHaveLength(0);
@@ -296,7 +302,7 @@ describe('NotificationDeliveriesRepository — state transitions', () => {
 
   it('clears the lease when a delivery succeeds', async () => {
     const { db, repo, id } = await claimed();
-    await repo.markDelivered(id, 'tg-42');
+    await repo.markDelivered(id, 'worker-1', 'tg-42');
     expect(db.rows[0]).toMatchObject({
       status: 'delivered',
       provider_message_id: 'tg-42',
@@ -308,26 +314,41 @@ describe('NotificationDeliveriesRepository — state transitions', () => {
 
   it('refuses to deliver a row that is not being processed', async () => {
     const { repo, id } = await claimed();
-    await repo.markDelivered(id);
-    await expect(repo.markDelivered(id)).rejects.toMatchObject({
+    await repo.markDelivered(id, 'worker-1');
+    await expect(repo.markDelivered(id, 'worker-1')).rejects.toMatchObject({
       code: 'NOTIFICATION_DELIVERY_STATE_INVALID',
     });
   });
 
   it('refuses to retry a row that already failed permanently', async () => {
     const { repo, id } = await claimed();
-    await repo.markPermanentlyFailed(id, 'BLOCKED');
-    await expect(repo.markRetry(id, 'X', new Date())).rejects.toMatchObject({
+    await repo.markPermanentlyFailed(id, 'worker-1', 'BLOCKED');
+    await expect(repo.markRetry(id, 'worker-1', 'X', new Date())).rejects.toMatchObject({
       code: 'NOTIFICATION_DELIVERY_STATE_INVALID',
     });
   });
 
   it('refuses to cancel an already terminal row', async () => {
     const { repo, id } = await claimed();
-    await repo.markDelivered(id);
+    await repo.markDelivered(id, 'worker-1');
     await expect(repo.cancel(id)).rejects.toMatchObject({
       code: 'NOTIFICATION_DELIVERY_STATE_INVALID',
     });
+  });
+
+  it('refuses to finalise a delivery leased by another worker', async () => {
+    const { repo, id } = await claimed(); // held by worker-1
+    await expect(repo.markDelivered(id, 'worker-2', 'tg-9')).rejects.toMatchObject({
+      code: 'NOTIFICATION_DELIVERY_STATE_INVALID',
+    });
+    await expect(repo.markRetry(id, 'worker-2', 'X', new Date())).rejects.toMatchObject({
+      code: 'NOTIFICATION_DELIVERY_STATE_INVALID',
+    });
+    await expect(repo.markPermanentlyFailed(id, 'worker-2', 'X')).rejects.toMatchObject({
+      code: 'NOTIFICATION_DELIVERY_STATE_INVALID',
+    });
+    // The rightful owner can still finish it.
+    await expect(repo.markDelivered(id, 'worker-1', 'tg-9')).resolves.toBeUndefined();
   });
 
   it('cancels a pending row that was never claimed', async () => {

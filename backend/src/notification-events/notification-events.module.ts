@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { TelegramModule } from '@/telegram/telegram.module';
+import { NotificationDeliveryWorker } from './delivery-worker.service';
 import { NotificationDeliveriesRepository } from './notification-deliveries.repository';
 import { NotificationEventsService } from './notification-events.service';
 
@@ -10,7 +12,8 @@ import { NotificationEventsService } from './notification-events.service';
  * PHASE 40 will drive NotificationDeliveriesRepository from a worker.
  */
 @Module({
-  providers: [NotificationEventsService, NotificationDeliveriesRepository],
+  imports: [TelegramModule],
+  providers: [NotificationEventsService, NotificationDeliveriesRepository, NotificationDeliveryWorker],
   exports: [NotificationEventsService, NotificationDeliveriesRepository],
 })
 export class NotificationEventsModule {}

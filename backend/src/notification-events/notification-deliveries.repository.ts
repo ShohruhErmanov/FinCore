@@ -17,6 +17,19 @@ export interface ClaimedDelivery {
   attempts: number;
 }
 
+/** A claimed delivery joined to the event it has to render. */
+export interface DeliveryContext {
+  deliveryId: string;
+  recipientIdentityId: string;
+  channel: string;
+  attempts: number;
+  eventId: string;
+  eventType: string;
+  templateVersion: number;
+  payload: Record<string, unknown>;
+  occurredAt: Date;
+}
+
 /** Terminal states can never be claimed again, by construction of every query below. */
 const TERMINAL = ['delivered', 'cancelled', 'permanently_failed'] as const;
 
@@ -109,8 +122,57 @@ export class NotificationDeliveriesRepository {
     );
   }
 
+  /**
+   * Everything a worker needs to render and address one claimed delivery.
+   * Kept separate from claim() because the claim is a single UPDATE … RETURNING
+   * that cannot also project the joined event row.
+   */
+  async loadContext(deliveryIds: string[]): Promise<DeliveryContext[]> {
+    if (deliveryIds.length === 0) return [];
+    return this.prisma.db.$queryRaw<DeliveryContext[]>`
+      SELECT d.id::text                      AS "deliveryId",
+             d.recipient_identity_id::text   AS "recipientIdentityId",
+             d.channel::text                 AS "channel",
+             d.attempts                      AS "attempts",
+             e.id::text                      AS "eventId",
+             e.event_type                    AS "eventType",
+             e.template_version              AS "templateVersion",
+             e.payload                       AS "payload",
+             e.occurred_at                   AS "occurredAt"
+      FROM fincore.notification_deliveries d
+      JOIN fincore.notification_events e ON e.id = d.event_id
+      WHERE d.id = ANY(${deliveryIds}::uuid[])
+    `;
+  }
+
+  /**
+   * The verified Telegram destination for a recipient, or null when there is
+   * none. PHASE 36 gives user_identities the same id as the users row, so the
+   * recipient identity addresses the account directly.
+   *
+   * Only a `linked` private account counts — an unlinked or disabled one is not
+   * a destination, and nothing a caller supplied is ever consulted.
+   */
+  async resolveTelegramChat(recipientIdentityId: string): Promise<bigint | null> {
+    const rows = await this.prisma.db.$queryRaw<Array<{ chat_id: bigint }>>`
+      SELECT t.chat_id
+      FROM fincore.telegram_accounts t
+      JOIN fincore.users u ON u.id = t.user_id
+      WHERE t.user_id = ${recipientIdentityId}::uuid
+        AND t.status = 'linked'
+        AND t.chat_type = 'private'
+        AND u.status = 'active'
+      LIMIT 1
+    `;
+    return rows[0]?.chat_id ?? null;
+  }
+
   /** Success. Clears the lease and freezes the row in a terminal state. */
-  async markDelivered(id: string, providerMessageId: string | null = null): Promise<void> {
+  async markDelivered(
+    id: string,
+    leaseOwner: string,
+    providerMessageId: string | null = null,
+  ): Promise<void> {
     await this.transition(
       id,
       this.prisma.db.$executeRaw`
@@ -121,13 +183,18 @@ export class NotificationDeliveriesRepository {
             last_error_code = NULL,
             lease_owner = NULL,
             lease_until = NULL
-        WHERE id = ${id}::uuid AND status = 'processing'
+        WHERE id = ${id}::uuid AND status = 'processing' AND lease_owner = ${leaseOwner}
       `,
     );
   }
 
   /** Recoverable failure: back to the queue, not due again until nextAttemptAt. */
-  async markRetry(id: string, errorCode: string, nextAttemptAt: Date): Promise<void> {
+  async markRetry(
+    id: string,
+    leaseOwner: string,
+    errorCode: string,
+    nextAttemptAt: Date,
+  ): Promise<void> {
     await this.transition(
       id,
       this.prisma.db.$executeRaw`
@@ -137,13 +204,13 @@ export class NotificationDeliveriesRepository {
             last_error_code = ${errorCode},
             lease_owner = NULL,
             lease_until = NULL
-        WHERE id = ${id}::uuid AND status = 'processing'
+        WHERE id = ${id}::uuid AND status = 'processing' AND lease_owner = ${leaseOwner}
       `,
     );
   }
 
   /** Unrecoverable failure — no further attempt will ever be made. */
-  async markPermanentlyFailed(id: string, errorCode: string): Promise<void> {
+  async markPermanentlyFailed(id: string, leaseOwner: string, errorCode: string): Promise<void> {
     await this.transition(
       id,
       this.prisma.db.$executeRaw`
@@ -153,7 +220,7 @@ export class NotificationDeliveriesRepository {
             last_error_code = ${errorCode},
             lease_owner = NULL,
             lease_until = NULL
-        WHERE id = ${id}::uuid AND status = 'processing'
+        WHERE id = ${id}::uuid AND status = 'processing' AND lease_owner = ${leaseOwner}
       `,
     );
   }

@@ -87,6 +87,22 @@ const schema = z
       .optional(),
     /** Deep links are short-lived by design; a stale link must not stay usable. */
     TELEGRAM_LINK_TOKEN_TTL_MINUTES: z.coerce.number().int().min(1).max(60).default(10),
+
+    /**
+     * PHASE 40 outbox worker. Off by default: a deployment that has not opted in
+     * writes notification events but never delivers them, which is the safe
+     * state for development, tests and any instance that should not send.
+     */
+    NOTIFICATION_WORKER_ENABLED: booleanish.default('false'),
+    /** Bounded polling — never a tight loop. */
+    NOTIFICATION_WORKER_INTERVAL_MS: z.coerce.number().int().min(1_000).max(300_000).default(15_000),
+    NOTIFICATION_WORKER_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(10),
+    /** Must outlast one batch, or a slow worker loses its own rows. */
+    NOTIFICATION_WORKER_LEASE_SECONDS: z.coerce.number().int().min(5).max(3_600).default(120),
+    /** Attempts are counted by the claim itself; this caps them. */
+    NOTIFICATION_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
+    NOTIFICATION_RETRY_BASE_MS: z.coerce.number().int().min(1_000).max(3_600_000).default(30_000),
+    NOTIFICATION_RETRY_MAX_MS: z.coerce.number().int().min(1_000).max(86_400_000).default(3_600_000),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production') {
@@ -126,6 +142,22 @@ const schema = z
             path: [key],
             message: `${key} is required when TELEGRAM_ENABLED=true`,
           });
+
+    // Telegram is the only delivery channel, so a worker without it would spin
+    // and permanently fail everything it picked up.
+    if (env.NOTIFICATION_WORKER_ENABLED && !env.TELEGRAM_ENABLED)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['NOTIFICATION_WORKER_ENABLED'],
+        message: 'NOTIFICATION_WORKER_ENABLED requires TELEGRAM_ENABLED=true',
+      });
+
+    if (env.NOTIFICATION_RETRY_MAX_MS < env.NOTIFICATION_RETRY_BASE_MS)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['NOTIFICATION_RETRY_MAX_MS'],
+        message: 'NOTIFICATION_RETRY_MAX_MS must be >= NOTIFICATION_RETRY_BASE_MS',
+      });
   });
 
 export type AppEnv = z.infer<typeof schema>;
