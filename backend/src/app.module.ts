@@ -15,6 +15,7 @@ import { RevenuePlansModule } from './revenue-plans/revenue-plans.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ImportsModule } from './imports/imports.module';
 import { TelegramModule } from './telegram/telegram.module';
+import { NotificationEventsModule } from './notification-events/notification-events.module';
 import { DailyRevenuesModule } from './daily-revenues/daily-revenues.module';
 
 @Module({
@@ -42,6 +43,7 @@ import { DailyRevenuesModule } from './daily-revenues/daily-revenues.module';
     RevenuePlansModule,
     NotificationsModule,
     TelegramModule,
+    NotificationEventsModule,
     ImportsModule,
     DailyRevenuesModule,
   ],

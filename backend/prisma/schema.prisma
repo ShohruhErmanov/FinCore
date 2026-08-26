@@ -135,6 +135,81 @@ model user_identities {
   created_at   DateTime  @default(now()) @db.Timestamptz(6)
   updated_at   DateTime  @default(now()) @db.Timestamptz(6)
 
+  notification_events     notification_events[]
+  notification_deliveries notification_deliveries[]
+
+  @@schema("fincore")
+}
+
+enum notification_channel {
+  telegram
+
+  @@schema("fincore")
+}
+
+enum notification_delivery_status {
+  pending
+  processing
+  retry
+  delivered
+  cancelled
+  permanently_failed
+
+  @@schema("fincore")
+}
+
+/// PHASE 39: immutable notification event, written in the same transaction as
+/// the business mutation. Database triggers reject UPDATE and DELETE.
+model notification_events {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_type        String
+  aggregate_type    String
+  /// TEXT, not UUID — a DailyRevenue is addressed as "daily-{branchId}-{date}".
+  aggregate_id      String
+  branch_id         String?  @db.Uuid
+  /// user_identities, not users: attribution survives account deletion.
+  actor_identity_id String?  @db.Uuid
+  payload           Json     @default("{}")
+  dedupe_key        String   @unique
+  policy_version    Int      @default(1)
+  template_version  Int      @default(1)
+  occurred_at       DateTime @default(now()) @db.Timestamptz(6)
+  available_at      DateTime @default(now()) @db.Timestamptz(6)
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+
+  branch         branches?        @relation(fields: [branch_id], references: [id])
+  actor_identity user_identities? @relation(fields: [actor_identity_id], references: [id])
+  deliveries     notification_deliveries[]
+
+  @@index([aggregate_type, aggregate_id, occurred_at])
+  @@schema("fincore")
+}
+
+/// PHASE 39: per-recipient outbox row. A PHASE 40 worker claims these with
+/// FOR UPDATE SKIP LOCKED under a lease; terminal rows are never re-claimed.
+model notification_deliveries {
+  id                    String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id              String                       @db.Uuid
+  recipient_identity_id String                       @db.Uuid
+  channel               notification_channel
+  status                notification_delivery_status @default(pending)
+  attempts              Int                          @default(0)
+  next_attempt_at       DateTime                     @default(now()) @db.Timestamptz(6)
+  lease_until           DateTime?                    @db.Timestamptz(6)
+  lease_owner           String?
+  last_error_code       String?
+  provider_message_id   String?
+  delivered_at          DateTime?                    @db.Timestamptz(6)
+  cancelled_at          DateTime?                    @db.Timestamptz(6)
+  permanently_failed_at DateTime?                    @db.Timestamptz(6)
+  created_at            DateTime                     @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime                     @default(now()) @db.Timestamptz(6)
+
+  event              notification_events @relation(fields: [event_id], references: [id])
+  recipient_identity user_identities     @relation(fields: [recipient_identity_id], references: [id])
+
+  @@unique([event_id, recipient_identity_id, channel])
+  @@index([next_attempt_at])
   @@schema("fincore")
 }
 
@@ -210,6 +285,7 @@ model branches {
   expenses   expenses[]
   budget_lines budget_lines[]
   revenue_plans revenue_plans[]
+  notification_events notification_events[]
 
   @@schema("fincore")
 }
