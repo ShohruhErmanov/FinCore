@@ -758,6 +758,8 @@ export function RevenueDetailPage() {
 export function RevenuePlanPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
+  // Top-bar branch narrows the board; saving still sends every branch.
+  const planBranch = searchParams.get('branch') ?? 'all';
   const [drafts, setDrafts] = useState<Record<string, string | null>>({});
   const meQuery = useQuery({ queryKey: queryKeys.me, queryFn: ({ signal }) => authApi.me(signal) });
   const periodsQuery = useQuery({
@@ -916,7 +918,11 @@ export function RevenuePlanPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {planQuery.data.lines.map((line) => {
+                  {planQuery.data.lines
+                    .filter(
+                      (line) => planBranch === 'all' || line.branchId === planBranch,
+                    )
+                    .map((line) => {
                     const draft = drafts[line.branchId] ?? null;
                     const dailyPlan =
                       draft === null

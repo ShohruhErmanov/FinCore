@@ -10,6 +10,8 @@ import type {
   Expense,
   ExpenseCategory,
   ExpenseCreateInput,
+  CategoryBaselineBoard,
+  CategoryBaselineInput,
   ImportSummary,
   MasterItem,
   MonthlyReport,
@@ -65,8 +67,10 @@ export const dashboardApi = {
 export const reportApi = {
   monthly: (query: { year: string | number; branch: string }, signal?: AbortSignal) =>
     api.get<MonthlyReport>('/reports/monthly', query, signal),
-  branchComparison: (query: { year: string | number }, signal?: AbortSignal) =>
-    api.get<BranchComparisonReport>('/reports/branch-comparison', query, signal),
+  branchComparison: (
+    query: { year: string | number; month: string | number; branch: string },
+    signal?: AbortSignal,
+  ) => api.get<BranchComparisonReport>('/reports/branch-comparison', query, signal),
   cashiers: (query: { period: string; branch: string }, signal?: AbortSignal) =>
     api.get<CashierReport>('/reports/cashiers', query, signal),
 };
@@ -127,11 +131,13 @@ export const revenueApi = {
     api.patch<DailyRevenue>(`/daily-revenues/${id}`, input),
   plan: (periodId: string, signal?: AbortSignal) =>
     api.get<RevenuePlanBoard>(`/revenue-plans/${periodId}`, undefined, signal),
-  savePlan: (periodId: string, lines: Array<{ branchId: string; plannedAmountUzs: MoneyUzs | null }>) =>
-    api.put<RevenuePlanBoard>(`/revenue-plans/${periodId}`, { lines }),
+  savePlan: (
+    periodId: string,
+    lines: Array<{ branchId: string; plannedAmountUzs: MoneyUzs | null }>,
+  ) => api.put<RevenuePlanBoard>(`/revenue-plans/${periodId}`, { lines }),
 };
 
-type MasterResource = 'categories' | 'departments' | 'payment-methods';
+type MasterResource = 'categories' | 'departments' | 'payment-methods' | 'branches';
 type MasterResponse = ExpenseCategory | MasterItem | Branch;
 
 export const adminApi = {
@@ -154,4 +160,13 @@ export const adminApi = {
   updateUserStatus: (id: string, status: UserStatus) =>
     api.patch<AuthenticatedUser>(`/users/${id}/status`, { status }),
   deleteUser: (id: string) => api.delete<void>(`/users/${id}`),
+
+  /** Sozlamalar uchun: scope filtrsiz butun filial ro'yxati. */
+  allBranches: (signal?: AbortSignal) => api.get<Branch[]>('/master/branches', undefined, signal),
+
+  /** Direktorning boshlang'ich reja jadvali (kategoriya x filial). */
+  categoryBaselines: (signal?: AbortSignal) =>
+    api.get<CategoryBaselineBoard>('/master/category-baselines', undefined, signal),
+  saveCategoryBaselines: (lines: CategoryBaselineInput[]) =>
+    api.put<CategoryBaselineBoard>('/master/category-baselines', { lines }),
 };

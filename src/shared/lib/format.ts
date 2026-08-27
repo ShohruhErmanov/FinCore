@@ -120,3 +120,24 @@ export function signedTone(value: MoneyUzs): 'success' | 'danger' | 'neutral' {
   const amount = BigInt(value);
   return amount > 0n ? 'success' : amount < 0n ? 'danger' : 'neutral';
 }
+
+/** Oy nomlari — hisob davri tanlagichi va sarlavhalar uchun. */
+export const MONTH_NAMES_UZ = [
+  'Yanvar',
+  'Fevral',
+  'Mart',
+  'Aprel',
+  'May',
+  'Iyun',
+  'Iyul',
+  'Avgust',
+  'Sentabr',
+  'Oktabr',
+  'Noyabr',
+  'Dekabr',
+] as const;
+
+/** 1–12 → oy nomi; diapazondan tashqarida raqamning o'zi qaytadi. */
+export function monthNameUz(month: number): string {
+  return MONTH_NAMES_UZ[month - 1] ?? String(month);
+}

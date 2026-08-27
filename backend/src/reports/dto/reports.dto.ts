@@ -11,6 +11,21 @@ export class YearQueryDto {
   year!: number;
 }
 
+export class BranchComparisonQueryDto extends YearQueryDto {
+  @ApiPropertyOptional({ example: 8, minimum: 1, maximum: 12 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  month?: number;
+
+  @ApiPropertyOptional({ description: 'Filial UUID yoki "all"' })
+  @IsOptional()
+  @IsString()
+  branch?: string;
+}
+
 export class MonthlyQueryDto extends YearQueryDto {
   @ApiPropertyOptional({ description: 'Filial UUID yoki "all"' })
   @IsOptional()

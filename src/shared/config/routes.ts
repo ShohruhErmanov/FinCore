@@ -47,7 +47,7 @@ export const navigation: NavigationGroup[] = [
     label: 'Operatsiyalar',
     items: [
       { label: 'Kunlik tushum', to: routes.revenues, permission: 'revenue.view_own_branch' },
-      { label: 'Xarajatlar', to: routes.expenses, permission: 'expense.view_own_branch' },
+      { label: 'Jurnal', to: routes.expenses, permission: 'expense.view_own_branch' },
     ],
   },
   {

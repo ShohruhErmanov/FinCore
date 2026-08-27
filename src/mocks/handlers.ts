@@ -12,7 +12,6 @@ import type {
   PaginatedResponse,
   RevenuePlanBoard,
   TelegramSettings,
-
   TelegramLinkStatus,
   TelegramSettingsInput,
   TrendGranularity,
@@ -60,8 +59,9 @@ let expenseRows = structuredClone(expenses);
 const periodRows = structuredClone(periods);
 let budgetPlanRows: BudgetPlan[] = structuredClone(budgetPlans);
 let revenueRows = structuredClone(dailyRevenues);
-const revenuePlanRows: Record<string, Record<string, MoneyUzs>> =
-  structuredClone(revenuePlanSeedUzs);
+const revenuePlanRows: Record<string, Record<string, MoneyUzs>> = structuredClone(
+  revenuePlanSeedUzs,
+);
 const revenuePlanMeta = new Map<string, { updatedAt: string; updatedByName: string }>();
 let categoryRows = structuredClone(categories);
 let departmentRows = structuredClone(departments);
@@ -105,6 +105,49 @@ function isReachable(userId: string): boolean {
   return telegramLink.status === 'linked' && userId === signedInUser?.id;
 }
 
+/** Director baseline grid cells, keyed "categoryId:branchId". */
+const baselineCells: Record<string, string> = {};
+
+function buildBaselineBoard() {
+  const live = branches.filter((branch) => branch.isActive);
+  const byBranch: Record<string, bigint> = {};
+  for (const branch of live) byBranch[branch.id] = 0n;
+  let grand = 0n;
+
+  const rows = [...categories]
+    .sort((a, b) => a.expenseType.localeCompare(b.expenseType) || a.name.localeCompare(b.name))
+    .map((category) => {
+      const amounts: Record<string, string> = {};
+      let rowTotal = 0n;
+      for (const branch of live) {
+        const amount = baselineCells[`${category.id}:${branch.id}`] ?? '0';
+        amounts[branch.id] = amount;
+        rowTotal += BigInt(amount);
+        byBranch[branch.id] = (byBranch[branch.id] ?? 0n) + BigInt(amount);
+      }
+      grand += rowTotal;
+      return {
+        categoryId: category.id,
+        code: category.code,
+        name: category.name,
+        expenseType: category.expenseType,
+        isActive: category.isActive,
+        amounts,
+        totalUzs: rowTotal.toString(),
+      };
+    });
+
+  return {
+    branches: live.map((branch) => ({ branchId: branch.id, code: branch.code, name: branch.name })),
+    rows,
+    totals: {
+      byBranch: Object.fromEntries(
+        Object.entries(byBranch).map(([id, total]) => [id, total.toString()]),
+      ),
+      grandTotalUzs: grand.toString(),
+    },
+  };
+}
 function publicTelegramSettings(): TelegramSettings {
   return {
     ...telegramState,
@@ -162,6 +205,23 @@ function canUseBranch(user: AuthenticatedUser, branchId: string): boolean {
 
 function canWriteBranch(user: AuthenticatedUser, branchId: string): boolean {
   return user.writeBranchScopes.includes(branchId);
+}
+
+/**
+ * Mirrors MasterWriteService.grantCreatorBranchScope: whoever creates a branch
+ * keeps it. The real backend re-derives scope per request and so only has to
+ * fill the enumerated write hole; these scopes are stored snapshots, so both
+ * lists are appended here and every copy of the account is kept in step.
+ */
+function grantCreatorBranchScope(user: AuthenticatedUser, branchId: string): void {
+  const stored = userRows.find((row) => row.id === user.id);
+  for (const target of new Set([user, signedInUser, stored])) {
+    if (!target || target.id !== user.id) continue;
+    if (!target.branchScopes.includes(branchId))
+      target.branchScopes = [...target.branchScopes, branchId];
+    if (!target.writeBranchScopes.includes(branchId))
+      target.writeBranchScopes = [...target.writeBranchScopes, branchId];
+  }
 }
 
 function percentageValue(actual: MoneyUzs, denominator: MoneyUzs): number | null {
@@ -323,8 +383,7 @@ function distributeDaily(monthly: bigint, days: number): bigint[] {
   const total = BigInt(days);
   return Array.from(
     { length: days },
-    (_, index) =>
-      (monthly * BigInt(index + 1)) / total - (monthly * BigInt(index)) / total,
+    (_, index) => (monthly * BigInt(index + 1)) / total - (monthly * BigInt(index)) / total,
   );
 }
 
@@ -420,9 +479,7 @@ function buildTrends(
     for (let month = 1; month <= 12; month += 1) {
       const bucket = `${period.year}-${String(month).padStart(2, '0')}`;
       const label = monthShortNames[month - 1] ?? String(month);
-      const monthPeriod = periodRows.find(
-        (row) => row.year === period.year && row.month === month,
-      );
+      const monthPeriod = periodRows.find((row) => row.year === period.year && row.month === month);
       const seed = historicalMonthly.find((row) => row.month === month);
       if (monthPeriod) {
         expense.push({
@@ -581,6 +638,8 @@ function buildAnnualSummary(year: number, branchIds: Set<string>): AnnualExpense
   const totalPlanUzs = sumMoney(months.map((row) => row.planUzs));
   // Excel «O‘rtacha oylik xarajat» — faqat fakt kiritilgan oylar bo‘yicha.
   const monthsWithActual = months.filter((row) => BigInt(row.actualUzs) > 0n);
+  const monthsWithPlan = months.filter((row) => BigInt(row.planUzs) > 0n);
+  const plannedMonthsTotal = sumMoney(monthsWithPlan.map((row) => row.planUzs));
   const peak = monthsWithActual.reduce<(typeof months)[number] | null>(
     (best, row) => (best === null || BigInt(row.actualUzs) > BigInt(best.actualUzs) ? row : best),
     null,
@@ -597,18 +656,16 @@ function buildAnnualSummary(year: number, branchIds: Set<string>): AnnualExpense
       ? (BigInt(totalActualUzs) / BigInt(monthsWithActual.length)).toString()
       : '0',
     averageMonthsCount: monthsWithActual.length,
-    peakMonth: peak
-      ? { month: peak.month, label: peak.label, actualUzs: peak.actualUzs }
-      : null,
+    averagePlannedMonthlyUzs: monthsWithPlan.length
+      ? (BigInt(plannedMonthsTotal) / BigInt(monthsWithPlan.length)).toString()
+      : '0',
+    averagePlanMonthsCount: monthsWithPlan.length,
+    peakMonth: peak ? { month: peak.month, label: peak.label, actualUzs: peak.actualUzs } : null,
     months,
   };
 }
 
-function buildDashboard(
-  branchId: string | null,
-  periodId: string,
-  granularity: TrendGranularity,
-) {
+function buildDashboard(branchId: string | null, periodId: string, granularity: TrendGranularity) {
   const selectedBranches = branches.filter((branch) => !branchId || branch.id === branchId);
   const selectedBranchIds = new Set(selectedBranches.map((branch) => branch.id));
   const period = periodRows.find((row) => row.id === periodId)!;
@@ -1005,7 +1062,9 @@ export const handlers = [
     if (period.status === 'closed')
       return problem(409, 'PERIOD_CLOSED', 'Yopiq davrdagi budjet tahrirlanmaydi.');
     const body = (await request.json()) as {
-      lines: Array<Pick<BudgetPlan['lines'][number], 'branchId' | 'categoryId' | 'plannedAmountUzs'>>;
+      lines: Array<
+        Pick<BudgetPlan['lines'][number], 'branchId' | 'categoryId' | 'plannedAmountUzs'>
+      >;
     };
     if (
       !Array.isArray(body.lines) ||
@@ -1021,7 +1080,8 @@ export const handlers = [
     const current = buildBudgetPlan(String(params.periodId));
     const updatedLines = current.lines.map((line) => {
       const input = body.lines.find(
-        (candidate) => candidate.branchId === line.branchId && candidate.categoryId === line.categoryId,
+        (candidate) =>
+          candidate.branchId === line.branchId && candidate.categoryId === line.categoryId,
       );
       if (!input) return line;
       const hasPlan = input.plannedAmountUzs !== null;
@@ -1070,7 +1130,8 @@ export const handlers = [
       .sort(
         (a, b) =>
           direction *
-          (a.businessDate.localeCompare(b.businessDate) || a.branchName.localeCompare(b.branchName)),
+          (a.businessDate.localeCompare(b.businessDate) ||
+            a.branchName.localeCompare(b.branchName)),
       );
     return ok(paginate(rows, request));
   }),
@@ -1296,7 +1357,11 @@ export const handlers = [
     const body = (await request.json()) as TelegramSettingsInput;
     if (!/^\d{2}:\d{2}$/.test(body.reminderTimeLocal ?? ''))
       return problem(422, 'TIME_INVALID', 'Eslatma vaqti HH:mm formatida bo‘lsin.');
-    if (!Number.isInteger(body.monthlyReportDay) || body.monthlyReportDay < 1 || body.monthlyReportDay > 28)
+    if (
+      !Number.isInteger(body.monthlyReportDay) ||
+      body.monthlyReportDay < 1 ||
+      body.monthlyReportDay > 28
+    )
       return problem(422, 'DAY_INVALID', 'Hisobot kuni 1 va 28 orasida bo‘lsin.');
     telegramState = {
       ...telegramState,
@@ -1606,23 +1671,20 @@ export const handlers = [
         });
     });
     const reportCategories = [...historicalCategoryMap.values()];
-    const selectedBranchIds = new Set(
-      branchFilter === 'all' ? user.branchScopes : [branchFilter],
-    );
+    const selectedBranchIds = new Set(branchFilter === 'all' ? user.branchScopes : [branchFilter]);
     const rows = reportCategories.map((category) => {
       const months = Array.from({ length: 12 }, (_, monthIndex) => {
         const period = periodRows.find(
           (candidate) => candidate.year === requestedYear && candidate.month === monthIndex + 1,
         );
-        const planLines =
-          period
-            ? buildBudgetPlan(period.id).lines.filter(
-                (line) =>
-                  line.categoryId === category.id &&
-                  selectedBranchIds.has(line.branchId) &&
-                  line.plannedAmountUzs !== null,
-              )
-            : [];
+        const planLines = period
+          ? buildBudgetPlan(period.id).lines.filter(
+              (line) =>
+                line.categoryId === category.id &&
+                selectedBranchIds.has(line.branchId) &&
+                line.plannedAmountUzs !== null,
+            )
+          : [];
         const planned = planLines.length
           ? sumMoney(planLines.map((line) => line.plannedAmountUzs ?? '0'))
           : null;
@@ -1711,10 +1773,36 @@ export const handlers = [
       branch: { id: 'all', code: 'ALL', name: 'Markaz jami', snapshotName: 'Markaz jami' },
       expense: planActual(plannedExpense, actualExpense),
     });
-    const requestedYear = Number(new URL(request.url).searchParams.get('year') || 2026);
+    const url = new URL(request.url);
+    const requestedYear = Number(url.searchParams.get('year') || 2026);
+    const requestedMonth = Number(url.searchParams.get('month') || 8);
+    const requestedBranch = url.searchParams.get('branch') || 'all';
+    const isVisibleBranch = (branchId: string) =>
+      canUseBranch(user, branchId) && (requestedBranch === 'all' || requestedBranch === branchId);
+    const monthLabels = [
+      'Yanvar',
+      'Fevral',
+      'Mart',
+      'Aprel',
+      'May',
+      'Iyun',
+      'Iyul',
+      'Avgust',
+      'Sentabr',
+      'Oktabr',
+      'Noyabr',
+      'Dekabr',
+    ];
     if (requestedYear !== 2026)
       return ok({
         year: requestedYear,
+        selectedMonth: {
+          month: requestedMonth,
+          label: monthLabels[requestedMonth - 1] ?? String(requestedMonth),
+          rows: [],
+          branches: [],
+          total: totalSummary('0', '0'),
+        },
         months: [],
         annual: { branches: [], total: totalSummary('0', '0') },
       });
@@ -1730,7 +1818,7 @@ export const handlers = [
         '45000000',
         active ? String(28_000_000 + index * 1_700_000) : '0',
       );
-      const visible = [sayxun, xalqlar].filter((item) => canUseBranch(user, item.branch.id));
+      const visible = [sayxun, xalqlar].filter((item) => isVisibleBranch(item.branch.id));
       const totalExpensePlan = sumMoney(
         visible.map((item) => item.expense.plannedAmountUzs ?? '0'),
       );
@@ -1744,15 +1832,52 @@ export const handlers = [
     const annualBranches = [
       branchSummary(ids.sayxun, '640000000', '560000000'),
       branchSummary(ids.xalqlar, '360000000', '320000000'),
-    ].filter((item) => canUseBranch(user, item.branch.id));
+    ].filter((item) => isVisibleBranch(item.branch.id));
     const annualExpensePlan = sumMoney(
       annualBranches.map((item) => item.expense.plannedAmountUzs ?? '0'),
     );
     const annualExpenseActual = sumMoney(
       annualBranches.map((item) => item.expense.actualAmountUzs),
     );
+    const selectedSummary = months[requestedMonth - 1];
+    const activeCategories = categoryRows.filter((category) => category.isActive);
+    const allocate = (amount: string, index: number) => {
+      const total = BigInt(amount);
+      const count = BigInt(activeCategories.length || 1);
+      return (total / count + (BigInt(index) < total % count ? 1n : 0n)).toString();
+    };
+    const selectedRows = activeCategories.map((category, index) => {
+      const categoryBranches = (selectedSummary?.branches ?? []).map((item) => ({
+        branch: item.branch,
+        expense: planActual(
+          allocate(item.expense.plannedAmountUzs ?? '0', index),
+          allocate(item.expense.actualAmountUzs, index),
+        ),
+      }));
+      return {
+        category: {
+          id: category.id,
+          code: category.code,
+          name: category.name,
+          snapshotName: category.name,
+          expenseTypeSnapshot: category.expenseType,
+        },
+        branches: categoryBranches,
+        total: totalSummary(
+          sumMoney(categoryBranches.map((item) => item.expense.plannedAmountUzs ?? '0')),
+          sumMoney(categoryBranches.map((item) => item.expense.actualAmountUzs)),
+        ),
+      };
+    });
     return ok({
       year: requestedYear,
+      selectedMonth: {
+        month: requestedMonth,
+        label: monthLabels[requestedMonth - 1] ?? String(requestedMonth),
+        rows: selectedRows,
+        branches: selectedSummary?.branches ?? [],
+        total: selectedSummary?.total ?? totalSummary('0', '0'),
+      },
       months,
       annual: {
         branches: annualBranches,
@@ -1761,6 +1886,43 @@ export const handlers = [
     });
   }),
 
+  // Scope filtrsiz: Sozlamalar ro'yxatning o'zini boshqaradi.
+  http.get(`${API}/master/branches`, () => {
+    const user = requireUser();
+    if (user instanceof HttpResponse) return user;
+    if (!hasPermission(user, 'master_data.manage'))
+      return problem(403, 'PERMISSION_DENIED', 'Sozlamalarni boshqarish huquqi yo‘q.');
+    return ok(branches);
+  }),
+
+  // --- Director baseline plan grid (Excel «Sozlamalar» D/E/F ustunlari) ----
+  http.get(`${API}/master/category-baselines`, () => {
+    const user = requireUser();
+    if (user instanceof HttpResponse) return user;
+    if (!hasPermission(user, 'master_data.manage'))
+      return problem(403, 'PERMISSION_DENIED', 'Sozlamalarni boshqarish huquqi yo‘q.');
+    return ok(buildBaselineBoard());
+  }),
+  http.put(`${API}/master/category-baselines`, async ({ request }) => {
+    const user = requireUser();
+    if (user instanceof HttpResponse) return user;
+    if (!hasPermission(user, 'master_data.manage'))
+      return problem(403, 'PERMISSION_DENIED', 'Sozlamalarni boshqarish huquqi yo‘q.');
+    const body = (await request.json()) as {
+      lines?: Array<{ categoryId: string; branchId: string; amountUzs: string }>;
+    };
+    const seen = new Set<string>();
+    for (const line of body.lines ?? []) {
+      if (!isNonNegativeMoney(line.amountUzs))
+        return problem(422, 'AMOUNT_INVALID', 'Summa manfiy bo‘lmagan butun so‘m bo‘lsin.');
+      const key = `${line.categoryId}:${line.branchId}`;
+      if (seen.has(key))
+        return problem(409, 'DUPLICATE_CELL', 'Bitta katak ikki marta yuborilgan.');
+      seen.add(key);
+      baselineCells[key] = line.amountUzs;
+    }
+    return ok(buildBaselineBoard());
+  }),
   http.post(`${API}/master/:kind`, async ({ params, request }) => {
     const user = requireUser();
     if (user instanceof HttpResponse) return user;
@@ -1781,7 +1943,9 @@ export const handlers = [
           ? departmentRows
           : params.kind === 'payment-methods'
             ? paymentMethodRows
-            : null;
+            : params.kind === 'branches'
+              ? branches
+              : null;
     if (!targetRows) return problem(404, 'MASTER_KIND_NOT_FOUND', 'Master data turi topilmadi.');
     if (targetRows.some((item) => item.code.toUpperCase() === normalizedCode))
       return problem(409, 'DUPLICATE_REFERENCE', 'Bu master-data kodi allaqachon mavjud.');
@@ -1804,6 +1968,12 @@ export const handlers = [
       paymentMethodRows = [...paymentMethodRows, base];
       return ok(base, 201);
     }
+    if (params.kind === 'branches') {
+      // The fixture array is shared by reference, so it is mutated in place.
+      branches.push(base);
+      grantCreatorBranchScope(user, base.id);
+      return ok(base, 201);
+    }
     return problem(404, 'MASTER_KIND_NOT_FOUND', 'Master data turi topilmadi.');
   }),
   http.patch(`${API}/master/:kind/:id`, async ({ params, request }) => {
@@ -1823,7 +1993,9 @@ export const handlers = [
           ? departmentRows
           : params.kind === 'payment-methods'
             ? paymentMethodRows
-            : null;
+            : params.kind === 'branches'
+              ? branches
+              : null;
     const item = rows?.find((row) => row.id === params.id);
     if (!item) return problem(404, 'MASTER_ITEM_NOT_FOUND', 'Master data elementi topilmadi.');
     if (typeof body.isActive === 'boolean') item.isActive = body.isActive;
@@ -2055,11 +2227,7 @@ export const handlers = [
         (candidate) => candidate.status === 'active' && hasRole(candidate, 'director'),
       ).length === 1
     )
-      return problem(
-        409,
-        'LAST_DIRECTOR_REQUIRED',
-        'Oxirgi faol direktorni o‘chirib bo‘lmaydi.',
-      );
+      return problem(409, 'LAST_DIRECTOR_REQUIRED', 'Oxirgi faol direktorni o‘chirib bo‘lmaydi.');
     // Historical mock expense/revenue rows intentionally remain. The real DB
     // keeps their actor UUIDs through fincore.user_identities; only the account
     // and its embedded authorization assignments disappear here.

@@ -4,6 +4,7 @@ export { CurrentUser } from './decorators/current-user.decorator';
 export { Public, IS_PUBLIC_KEY } from './decorators/public.decorator';
 export { RequirePermissions, PERMISSIONS_KEY } from './decorators/require-permissions.decorator';
 export { PermissionsGuard } from './guards/permissions.guard';
+export { GLOBAL_WRITE_ROLE_CODES, hasCompanyWideWrite } from './authz/branch-scope';
 export { FinancialPayloadInterceptor } from './serialization/financial-payload.interceptor';
 export { toMoneyUzs, toIsoDate, toIsoDateTime, toPercent } from './serialization/financial';
 export type {

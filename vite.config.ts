@@ -5,7 +5,11 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   plugins: [react()],
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
-  server: { port: 5173 },
+  // strictPort, because the backend allows exactly one CORS origin. Without
+  // it Vite silently moves to 5174 when 5173 is taken, and every API call is
+  // then blocked by CORS with an error that reads like the server is down.
+  // Failing to start is the far easier problem to diagnose.
+  server: { port: 5173, strictPort: true },
   build: {
     rollupOptions: {
       output: {

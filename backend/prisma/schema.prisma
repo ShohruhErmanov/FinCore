@@ -137,6 +137,7 @@ model user_identities {
 
   notification_events     notification_events[]
   notification_deliveries notification_deliveries[]
+  expense_category_baselines expense_category_baselines[]
 
   @@schema("fincore")
 }
@@ -286,6 +287,7 @@ model branches {
   budget_lines budget_lines[]
   revenue_plans revenue_plans[]
   notification_events notification_events[]
+  expense_category_baselines expense_category_baselines[]
 
   @@schema("fincore")
 }
@@ -335,6 +337,7 @@ model expense_categories {
   category_aliases category_aliases[]
   expenses         expenses[]
   budget_lines     budget_lines[]
+  baselines        expense_category_baselines[]
 
   @@schema("fincore")
 }
@@ -516,5 +519,25 @@ model revenue_plans {
   branch branches           @relation(fields: [branch_id], references: [id])
 
   @@unique([period_id, branch_id, revision_no])
+  @@schema("fincore")
+}
+
+/// PHASE 43: director-maintained baseline plan per category and branch.
+/// NOT the monthly budget — budget_lines remains the reporting source.
+model expense_category_baselines {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  category_id String   @db.Uuid
+  branch_id   String   @db.Uuid
+  amount_uzs  BigInt   @default(0)
+  updated_by  String?  @db.Uuid
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  category expense_categories @relation(fields: [category_id], references: [id], onDelete: Cascade)
+  branch   branches           @relation(fields: [branch_id], references: [id])
+  updatedBy user_identities?  @relation(fields: [updated_by], references: [id], onDelete: Restrict)
+
+  @@unique([category_id, branch_id])
+  @@index([branch_id])
   @@schema("fincore")
 }

@@ -56,6 +56,8 @@ export interface DashboardResponse {
     varianceUzs: string;
     averageMonthlyUzs: string;
     averageMonthsCount: number;
+    averagePlannedMonthlyUzs: string;
+    averagePlanMonthsCount: number;
     peakMonth: { month: number; label: string; actualUzs: string } | null;
     months: Array<{
       month: number;
@@ -277,6 +279,12 @@ export class DashboardService {
     const totalPlan = months.reduce((total, row) => total + BigInt(row.planUzs), 0n);
     // Excel counts the average over months that actually have spending.
     const monthsWithActual = months.filter((row) => BigInt(row.actualUzs) > 0n);
+    // Excel «O‘rtacha kiritilgan oylik reja» counts only months with a positive plan.
+    const monthsWithPlan = months.filter((row) => BigInt(row.planUzs) > 0n);
+    const plannedMonthsTotal = monthsWithPlan.reduce(
+      (total, row) => total + BigInt(row.planUzs),
+      0n,
+    );
     const peak = monthsWithActual.reduce<(typeof months)[number] | null>(
       (best, row) => (best === null || BigInt(row.actualUzs) > BigInt(best.actualUzs) ? row : best),
       null,
@@ -294,6 +302,10 @@ export class DashboardService {
         ? toMoneyUzs(totalActual / BigInt(monthsWithActual.length))!
         : '0',
       averageMonthsCount: monthsWithActual.length,
+      averagePlannedMonthlyUzs: monthsWithPlan.length
+        ? toMoneyUzs(plannedMonthsTotal / BigInt(monthsWithPlan.length))!
+        : '0',
+      averagePlanMonthsCount: monthsWithPlan.length,
       peakMonth: peak ? { month: peak.month, label: peak.label, actualUzs: peak.actualUzs } : null,
       months,
     };

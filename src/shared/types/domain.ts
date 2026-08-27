@@ -35,7 +35,11 @@ export type TrendGranularity = 'daily' | 'weekly' | 'monthly';
 
 export interface Branch {
   id: UUID;
-  code: 'SAYXUN' | 'XALQLAR';
+  /**
+   * Barqaror biznes kodi. Ilgari faqat SAYXUN/XALQLAR bo‘lgan; direktor
+   * Sozlamalarda yangi filial ocha olgani uchun endi ochiq matn.
+   */
+  code: string;
   name: string;
   isActive: boolean;
 }
@@ -103,6 +107,47 @@ export interface ExpenseCategory {
   expenseType: ExpenseType;
   isActive: boolean;
   aliases: string[];
+}
+
+/**
+ * Direktorning boshlang‘ich oylik reja jadvali — Excel «Sozlamalar» varag‘idagi
+ * «Boshlang‘ich Sayxun / Xalqlar do‘stligi / jami» ustunlari.
+ *
+ * Bu oylik budjet EMAS: hisobotlar baribir budjet qatorlaridan o‘qiydi.
+ */
+export interface CategoryBaselineBranch {
+  branchId: UUID;
+  code: string;
+  name: string;
+}
+
+export interface CategoryBaselineRow {
+  categoryId: UUID;
+  code: string;
+  name: string;
+  expenseType: ExpenseType;
+  isActive: boolean;
+  /** branchId → butun so‘m. Har bir faol filial uchun doimo qiymat bo‘ladi. */
+  amounts: Record<UUID, MoneyUzs>;
+  /** Qator jami — serverda hisoblanadi, saqlanmaydi. */
+  totalUzs: MoneyUzs;
+}
+
+export interface CategoryBaselineBoard {
+  branches: CategoryBaselineBranch[];
+  rows: CategoryBaselineRow[];
+  totals: {
+    /** branchId → ustun jami. */
+    byBranch: Record<UUID, MoneyUzs>;
+    /** «Jami oylik reja (byudjet)». */
+    grandTotalUzs: MoneyUzs;
+  };
+}
+
+export interface CategoryBaselineInput {
+  categoryId: UUID;
+  branchId: UUID;
+  amountUzs: MoneyUzs;
 }
 
 export interface MasterItem {
@@ -318,6 +363,8 @@ export interface AnnualExpenseSummary {
   varianceUzs: MoneyUzs;
   averageMonthlyUzs: MoneyUzs;
   averageMonthsCount: number;
+  averagePlannedMonthlyUzs: MoneyUzs;
+  averagePlanMonthsCount: number;
   peakMonth: { month: number; label: string; actualUzs: MoneyUzs } | null;
   months: Array<{
     month: number;
@@ -400,8 +447,21 @@ export interface BranchSummary {
   expense: PlanActual;
 }
 
+export interface TwoBranchMonthRow {
+  category: HistoricalRef & { expenseTypeSnapshot: ExpenseType };
+  branches: BranchSummary[];
+  total: BranchSummary;
+}
+
 export interface BranchComparisonReport {
   year: number;
+  selectedMonth: {
+    month: number;
+    label: string;
+    rows: TwoBranchMonthRow[];
+    branches: BranchSummary[];
+    total: BranchSummary;
+  };
   months: Array<{ month: number; branches: BranchSummary[]; total: BranchSummary }>;
   annual: { branches: BranchSummary[]; total: BranchSummary };
 }

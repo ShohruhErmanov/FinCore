@@ -1,6 +1,16 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Download, FilePlus2, FilterX, Pencil, Save, ShieldCheck } from 'lucide-react';
+import {
+  ArrowLeft,
+  Download,
+  FilePlus2,
+  FileSpreadsheet,
+  FilterX,
+  Pencil,
+  Save,
+  ShieldCheck,
+  Upload,
+} from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -15,6 +25,7 @@ import { getActiveWritableBranches } from '@/shared/lib/branch-scopes';
 import { downloadCsv } from '@/shared/lib/csv';
 import { formatDate, formatDateTime } from '@/shared/lib/format';
 import type { Expense, ExpenseType } from '@/shared/types/domain';
+import { downloadJournalXlsx, journalCsvRows, loadAllJournalExpenses } from './journal-export';
 import {
   Alert,
   Breadcrumbs,
@@ -70,36 +81,8 @@ function updateQueryParam(
   setter(next, { replace: true });
 }
 
-function exportCurrentPage(rows: Expense[]) {
-  const cells = [
-    [
-      'Sana',
-      'Filial',
-      'Kategoriya',
-      'Turi',
-      'Tavsif',
-      'Summa (UZS)',
-      'To‘lov usuli',
-      'Bo‘lim',
-      'Mas’ul',
-      'Kiritgan',
-      'Izoh',
-    ],
-    ...rows.map((row) => [
-      row.transactionDate,
-      row.branchName,
-      row.categoryNameSnapshot,
-      row.expenseTypeSnapshot === 'fixed' ? 'Doimiy' : 'O\u2018zgaruvchan',
-      row.description,
-      row.amountUzs,
-      row.paymentMethodName,
-      row.departmentName,
-      row.responsibleUserName,
-      row.enteredByName,
-      row.comment,
-    ]),
-  ];
-  downloadCsv('xarajatlar', cells);
+function exportCurrentPage(rows: Expense[], startSequence: number) {
+  downloadCsv('jurnal', journalCsvRows(rows, startSequence));
 }
 
 export function ExpenseLedgerPage() {
@@ -112,29 +95,52 @@ export function ExpenseLedgerPage() {
     : 20;
   const branch = searchParams.get('branch') ?? 'all';
 
-  const queryString = searchParams.toString();
+  // The ledger follows the period chosen in the top bar. An explicit
+  // year/month filter on this page still wins, so a user can look outside
+  // the selected period without changing it for every other screen.
+  const periodsQuery = useQuery({
+    queryKey: queryKeys.periods,
+    queryFn: ({ signal }) => referenceApi.periods(signal),
+    staleTime: 300_000,
+  });
+  const selectedPeriodId = searchParams.get('period');
+  const selectedPeriod = periodsQuery.data?.find((period) => period.id === selectedPeriodId);
+  const year = searchParams.get('year') ?? selectedPeriod?.year?.toString();
+  const month = searchParams.get('month') ?? selectedPeriod?.month?.toString();
+
+  const listFilters = {
+    dateFrom: searchParams.get('dateFrom') ?? undefined,
+    dateTo: searchParams.get('dateTo') ?? undefined,
+    year,
+    month,
+    branch,
+    categoryId: searchParams.get('category') ?? undefined,
+    expenseType: searchParams.get('expenseType') ?? undefined,
+    departmentId: searchParams.get('department') ?? undefined,
+    paymentMethodId: searchParams.get('paymentMethod') ?? undefined,
+    responsibleUserId: searchParams.get('responsible') ?? undefined,
+    enteredByUserId: searchParams.get('enteredBy') ?? undefined,
+    sort: searchParams.get('sort') ?? 'transactionDate:desc',
+  };
+  const queryString = `${searchParams.toString()}|${year ?? ''}-${month ?? ''}`;
   const query = useQuery({
     queryKey: queryKeys.expenses(queryString),
     queryFn: ({ signal }) =>
       expenseApi.list(
         {
-          dateFrom: searchParams.get('dateFrom') ?? undefined,
-          dateTo: searchParams.get('dateTo') ?? undefined,
-          year: searchParams.get('year') ?? undefined,
-          month: searchParams.get('month') ?? undefined,
-          branch,
-          categoryId: searchParams.get('category') ?? undefined,
-          expenseType: searchParams.get('expenseType') ?? undefined,
-          departmentId: searchParams.get('department') ?? undefined,
-          paymentMethodId: searchParams.get('paymentMethod') ?? undefined,
-          responsibleUserId: searchParams.get('responsible') ?? undefined,
-          enteredByUserId: searchParams.get('enteredBy') ?? undefined,
-          sort: searchParams.get('sort') ?? 'transactionDate:desc',
+          ...listFilters,
           page,
           pageSize,
         },
         signal,
       ),
+  });
+
+  const excelExport = useMutation({
+    mutationFn: async () => {
+      const rows = await loadAllJournalExpenses((filters) => expenseApi.list(filters), listFilters);
+      await downloadJournalXlsx(rows);
+    },
   });
 
   const branchesQuery = useQuery({
@@ -163,8 +169,22 @@ export function ExpenseLedgerPage() {
     staleTime: 60_000,
   });
 
+  const rowNumberById = useMemo(
+    () =>
+      new Map(
+        (query.data?.items ?? []).map((row, index) => [row.id, (page - 1) * pageSize + index + 1]),
+      ),
+    [page, pageSize, query.data?.items],
+  );
+
   const columns = useMemo<Column<Expense>[]>(
     () => [
+      {
+        key: 'number',
+        header: '№',
+        className: 'text-center',
+        cell: (row) => rowNumberById.get(row.id) ?? '—',
+      },
       {
         key: 'date',
         header: 'Sana',
@@ -172,35 +192,52 @@ export function ExpenseLedgerPage() {
           <span className="whitespace-nowrap font-medium">{formatDate(row.transactionDate)}</span>
         ),
       },
-      { key: 'branch', header: 'Filial', cell: (row) => row.branchName },
+      { key: 'year', header: 'Yil', cell: (row) => row.transactionDate.slice(0, 4) },
+      {
+        key: 'month',
+        header: 'Oy',
+        cell: (row) => String(Number(row.transactionDate.slice(5, 7))),
+      },
       {
         key: 'category',
         header: 'Kategoriya',
         cell: (row) => (
-          <div>
-            <p className="font-medium text-ink">{row.categoryNameSnapshot}</p>
-            <p className="mt-0.5 text-xs text-muted">
-              {row.expenseTypeSnapshot === 'fixed' ? 'Doimiy' : 'O‘zgaruvchan'}
-            </p>
-          </div>
+          <span className="min-w-48 font-medium text-ink">{row.categoryNameSnapshot}</span>
         ),
       },
       {
-        key: 'description',
-        header: 'Tavsif',
-        cell: (row) => <span className="line-clamp-2 min-w-48">{row.description}</span>,
+        key: 'type',
+        header: 'Turi',
+        cell: (row) => (row.expenseTypeSnapshot === 'fixed' ? 'Doimiy' : 'O‘zgaruvchan'),
       },
-      { key: 'department', header: 'Bo‘lim', cell: (row) => row.departmentName },
+      {
+        key: 'description',
+        header: 'Tavsif / nima uchun',
+        cell: (row) => <span className="line-clamp-2 min-w-64">{row.description}</span>,
+      },
       {
         key: 'amount',
-        header: 'Summa',
+        header: 'Summa, so‘m',
         className: 'text-right',
         cell: (row) => (
           <MoneyText value={row.amountUzs} className="whitespace-nowrap font-bold text-ink" />
         ),
       },
+      {
+        key: 'payment',
+        header: 'To‘lov usuli',
+        cell: (row) => <span className="whitespace-nowrap">{row.paymentMethodName}</span>,
+      },
+      { key: 'department', header: 'Bo‘lim', cell: (row) => row.departmentName },
+      { key: 'responsible', header: 'Mas’ul', cell: (row) => row.responsibleUserName || '—' },
+      { key: 'branch', header: 'Filial', cell: (row) => row.branchName },
+      {
+        key: 'comment',
+        header: 'Izoh',
+        cell: (row) => <span className="line-clamp-2 min-w-40">{row.comment || '—'}</span>,
+      },
     ],
-    [],
+    [rowNumberById],
   );
 
   const clearFilters = () => setSearchParams(new URLSearchParams(), { replace: true });
@@ -210,19 +247,35 @@ export function ExpenseLedgerPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Operatsiyalar' }, { label: 'Xarajatlar', current: true }]} />
+      <Breadcrumbs items={[{ label: 'Operatsiyalar' }, { label: 'Jurnal', current: true }]} />
       <PageHeader
-        title="Xarajatlar jurnali"
-        description="Ikki filialning ruxsat doirasidagi yagona server jurnali. Filtr va sahifa holati URL’da saqlanadi."
+        title="Jurnal"
+        description="Excel’dagi Sayxun_kassa va Xalqlar_kassa yozuvlari bilan bir xil 13 ustunli yagona server jurnali."
         actions={
           <>
             <Button
               variant="secondary"
               disabled={!query.data?.items.length}
-              onClick={() => exportCurrentPage(query.data?.items ?? [])}
+              onClick={() => exportCurrentPage(query.data?.items ?? [], (page - 1) * pageSize + 1)}
             >
               <Download className="h-4 w-4" /> Joriy sahifa CSV
             </Button>
+            <Button
+              variant="secondary"
+              loading={excelExport.isPending}
+              disabled={!query.data?.total}
+              onClick={() => excelExport.mutate()}
+            >
+              <FileSpreadsheet className="h-4 w-4" /> To‘liq Excel
+            </Button>
+            {hasPermission('import.run') ? (
+              <Link
+                to={routes.imports}
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                <Upload className="h-4 w-4" /> Excel’dan import
+              </Link>
+            ) : null}
             {hasPermission('expense.create') ? (
               <Link
                 to={routes.expenseNew}
@@ -234,6 +287,12 @@ export function ExpenseLedgerPage() {
           </>
         }
       />
+
+      {excelExport.isError ? (
+        <Alert title="Excel eksport bajarilmadi" tone="danger" className="mb-5">
+          {getApiErrorMessage(excelExport.error)}
+        </Alert>
+      ) : null}
 
       <Card
         title="Filtrlar"
@@ -396,7 +455,7 @@ export function ExpenseLedgerPage() {
         </div>
       </Card>
 
-      {query.isLoading ? <LoadingState label="Xarajatlar jurnali yuklanmoqda…" /> : null}
+      {query.isLoading ? <LoadingState label="Jurnal yuklanmoqda…" /> : null}
       {query.isError ? (
         <ErrorState
           message={getApiErrorMessage(query.error)}
@@ -406,7 +465,7 @@ export function ExpenseLedgerPage() {
       {query.data ? (
         <Card
           className="overflow-hidden"
-          title={`${query.data.total} ta tranzaksiya`}
+          title={`${query.data.total} ta xarajat`}
           description={
             query.isFetching ? 'Natijalar yangilanmoqda…' : 'Ruxsat doirasidagi natijalar'
           }
@@ -415,7 +474,7 @@ export function ExpenseLedgerPage() {
             <DataTable
               columns={columns}
               rows={query.data.items}
-              caption="Filtrlangan xarajatlar jurnali"
+              caption="Filtrlangan umumiy Jurnal"
               onRowClick={(row) => navigate(routes.expenseDetail(row.id))}
             />
             <Pagination
@@ -502,8 +561,7 @@ export function ExpenseCreatePage() {
     references.branches.data ?? [],
     currentUser?.writeBranchScopes,
   );
-  const fixedWriteBranch =
-    writableBranches.length === 1 ? (writableBranches[0] ?? null) : null;
+  const fixedWriteBranch = writableBranches.length === 1 ? (writableBranches[0] ?? null) : null;
   const canChooseBranch = writableBranches.length > 1;
   const hasNoWritableBranch = Boolean(currentUser) && writableBranches.length === 0;
   const selectedCategory = references.categories.data?.find((item) => item.id === watchedCategory);
@@ -649,8 +707,7 @@ export function ExpenseCreatePage() {
                     id="expense-form-branch-readonly"
                     readOnly
                     value={
-                      fixedWriteBranch?.name ??
-                      'Yozish mumkin bo‘lgan aktiv filial mavjud emas'
+                      fixedWriteBranch?.name ?? 'Yozish mumkin bo‘lgan aktiv filial mavjud emas'
                     }
                   />
                 </FormField>
@@ -1089,9 +1146,7 @@ export function ExpenseDetailPage() {
       />
 
       {period?.status === 'closed' ? (
-        <LockedNotice>
-          {period.label} yopilgan. Original xarajat tahrirlanmaydi.
-        </LockedNotice>
+        <LockedNotice>{period.label} yopilgan. Original xarajat tahrirlanmaydi.</LockedNotice>
       ) : null}
 
       {editing ? (

@@ -22,13 +22,14 @@ import {
   WalletCards,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/features/auth/auth-context';
 import { referenceApi } from '@/shared/api/contracts';
 import { queryKeys } from '@/shared/api/query-keys';
 import { navigation, routes, type NavigationItem } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/cn';
+import { monthNameUz } from '@/shared/lib/format';
 import { Button, Select, StatusBadge } from '@/shared/ui';
 
 const iconByPath: Record<string, typeof LayoutDashboard> = {
@@ -198,14 +199,60 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
   });
   const accessibleBranches =
     branchesQuery.data?.filter((branch) => user?.branchScopes.includes(branch.id)) ?? [];
+  // The period is one row in the database, but the bar offers it as year +
+  // month, because that is how the office thinks about a reporting period.
+  const periods = periodsQuery.data ?? [];
+
+  // The bar reads as app-wide state but it lives in the URL, and in-app links
+  // carry no query — so every click would otherwise snap the filter back to
+  // its default. Remembering the last explicit choice lets the selection
+  // survive navigation. It is re-validated on use, because the remembered
+  // branch may be one this account can no longer see.
+  const lastChoice = useRef<{ period?: string; branch?: string }>({});
+  const rememberedPeriod = periods.some((period) => period.id === lastChoice.current.period)
+    ? lastChoice.current.period
+    : undefined;
+
+  // Default to the month we are actually in. Every month of the year now exists
+  // as an open period, so "the first open one" would land on December.
+  const today = new Date();
   const selectedPeriod =
     searchParams.get('period') ??
-    periodsQuery.data?.find((period) => period.status === 'open')?.id ??
+    rememberedPeriod ??
+    periods.find(
+      (period) => period.year === today.getFullYear() && period.month === today.getMonth() + 1,
+    )?.id ??
+    periods.find((period) => period.status === 'open')?.id ??
     '';
-  const defaultBranch = hasPermission('expense.view_all_branches')
-    ? 'all'
-    : (accessibleBranches[0]?.id ?? '');
-  const selectedBranch = searchParams.get('branch') ?? defaultBranch;
+
+  const canSeeAllBranches = hasPermission('expense.view_all_branches');
+  const defaultBranch = canSeeAllBranches ? 'all' : (accessibleBranches[0]?.id ?? '');
+  const rememberedBranch =
+    lastChoice.current.branch === 'all'
+      ? (canSeeAllBranches ? 'all' : undefined)
+      : accessibleBranches.some((branch) => branch.id === lastChoice.current.branch)
+        ? lastChoice.current.branch
+        : undefined;
+  const selectedBranch = searchParams.get('branch') ?? rememberedBranch ?? defaultBranch;
+
+  const currentPeriod = periods.find((period) => period.id === selectedPeriod);
+  const years = [...new Set(periods.map((period) => period.year))].sort((a, b) => b - a);
+  const selectedYear = currentPeriod?.year ?? years[0];
+  const monthsOfYear = periods
+    .filter((period) => period.year === selectedYear)
+    .sort((a, b) => a.month - b.month);
+
+  /** Switching year keeps the same month when that month exists in the new year. */
+  function selectYear(year: number) {
+    const sameMonth = periods.find(
+      (period) => period.year === year && period.month === currentPeriod?.month,
+    );
+    const newest = periods
+      .filter((period) => period.year === year)
+      .sort((a, b) => b.month - a.month)[0];
+    const next = sameMonth ?? newest;
+    if (next) updateFilter('period', next.id);
+  }
 
   function updateFilter(key: 'period' | 'branch', value: string) {
     const next = new URLSearchParams(searchParams);
@@ -213,6 +260,24 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
     next.delete('page');
     setSearchParams(next, { replace: true });
   }
+
+  // The bar resolves its own defaults, but every page reads the filter back
+  // out of the URL and falls back differently when it is missing — which is
+  // how the bar could read "Avgust" while the page below it reported
+  // December. Publishing the resolved value makes the URL the single source
+  // both sides read. replace: true keeps this out of the history stack.
+  useEffect(() => {
+    // Whatever the URL states explicitly becomes the choice to carry forward,
+    // so a shared link sets the filter just as the dropdowns do.
+    const fromUrl = { period: searchParams.get('period'), branch: searchParams.get('branch') };
+    if (fromUrl.period) lastChoice.current.period = fromUrl.period;
+    if (fromUrl.branch) lastChoice.current.branch = fromUrl.branch;
+
+    const next = new URLSearchParams(searchParams);
+    if (selectedPeriod && !fromUrl.period) next.set('period', selectedPeriod);
+    if (selectedBranch && !fromUrl.branch) next.set('branch', selectedBranch);
+    if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
+  }, [selectedPeriod, selectedBranch, searchParams, setSearchParams]);
 
   return (
     <header className="sticky top-0 z-30 flex min-h-[72px] items-center justify-between gap-3 border-b border-border bg-white/95 px-4 backdrop-blur sm:px-6">
@@ -227,14 +292,26 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
         </button>
         <div className="hidden items-center gap-2 sm:flex">
           <Select
-            aria-label="Hisobot davri"
+            aria-label="Hisobot yili"
+            value={selectedYear ?? ''}
+            onChange={(event) => selectYear(Number(event.target.value))}
+            className="w-28 border-0 bg-slate-100 font-medium"
+          >
+            {years.map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </Select>
+          <Select
+            aria-label="Hisobot oyi"
             value={selectedPeriod}
             onChange={(event) => updateFilter('period', event.target.value)}
-            className="w-40 border-0 bg-slate-100 font-medium"
+            className="w-36 border-0 bg-slate-100 font-medium"
           >
-            {(periodsQuery.data ?? []).map((period) => (
+            {monthsOfYear.map((period) => (
               <option key={period.id} value={period.id}>
-                {period.label}
+                {monthNameUz(period.month)}
               </option>
             ))}
           </Select>

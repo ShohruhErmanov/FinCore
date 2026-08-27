@@ -24,6 +24,9 @@ vi.mock('recharts', () => {
     BarChart: Container,
     CartesianGrid: Container,
     Legend: Container,
+    Pie: Container,
+    PieChart: Container,
+    Cell: Container,
     Tooltip: Container,
     XAxis: Container,
     YAxis: Container,
@@ -63,6 +66,8 @@ const dashboardResponse: DashboardResponse = {
     varianceUzs: '32000000',
     averageMonthlyUzs: '85000000',
     averageMonthsCount: 2,
+    averagePlannedMonthlyUzs: '101000000',
+    averagePlanMonthsCount: 2,
     peakMonth: { month: 8, label: 'Avg', actualUzs: '118000000' },
     months: [
       {
@@ -159,6 +164,18 @@ describe('[FE-MSW, AC-14, AC-16] dashboard integration', () => {
     expect(screen.getByText('Fakt mavjud 2 oy bo‘yicha')).toBeInTheDocument();
     expect(screen.getByText('Eng qimmat oy')).toBeInTheDocument();
     expect(screen.getByText('Avg oyi')).toBeInTheDocument();
+    expect(screen.getByText('Doimiy xarajatlar (yil)')).toBeInTheDocument();
+    expect(screen.getByText('O‘zgaruvchan xarajatlar (yil)')).toBeInTheDocument();
+    expect(screen.getByText('O‘rtacha kiritilgan oylik reja')).toBeInTheDocument();
+    expect(screen.getByText("101 mln so'm")).toBeInTheDocument();
+    expect(screen.getByText('Reja mavjud 2 oy bo‘yicha')).toBeInTheDocument();
+    expect(screen.getByText('Yillik farq')).toBeInTheDocument();
+    expect(
+      screen.getByLabelText('Oylik doimiy va o‘zgaruvchan xarajatlar diagrammasi'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText('Yillik doimiy va o‘zgaruvchan xarajatlar diagrammasi'),
+    ).toBeInTheDocument();
 
     const table = screen.getByRole('table', { name: /oylik dinamika/i });
     expect(table).toBeInTheDocument();

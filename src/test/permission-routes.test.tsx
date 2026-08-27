@@ -104,7 +104,7 @@ describe('[FE-AUTH-03] permission va direct-route himoyasi', () => {
       .map((item) => item.label);
 
     expect(visibleLabels).toContain('Dashboard');
-    expect(visibleLabels).toContain('Xarajatlar');
+    expect(visibleLabels).toContain('Jurnal');
     expect(visibleLabels).not.toContain('Rollar');
     expect(visibleLabels).not.toContain('Foydalanuvchilar');
   });

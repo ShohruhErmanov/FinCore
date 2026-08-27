@@ -4,8 +4,11 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   Bar,
   BarChart,
+  Cell,
   CartesianGrid,
   Legend,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -138,8 +141,103 @@ function exportAnnualSummary(data: AnnualExpenseSummary) {
     ['Doimiy ulushi %', data.fixedSharePct],
     ['O‘rtacha oylik xarajat', data.averageMonthlyUzs],
     ['O‘rtacha hisoblangan oylar soni', data.averageMonthsCount],
+    ['O‘rtacha kiritilgan oylik reja', data.averagePlannedMonthlyUzs],
+    ['O‘rtacha reja hisoblangan oylar soni', data.averagePlanMonthsCount],
     ['Eng qimmat oy', data.peakMonth?.label ?? '', data.peakMonth?.actualUzs ?? ''],
   ]);
+}
+
+function AnnualCompositionCharts({ data }: { data: AnnualExpenseSummary }) {
+  const monthly = data.months.map((row) => ({
+    label: row.label,
+    fixed: toChartNumber(row.fixedUzs),
+    variable: toChartNumber(row.variableUzs),
+  }));
+  const composition = [
+    { name: 'Doimiy', value: toChartNumber(data.fixedActualUzs), color: '#2563eb' },
+    { name: 'O‘zgaruvchan', value: toChartNumber(data.variableActualUzs), color: '#f59e0b' },
+  ];
+  const hasComposition = composition.some((item) => item.value > 0);
+
+  return (
+    <div className="mt-4 grid gap-6 xl:grid-cols-2">
+      <Card
+        title="Oylik xarajatlar: doimiy va o‘zgaruvchan"
+        description={`${data.year} yil, oylar kesimi`}
+      >
+        <div
+          className="h-[300px] w-full"
+          aria-label="Oylik doimiy va o‘zgaruvchan xarajatlar diagrammasi"
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={monthly} margin={{ top: 10, right: 10, left: 2, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+              <XAxis
+                dataKey="label"
+                tickLine={false}
+                axisLine={false}
+                fontSize={11}
+                interval="preserveStartEnd"
+              />
+              <YAxis
+                tickFormatter={axisMillions}
+                tickLine={false}
+                axisLine={false}
+                fontSize={11}
+                width={58}
+              />
+              <Tooltip
+                formatter={(value: number) => formatMoney(String(value))}
+                cursor={{ fill: '#eff6ff' }}
+              />
+              <Legend />
+              <Bar dataKey="fixed" name="Doimiy" fill="#2563eb" radius={[5, 5, 0, 0]} />
+              <Bar
+                dataKey="variable"
+                name="O‘zgaruvchan"
+                fill="#f59e0b"
+                radius={[5, 5, 0, 0]}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
+
+      <Card
+        title="Tuzilma: doimiy / o‘zgaruvchan (yil)"
+        description={`${data.year} yil jami xarajat tarkibi`}
+      >
+        <div
+          className="grid h-[300px] w-full place-items-center"
+          aria-label="Yillik doimiy va o‘zgaruvchan xarajatlar diagrammasi"
+        >
+          {hasComposition ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={composition}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={96}
+                  paddingAngle={2}
+                >
+                  {composition.map((item) => (
+                    <Cell key={item.name} fill={item.color} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value: number) => formatMoney(String(value))} />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-sm text-muted">Xarajat ma’lumoti mavjud emas.</p>
+          )}
+        </div>
+      </Card>
+    </div>
+  );
 }
 
 /** Excel «Xulosa» varag‘ining veb ko‘rinishi. */
@@ -156,6 +254,16 @@ function AnnualSummary({ data }: { data: AnnualExpenseSummary }) {
           label="Yillik umumiy xarajat"
           value={<MoneyText value={data.totalActualUzs} compact />}
           helper={`Reja ${formatMoney(data.totalPlanUzs, true)}, farq ${formatMoney(data.varianceUzs, true)}`}
+        />
+        <SummaryTile
+          label="Doimiy xarajatlar (yil)"
+          value={<MoneyText value={data.fixedActualUzs} compact />}
+          helper="Yillik jami doimiy xarajat"
+        />
+        <SummaryTile
+          label="O‘zgaruvchan xarajatlar (yil)"
+          value={<MoneyText value={data.variableActualUzs} compact />}
+          helper="Yillik jami o‘zgaruvchan xarajat"
         />
         <SummaryTile
           label="Doimiy ulushi"
@@ -181,6 +289,20 @@ function AnnualSummary({ data }: { data: AnnualExpenseSummary }) {
             )
           }
           helper={data.peakMonth ? `${data.peakMonth.label} oyi` : 'Ma’lumot yo‘q'}
+        />
+        <SummaryTile
+          label="O‘rtacha kiritilgan oylik reja"
+          value={<MoneyText value={data.averagePlannedMonthlyUzs} compact />}
+          helper={
+            data.averagePlanMonthsCount
+              ? `Reja mavjud ${data.averagePlanMonthsCount} oy bo‘yicha`
+              : 'Reja kiritilgan oy yo‘q'
+          }
+        />
+        <SummaryTile
+          label="Yillik farq"
+          value={<VarianceText value={data.varianceUzs} />}
+          helper="Musbat qiymat — budjetdan qolgan summa"
         />
       </div>
 
@@ -269,6 +391,8 @@ function AnnualSummary({ data }: { data: AnnualExpenseSummary }) {
           </table>
         </div>
       </Card>
+
+      <AnnualCompositionCharts data={data} />
     </section>
   );
 }

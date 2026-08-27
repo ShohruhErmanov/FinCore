@@ -1,12 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CirclePlus, Landmark, PencilLine, Power } from 'lucide-react';
+import { CirclePlus, Landmark, PencilLine, Power, Save } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { NavLink, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/features/auth/auth-context';
 import { getApiErrorMessage } from '@/shared/api/client';
 import { adminApi, referenceApi } from '@/shared/api/contracts';
 import { queryKeys } from '@/shared/api/query-keys';
-import type { Branch, ExpenseCategory, ExpenseType, MasterItem } from '@/shared/types/domain';
+import { routes } from '@/shared/config/routes';
+import type {
+  Branch,
+  CategoryBaselineInput,
+  ExpenseCategory,
+  ExpenseType,
+  MasterItem,
+} from '@/shared/types/domain';
 import {
   Alert,
   Button,
@@ -16,7 +23,9 @@ import {
   ErrorState,
   FormField,
   Input,
+  CurrencyInput,
   LoadingState,
+  MoneyText,
   PageHeader,
   Select,
   type Column,
@@ -44,13 +53,46 @@ const config: Record<SettingKind, { title: string; singular: string; description
   branches: {
     title: 'Filiallar',
     singular: 'filial',
-    description: 'V1 doirasida faqat Sayxun va Xalqlar do‘stligi; “Barchasi” filial emas.',
+    description: 'Filial ro‘yxati. “Barchasi” — filtr, filial emas.',
   },
 };
 
+/**
+ * The four reference lists the Excel "Sozlamalar" sheet keeps side by side.
+ * They live on separate routes here, so a tab strip keeps them one section
+ * rather than four unrelated pages.
+ */
+const SETTING_TABS: Array<{ kind: SettingKind; label: string; to: string }> = [
+  { kind: 'categories', label: 'Xarajat kategoriyalari', to: routes.categories },
+  { kind: 'departments', label: 'Bo‘limlar', to: routes.departments },
+  { kind: 'payment-methods', label: 'To‘lov usullari', to: routes.paymentMethods },
+  { kind: 'branches', label: 'Filiallar', to: routes.branches },
+];
+
+function SettingsTabs({ active }: { active: SettingKind }) {
+  return (
+    <nav aria-label="Sozlamalar bo‘limlari" className="mb-5 flex flex-wrap gap-1 border-b border-border">
+      {SETTING_TABS.map((tab) => (
+        <NavLink
+          key={tab.kind}
+          to={tab.to}
+          aria-current={tab.kind === active ? 'page' : undefined}
+          className={`-mb-px min-h-11 border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
+            tab.kind === active
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted hover:text-ink'
+          }`}
+        >
+          {tab.label}
+        </NavLink>
+      ))}
+    </nav>
+  );
+}
+
 function useSettingData(kind: SettingKind) {
   return useQuery({
-    queryKey: kind === 'branches' ? queryKeys.branches : queryKeys.master(kind),
+    queryKey: queryKeys.master(kind),
     queryFn: ({ signal }) =>
       kind === 'categories'
         ? referenceApi.categories(signal)
@@ -58,14 +100,14 @@ function useSettingData(kind: SettingKind) {
           ? referenceApi.departments(signal)
           : kind === 'payment-methods'
             ? referenceApi.paymentMethods(signal)
-            : referenceApi.branches(signal),
+            : adminApi.allBranches(signal),
     staleTime: 120_000,
   });
 }
 
 function SettingsPage({ kind }: { kind: SettingKind }) {
   const { hasPermission } = useAuth();
-  const canManage = kind !== 'branches' && hasPermission('master_data.manage');
+  const canManage = hasPermission('master_data.manage');
   const data = useSettingData(kind);
   const [searchParams, setSearchParams] = useSearchParams();
   const [creating, setCreating] = useState(false);
@@ -131,17 +173,18 @@ function SettingsPage({ kind }: { kind: SettingKind }) {
       cell: (row) =>
         canManage ? (
           <SettingActions kind={kind} row={row} />
-        ) : kind === 'branches' ? (
+        ) : (
           <span className="inline-flex items-center gap-1 text-xs font-semibold text-muted">
             <Landmark className="h-4 w-4" />
-            V1 read-only
+            Faqat o‘qish
           </span>
-        ) : null,
+        ),
     },
   ];
   const meta = config[kind];
   return (
     <>
+      <SettingsTabs active={kind} />
       <PageHeader
         title={meta.title}
         description={meta.description}
@@ -155,51 +198,240 @@ function SettingsPage({ kind }: { kind: SettingKind }) {
         }
       />
       {kind === 'branches' ? (
-        <Alert title="V1 filial cheklovi" tone="info" className="mb-5">
-          Yangi filial yaratish va “Barchasi”ni master-row sifatida qo‘shish scope’dan tashqarida.
+        <Alert title="Yangi filial haqida" tone="info" className="mb-5">
+          Yangi filial darhol o‘zingizga ochiladi — uni yaratganingizda u avtomatik ravishda
+          sizning rol scope’ingizga qo‘shiladi. Boshqa xodimlar uchun uni “Foydalanuvchilar”
+          bo‘limida alohida biriktirish kerak. “Barchasi” — filtr, filial emas.
         </Alert>
       ) : null}
-      {creating && kind !== 'branches' ? (
+      {creating ? (
         <CreateSettingPanel kind={kind} onClose={() => setCreating(false)} />
       ) : null}
-      <Card className="mb-5">
-        <label htmlFor={`${kind}-status`} className="block max-w-xs space-y-1.5">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-            Holat
-          </span>
-          <Select
-            id={`${kind}-status`}
-            value={status}
-            onChange={(event) =>
-              setSearchParams(event.target.value === 'all' ? {} : { status: event.target.value })
-            }
-          >
-            <option value="all">Barchasi</option>
-            <option value="active">Faol</option>
-            <option value="inactive">Nofaol (tarixiy)</option>
-          </Select>
-        </label>
-      </Card>
-      {data.isLoading ? (
-        <LoadingState label={`${meta.title} yuklanmoqda…`} />
-      ) : data.isError ? (
-        <ErrorState message={getApiErrorMessage(data.error)} onRetry={() => void data.refetch()} />
-      ) : rows.length ? (
-        <Card>
-          <DataTable columns={columns} rows={rows} caption={meta.title} />
-        </Card>
-      ) : (
-        <EmptyState description="Tanlangan holat bo‘yicha master-data topilmadi." />
+      {kind === 'categories' && canManage ? <CategoryBaselineGrid /> : null}
+      {/*
+        Categories are shown by the baseline grid above, which already lists
+        every category with its type — the status filter and the flat list would
+        just repeat it, so that tab skips both.
+      */}
+      {kind === 'categories' ? null : (
+        <>
+          <Card className="mb-5">
+            <label htmlFor={`${kind}-status`} className="block max-w-xs space-y-1.5">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Holat
+              </span>
+              <Select
+                id={`${kind}-status`}
+                value={status}
+                onChange={(event) =>
+                  setSearchParams(event.target.value === 'all' ? {} : { status: event.target.value })
+                }
+              >
+                <option value="all">Barchasi</option>
+                <option value="active">Faol</option>
+                <option value="inactive">Nofaol (tarixiy)</option>
+              </Select>
+            </label>
+          </Card>
+          {data.isLoading ? (
+            <LoadingState label={`${meta.title} yuklanmoqda…`} />
+          ) : data.isError ? (
+            <ErrorState
+              message={getApiErrorMessage(data.error)}
+              onRetry={() => void data.refetch()}
+            />
+          ) : rows.length ? (
+            <Card>
+              <DataTable columns={columns} rows={rows} caption={meta.title} />
+            </Card>
+          ) : (
+            <EmptyState description="Tanlangan holat bo‘yicha master-data topilmadi." />
+          )}
+        </>
       )}
     </>
   );
 }
 
+
+/**
+ * The Excel «Sozlamalar» grid: every category with one editable amount per
+ * branch, a computed row total, and the «Jami oylik reja (byudjet)» footer.
+ *
+ * This is the director’s baseline plan, not the monthly budget — reports keep
+ * reading budget lines. Totals are recomputed as you type, the way the
+ * spreadsheet behaves, and only edited cells are sent on save.
+ */
+function CategoryBaselineGrid() {
+  const queryClient = useQueryClient();
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  const board = useQuery({
+    queryKey: ['master', 'category-baselines'],
+    queryFn: ({ signal }) => adminApi.categoryBaselines(signal),
+  });
+
+  const save = useMutation({
+    mutationFn: (lines: CategoryBaselineInput[]) => adminApi.saveCategoryBaselines(lines),
+    onSuccess: async () => {
+      setDraft({});
+      setError(null);
+      await queryClient.invalidateQueries({ queryKey: ['master', 'category-baselines'] });
+    },
+    onError: (mutationError) => setError(getApiErrorMessage(mutationError)),
+  });
+
+  const cellKey = (categoryId: string, branchId: string) => `${categoryId}:${branchId}`;
+  const valueOf = (categoryId: string, branchId: string, stored: string) =>
+    draft[cellKey(categoryId, branchId)] ?? stored;
+
+  const totals = useMemo(() => {
+    const byBranch: Record<string, bigint> = {};
+    const byRow: Record<string, bigint> = {};
+    let grand = 0n;
+    for (const branch of board.data?.branches ?? []) byBranch[branch.branchId] = 0n;
+    for (const row of board.data?.rows ?? []) {
+      let rowTotal = 0n;
+      for (const branch of board.data?.branches ?? []) {
+        const raw =
+          draft[cellKey(row.categoryId, branch.branchId)] ?? row.amounts[branch.branchId] ?? '0';
+        const amount = /^\d+$/.test(raw) ? BigInt(raw) : 0n;
+        rowTotal += amount;
+        byBranch[branch.branchId] = (byBranch[branch.branchId] ?? 0n) + amount;
+      }
+      byRow[row.categoryId] = rowTotal;
+      grand += rowTotal;
+    }
+    return { byBranch, byRow, grand };
+  }, [board.data, draft]);
+
+  if (board.isLoading) return <LoadingState label="Boshlang‘ich reja yuklanmoqda…" />;
+  if (board.isError)
+    return (
+      <ErrorState message={getApiErrorMessage(board.error)} onRetry={() => void board.refetch()} />
+    );
+  if (!board.data) return null;
+
+  const { branches, rows } = board.data;
+  const dirty = Object.keys(draft).length > 0;
+
+  const submit = () => {
+    const lines: CategoryBaselineInput[] = [];
+    for (const [key, raw] of Object.entries(draft)) {
+      if (!/^\d+$/.test(raw))
+        return setError('Summalar manfiy bo\u2018lmagan butun so\u2018mda bo\u2018lsin.');
+      const [categoryId, branchId] = key.split(':');
+      lines.push({ categoryId: categoryId!, branchId: branchId!, amountUzs: raw });
+    }
+    setError(null);
+    save.mutate(lines);
+  };
+
+  return (
+    <Card
+      title="Boshlang‘ich oylik reja"
+      description="Har kategoriya uchun filial bo‘yicha summa. Jami ustuni va pastdagi yakuniy qator avtomatik hisoblanadi."
+      className="mb-5"
+      actions={
+        <Button onClick={submit} loading={save.isPending} disabled={!dirty}>
+          <Save className="h-4 w-4" /> Saqlash
+        </Button>
+      }
+    >
+      {error ? (
+        <Alert title="Saqlanmadi" tone="danger" className="mb-4">
+          {error}
+        </Alert>
+      ) : null}
+      {save.isSuccess && !dirty ? (
+        <Alert title="Saqlandi" tone="success" className="mb-4">
+          Boshlang‘ich reja yangilandi.
+        </Alert>
+      ) : null}
+      <div className="overflow-x-auto scrollbar-thin">
+        <table className="w-full min-w-[760px] text-left text-sm">
+          <caption className="sr-only">Boshlang‘ich oylik reja</caption>
+          <thead>
+            <tr className="border-b border-border bg-slate-50">
+              <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Kategoriya
+              </th>
+              <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Turi
+              </th>
+              {branches.map((branch) => (
+                <th
+                  key={branch.branchId}
+                  scope="col"
+                  className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-600"
+                >
+                  Boshlang‘ich {branch.name}
+                </th>
+              ))}
+              <th scope="col" className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Boshlang‘ich jami
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.categoryId} className="border-b border-border/70 last:border-0">
+                <td className="px-4 py-2.5">
+                  <span className="font-medium text-ink">{row.name}</span>
+                  {row.isActive ? null : (
+                    <span className="ml-2 text-xs text-muted">nofaol</span>
+                  )}
+                </td>
+                <td className="px-4 py-2.5 text-xs text-muted">
+                  {row.expenseType === 'fixed' ? 'Doimiy' : 'O\u2018zgaruvchan'}
+                </td>
+                {branches.map((branch) => (
+                  <td key={branch.branchId} className="px-4 py-2.5 text-right">
+                    <CurrencyInput
+                      aria-label={`${row.name} — ${branch.name}`}
+                      className="w-40 text-right"
+                      value={valueOf(row.categoryId, branch.branchId, row.amounts[branch.branchId] ?? '0')}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          [cellKey(row.categoryId, branch.branchId)]: event.target.value.replace(/\D/g, ''),
+                        }))
+                      }
+                    />
+                  </td>
+                ))}
+                <td className="px-4 py-2.5 text-right font-semibold text-ink">
+                  <MoneyText value={(totals.byRow[row.categoryId] ?? 0n).toString()} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-border bg-slate-50">
+              <th scope="row" colSpan={2} className="px-4 py-3 text-left font-semibold text-ink">
+                Jami oylik reja (byudjet):
+              </th>
+              {branches.map((branch) => (
+                <td key={branch.branchId} className="px-4 py-3 text-right font-semibold text-ink">
+                  <MoneyText value={(totals.byBranch[branch.branchId] ?? 0n).toString()} />
+                </td>
+              ))}
+              <td className="px-4 py-3 text-right text-base font-bold text-ink">
+                <MoneyText value={totals.grand.toString()} />
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </Card>
+  );
+}
 function CreateSettingPanel({
   kind,
   onClose,
 }: {
-  kind: Exclude<SettingKind, 'branches'>;
+  kind: SettingKind;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -218,6 +450,15 @@ function CreateSettingPanel({
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.master(kind) }),
         queryClient.invalidateQueries({ queryKey: ['report'] }),
+        // Creating a branch also widens the creator’s own scope on the server,
+        // so the cached session and the scoped branch list behind the top bar
+        // are both stale the moment this returns.
+        ...(kind === 'branches'
+          ? [
+              queryClient.invalidateQueries({ queryKey: queryKeys.branches }),
+              queryClient.invalidateQueries({ queryKey: queryKeys.me }),
+            ]
+          : []),
       ]);
       onClose();
     },
@@ -283,13 +524,7 @@ function CreateSettingPanel({
   );
 }
 
-function SettingActions({
-  kind,
-  row,
-}: {
-  kind: Exclude<SettingKind, 'branches'>;
-  row: SettingRow;
-}) {
+function SettingActions({ kind, row }: { kind: SettingKind; row: SettingRow }) {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(row.name);

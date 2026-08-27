@@ -65,6 +65,15 @@ export class MasterDataService {
    * Only the branches the caller may read. Mirrors the mock backend, which
    * filters the list rather than returning every branch to every user.
    */
+  /** Every branch, scope ignored — the Settings master-data screen manages the list itself. */
+  async allBranches(): Promise<BranchDto[]> {
+    const rows = await this.prisma.db.branches.findMany({
+      select: { id: true, code: true, name: true, is_active: true },
+      orderBy: { code: 'asc' },
+    });
+    return rows.map((row) => ({ id: row.id, code: row.code, name: row.name, isActive: row.is_active }));
+  }
+
   async branches(branchScopes: string[]): Promise<BranchDto[]> {
     if (branchScopes.length === 0) return [];
     const rows = await this.prisma.db.branches.findMany({

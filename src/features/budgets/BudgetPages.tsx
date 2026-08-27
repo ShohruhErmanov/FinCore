@@ -207,6 +207,7 @@ function exportBudgetPlan(plan: BudgetPlan) {
 export function BudgetPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
+  const branch = searchParams.get('branch') ?? 'all';
   const [drafts, setDrafts] = useState<Record<string, BudgetLineDraft>>({});
   const meQuery = useQuery({ queryKey: queryKeys.me, queryFn: ({ signal }) => authApi.me(signal) });
   const periodsQuery = useQuery({
@@ -347,6 +348,7 @@ export function BudgetPage() {
       {planQuery.data ? (
         <BudgetPageContent
           plan={planQuery.data}
+          branch={branch}
           drafts={drafts}
           editable={canEdit}
           onChangeLine={(next) => setDrafts((current) => ({ ...current, [next.id]: next }))}
@@ -361,12 +363,21 @@ function BudgetPageContent({
   drafts,
   editable,
   onChangeLine,
+  branch,
 }: {
   plan: BudgetPlan;
   drafts: Record<string, BudgetLineDraft>;
   editable: boolean;
   onChangeLine: (next: BudgetLineDraft) => void;
+  /** Top-bar branch, or "all". */
+  branch: string;
 }) {
+  // A display filter only: editing still saves every branch, so narrowing
+  // the view to one branch can never drop the other one’s plan.
+  const lines = useMemo(
+    () => (branch === 'all' ? plan.lines : plan.lines.filter((line) => line.branchId === branch)),
+    [plan.lines, branch],
+  );
   const updatedLabel = useMemo(
     () => `${plan.updatedByName} · ${formatDateTime(plan.updatedAt)}`,
     [plan.updatedByName, plan.updatedAt],
@@ -374,9 +385,9 @@ function BudgetPageContent({
   return (
     <>
       <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryBlock label="Umumiy" lines={plan.lines} />
-        <SummaryBlock label="Doimiy xarajat" type="fixed" lines={plan.lines} />
-        <SummaryBlock label="O‘zgaruvchan xarajat" type="variable" lines={plan.lines} />
+        <SummaryBlock label="Umumiy" lines={lines} />
+        <SummaryBlock label="Doimiy xarajat" type="fixed" lines={lines} />
+        <SummaryBlock label="O‘zgaruvchan xarajat" type="variable" lines={lines} />
         <div className="rounded-card border border-border bg-white p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted">
             Oxirgi saqlash
@@ -409,7 +420,7 @@ function BudgetPageContent({
               </tr>
             </thead>
             <tbody>
-              {plan.lines.map((line) => (
+              {lines.map((line) => (
                 <BudgetLineRow
                   key={line.id}
                   line={line}

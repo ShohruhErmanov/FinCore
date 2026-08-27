@@ -9,11 +9,11 @@ import {
 } from '@nestjs/swagger';
 import { CurrentUser, RequirePermissions, type AuthenticatedUser } from '@/common';
 import {
+  BranchComparisonQueryDto,
   CashierReportResponseDto,
   CashiersQueryDto,
   DashboardQueryDto,
   MonthlyQueryDto,
-  YearQueryDto,
 } from './dto/reports.dto';
 import { CashierReportService, type CashierReportDto } from './cashier-report.service';
 import { DashboardService, type DashboardResponse } from './dashboard.service';
@@ -48,7 +48,12 @@ export class ReportsController {
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: DashboardQueryDto,
   ): Promise<DashboardResponse> {
-    return this.dashboard.get(user, query.period, query.branch ?? 'all', query.granularity ?? 'monthly');
+    return this.dashboard.get(
+      user,
+      query.period,
+      query.branch ?? 'all',
+      query.granularity ?? 'monthly',
+    );
   }
 
   @Get('monthly')
@@ -71,14 +76,31 @@ export class ReportsController {
   @RequirePermissions('reports.view')
   @ApiOperation({ summary: 'Filiallar taqqoslashi: oylar va yillik jami' })
   @ApiQuery({ name: 'year', example: 2026 })
+  @ApiQuery({
+    name: 'month',
+    required: false,
+    example: 8,
+    description: 'Ikki filial bitta jadval kategoriya matritsasi uchun oy',
+  })
+  @ApiQuery({ name: 'branch', required: false, description: 'Filial UUID yoki "all"' })
   @ApiResponse({ status: 200, description: 'BranchComparisonReport' })
   @ApiResponse({ status: 401, description: 'UNAUTHENTICATED' })
   @ApiResponse({ status: 403, description: 'FORBIDDEN — reports.view yo‘q' })
   getBranchComparison(
     @CurrentUser() user: AuthenticatedUser,
-    @Query() query: YearQueryDto,
+    @Query() query: BranchComparisonQueryDto,
   ): Promise<BranchComparisonReport> {
-    return this.reports.branchComparison(user, Number(query.year));
+    const tashkentMonth = Number(
+      new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Tashkent', month: 'numeric' }).format(
+        new Date(),
+      ),
+    );
+    return this.reports.branchComparison(
+      user,
+      Number(query.year),
+      query.month ?? tashkentMonth,
+      query.branch ?? 'all',
+    );
   }
 
   @Get('cashiers')

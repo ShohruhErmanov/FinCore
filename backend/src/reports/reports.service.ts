@@ -1,12 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { AuthenticatedUser } from '@/common';
 import { PrismaService } from '@/database';
-import {
-  MONTHS_SHORT_UZ,
-  planActual,
-  toBigInt,
-  type PlanActual,
-} from './report-math';
+import { MONTHS_SHORT_UZ, MONTHS_UZ, planActual, toBigInt, type PlanActual } from './report-math';
 
 /**
  * Report numbers come from the sanctioned views in
@@ -36,6 +31,17 @@ export interface MonthlyReport {
 
 export interface BranchComparisonReport {
   year: number;
+  selectedMonth: {
+    month: number;
+    label: string;
+    rows: Array<{
+      category: HistoricalRef & { expenseTypeSnapshot: 'fixed' | 'variable' };
+      branches: Array<{ branch: HistoricalRef; expense: PlanActual }>;
+      total: { branch: HistoricalRef; expense: PlanActual };
+    }>;
+    branches: Array<{ branch: HistoricalRef; expense: PlanActual }>;
+    total: { branch: HistoricalRef; expense: PlanActual };
+  };
   months: Array<{
     month: number;
     branches: Array<{ branch: HistoricalRef; expense: PlanActual }>;
@@ -67,6 +73,13 @@ interface BranchViewRow {
   planned_amount_uzs: unknown;
 }
 
+interface TwoBranchMonthViewRow extends BranchViewRow {
+  category_id: string;
+  category_name: string;
+  expense_type: 'fixed' | 'variable';
+  has_plan: boolean;
+}
+
 const TOTAL_REF: HistoricalRef = {
   id: 'all',
   code: 'ALL',
@@ -95,14 +108,22 @@ export class ReportsService {
     return user.branchScopes.includes(branchFilter) ? [branchFilter] : [];
   }
 
-  async monthly(user: AuthenticatedUser, year: number, branchFilter: string): Promise<MonthlyReport> {
+  async monthly(
+    user: AuthenticatedUser,
+    year: number,
+    branchFilter: string,
+  ): Promise<MonthlyReport> {
     const branchIds = this.scopeBranchIds(user, branchFilter);
     const empty = planActual(null, 0n, false);
     if (branchIds.length === 0)
       return {
         year,
         branchFilter,
-        averagePolicy: { code: 'months_with_actual', label: 'Fakt mavjud oylar bo‘yicha o‘rtacha', denominator: 0 },
+        averagePolicy: {
+          code: 'months_with_actual',
+          label: 'Fakt mavjud oylar bo‘yicha o‘rtacha',
+          denominator: 0,
+        },
         rows: [],
         totals: { fixed: empty, variable: empty, overall: empty },
       };
@@ -129,7 +150,9 @@ export class ReportsService {
     ]);
 
     const categoryById = new Map(categories.map((category) => [category.id, category]));
-    const countByCell = new Map(counts.map((row) => [`${row.category_id}:${row.month}`, Number(row.n)]));
+    const countByCell = new Map(
+      counts.map((row) => [`${row.category_id}:${row.month}`, Number(row.n)]),
+    );
 
     // One row per category, aggregated across every branch in scope.
     const byCategory = new Map<string, Map<number, { planned: bigint | null; actual: bigint }>>();
@@ -196,10 +219,15 @@ export class ReportsService {
         : reportRows;
       const planned = selected.reduce<bigint | null>(
         (total, row) =>
-          row.annual.plannedAmountUzs === null ? total : (total ?? 0n) + BigInt(row.annual.plannedAmountUzs),
+          row.annual.plannedAmountUzs === null
+            ? total
+            : (total ?? 0n) + BigInt(row.annual.plannedAmountUzs),
         null,
       );
-      const actual = selected.reduce((total, row) => total + BigInt(row.annual.actualAmountUzs), 0n);
+      const actual = selected.reduce(
+        (total, row) => total + BigInt(row.annual.actualAmountUzs),
+        0n,
+      );
       return planActual(planned, actual, planned !== null);
     };
 
@@ -222,25 +250,52 @@ export class ReportsService {
     };
   }
 
-  async branchComparison(user: AuthenticatedUser, year: number): Promise<BranchComparisonReport> {
-    const branchIds = user.branchScopes;
+  async branchComparison(
+    user: AuthenticatedUser,
+    year: number,
+    selectedMonth = 1,
+    branchFilter = 'all',
+  ): Promise<BranchComparisonReport> {
+    const branchIds = this.scopeBranchIds(user, branchFilter);
     if (branchIds.length === 0)
       return {
         year,
+        selectedMonth: {
+          month: selectedMonth,
+          label: MONTHS_UZ[selectedMonth - 1] ?? String(selectedMonth),
+          rows: [],
+          branches: [],
+          total: { branch: TOTAL_REF, expense: planActual(null, 0n, false) },
+        },
         months: [],
-        annual: { branches: [], total: { branch: TOTAL_REF, expense: planActual(null, 0n, false) } },
+        annual: {
+          branches: [],
+          total: { branch: TOTAL_REF, expense: planActual(null, 0n, false) },
+        },
       };
 
-    const [rows, branches] = await Promise.all([
+    const [rows, monthRows, branches, categories] = await Promise.all([
       this.prisma.db.$queryRaw<BranchViewRow[]>`
         SELECT year, month, branch_id, branch_name, actual_uzs, planned_amount_uzs
         FROM fincore.v_branch_comparison
         WHERE year = ${year} AND branch_id = ANY(${branchIds}::uuid[])
       `,
+      this.prisma.db.$queryRaw<TwoBranchMonthViewRow[]>`
+        SELECT year, month, branch_id, branch_name, category_id, category_name,
+               expense_type, actual_uzs, planned_amount_uzs, has_plan
+        FROM fincore.v_two_branch_month_matrix
+        WHERE year = ${year} AND month = ${selectedMonth}
+          AND branch_id = ANY(${branchIds}::uuid[])
+      `,
       this.prisma.db.branches.findMany({
         where: { id: { in: branchIds } },
         select: { id: true, code: true, name: true },
         orderBy: { code: 'asc' },
+      }),
+      this.prisma.db.expense_categories.findMany({
+        where: { is_active: true },
+        select: { id: true, code: true, name: true, expense_type: true, sort_order: true },
+        orderBy: [{ expense_type: 'asc' }, { sort_order: 'asc' }, { code: 'asc' }],
       }),
     ]);
 
@@ -253,13 +308,71 @@ export class ReportsService {
             : (total ?? 0n) + toBigInt(row.planned_amount_uzs),
         null,
       );
-      return { planned, actual: found.reduce((total, row) => total + toBigInt(row.actual_uzs), 0n) };
+      return {
+        planned,
+        actual: found.reduce((total, row) => total + toBigInt(row.actual_uzs), 0n),
+      };
     };
 
-    const summary = (branch: { id: string; code: string; name: string }, planned: bigint | null, actual: bigint) => ({
+    const summary = (
+      branch: { id: string; code: string; name: string },
+      planned: bigint | null,
+      actual: bigint,
+    ) => ({
       branch: { id: branch.id, code: branch.code, name: branch.name, snapshotName: branch.name },
       expense: planActual(planned, actual),
     });
+
+    const monthCellByKey = new Map(
+      monthRows.map((row) => [`${row.branch_id}:${row.category_id}`, row] as const),
+    );
+    const aggregateExpense = (items: Array<{ expense: PlanActual }>): PlanActual => {
+      const hasPlan = items.some((item) => item.expense.hasPlan);
+      const planned = hasPlan
+        ? items.reduce((total, item) => total + BigInt(item.expense.plannedAmountUzs ?? '0'), 0n)
+        : null;
+      const actual = items.reduce(
+        (total, item) => total + BigInt(item.expense.actualAmountUzs),
+        0n,
+      );
+      return planActual(planned, actual, hasPlan);
+    };
+    const selectedMonthRows = categories.map((category) => {
+      const perBranch = branches.map((branch) => {
+        const row = monthCellByKey.get(`${branch.id}:${category.id}`);
+        const hasPlan = row?.has_plan ?? false;
+        return summary(
+          branch,
+          hasPlan ? toBigInt(row?.planned_amount_uzs) : null,
+          toBigInt(row?.actual_uzs),
+        );
+      });
+      return {
+        category: {
+          id: category.id,
+          code: category.code,
+          name: category.name,
+          snapshotName:
+            monthRows.find((row) => row.category_id === category.id)?.category_name ??
+            category.name,
+          expenseTypeSnapshot: category.expense_type,
+        },
+        branches: perBranch,
+        total: { branch: TOTAL_REF, expense: aggregateExpense(perBranch) },
+      };
+    });
+    const selectedMonthBranches = branches.map((branch) => ({
+      branch: { id: branch.id, code: branch.code, name: branch.name, snapshotName: branch.name },
+      expense: aggregateExpense(
+        selectedMonthRows.flatMap((row) =>
+          row.branches.filter((item) => item.branch.id === branch.id),
+        ),
+      ),
+    }));
+    const selectedMonthTotal = {
+      branch: TOTAL_REF,
+      expense: aggregateExpense(selectedMonthBranches),
+    };
 
     const months = Array.from({ length: 12 }, (_, index) => {
       const month = index + 1;
@@ -269,7 +382,9 @@ export class ReportsService {
       });
       const totalPlanned = perBranch.reduce<bigint | null>(
         (total, item) =>
-          item.expense.plannedAmountUzs === null ? total : (total ?? 0n) + BigInt(item.expense.plannedAmountUzs),
+          item.expense.plannedAmountUzs === null
+            ? total
+            : (total ?? 0n) + BigInt(item.expense.plannedAmountUzs),
         null,
       );
       const totalActual = perBranch.reduce(
@@ -286,7 +401,9 @@ export class ReportsService {
     const annualBranches = branches.map((branch) => {
       const planned = months.reduce<bigint | null>((total, entry) => {
         const item = entry.branches.find((candidate) => candidate.branch.id === branch.id);
-        return item?.expense.plannedAmountUzs == null ? total : (total ?? 0n) + BigInt(item.expense.plannedAmountUzs);
+        return item?.expense.plannedAmountUzs == null
+          ? total
+          : (total ?? 0n) + BigInt(item.expense.plannedAmountUzs);
       }, null);
       const actual = months.reduce((total, entry) => {
         const item = entry.branches.find((candidate) => candidate.branch.id === branch.id);
@@ -297,7 +414,9 @@ export class ReportsService {
 
     const annualPlanned = annualBranches.reduce<bigint | null>(
       (total, item) =>
-        item.expense.plannedAmountUzs === null ? total : (total ?? 0n) + BigInt(item.expense.plannedAmountUzs),
+        item.expense.plannedAmountUzs === null
+          ? total
+          : (total ?? 0n) + BigInt(item.expense.plannedAmountUzs),
       null,
     );
     const annualActual = annualBranches.reduce(
@@ -307,6 +426,13 @@ export class ReportsService {
 
     return {
       year,
+      selectedMonth: {
+        month: selectedMonth,
+        label: MONTHS_UZ[selectedMonth - 1] ?? String(selectedMonth),
+        rows: selectedMonthRows,
+        branches: selectedMonthBranches,
+        total: selectedMonthTotal,
+      },
       months,
       annual: {
         branches: annualBranches,
@@ -319,7 +445,12 @@ export class ReportsService {
   async annualMonths(year: number, branchIds: string[]) {
     if (branchIds.length === 0) return [];
     return this.prisma.db.$queryRaw<
-      Array<{ month: number; expense_type: 'fixed' | 'variable'; actual_uzs: unknown; planned_amount_uzs: unknown }>
+      Array<{
+        month: number;
+        expense_type: 'fixed' | 'variable';
+        actual_uzs: unknown;
+        planned_amount_uzs: unknown;
+      }>
     >`
       SELECT month, expense_type, sum(actual_uzs) AS actual_uzs,
              sum(planned_amount_uzs) AS planned_amount_uzs

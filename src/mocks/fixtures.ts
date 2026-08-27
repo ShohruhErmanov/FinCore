@@ -33,26 +33,38 @@ export const branches: Branch[] = [
   { id: ids.xalqlar, code: 'XALQLAR', name: "Xalqlar do'stligi", isActive: true },
 ];
 
-export const periods: AccountingPeriod[] = [
-  {
-    id: ids.periodAug,
-    year: 2026,
-    month: 8,
-    label: 'Avgust 2026',
-    status: 'open',
-    closedAt: null,
-    closedByName: null,
-  },
-  {
-    id: ids.periodJul,
-    year: 2026,
-    month: 7,
-    label: 'Iyul 2026',
-    status: 'closed',
-    closedAt: '2026-08-03T09:12:00+05:00',
-    closedByName: 'Shohrux Ermanov',
-  },
+const MONTH_LABELS = [
+  'Yanvar',
+  'Fevral',
+  'Mart',
+  'Aprel',
+  'May',
+  'Iyun',
+  'Iyul',
+  'Avgust',
+  'Sentabr',
+  'Oktabr',
+  'Noyabr',
+  'Dekabr',
 ];
+
+/**
+ * A full calendar year, the way the live database now holds it. Iyul is the
+ * one closed month, so the closed-period rules stay exercised in the mock.
+ */
+export const periods: AccountingPeriod[] = Array.from({ length: 12 }, (_, index) => {
+  const month = index + 1;
+  const closed = month === 7;
+  return {
+    id: `20000000-0000-0000-0000-${String(month).padStart(12, '0')}`,
+    year: 2026,
+    month,
+    label: `${MONTH_LABELS[index]} 2026`,
+    status: closed ? ('closed' as const) : ('open' as const),
+    closedAt: closed ? '2026-08-03T09:12:00+05:00' : null,
+    closedByName: closed ? 'Shohrux Ermanov' : null,
+  };
+}).sort((a, b) => b.month - a.month);
 
 /**
  * Direktor — nazorat va rejalashtirish roli: kunlik xarajat/tushum kiritmaydi,
