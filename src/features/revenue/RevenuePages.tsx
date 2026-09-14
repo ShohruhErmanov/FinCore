@@ -50,7 +50,9 @@ const revenueFormSchema = z
   })
   .refine(
     (values) =>
-      BigInt(values.cashUzs || '0') + BigInt(values.cardUzs || '0') + BigInt(values.transferUzs || '0') >
+      BigInt(values.cashUzs || '0') +
+        BigInt(values.cardUzs || '0') +
+        BigInt(values.transferUzs || '0') >
       0n,
     { message: 'Kunlik jami tushum 0 dan katta bo‘lishi kerak.', path: ['cashUzs'] },
   );
@@ -176,7 +178,17 @@ export function RevenueLedgerPage() {
     [],
   );
 
-  const hasFilters = [...searchParams.keys()].some((key) => !['page', 'sort'].includes(key));
+  const hasFilters = [...searchParams.keys()].some(
+    (key) => !['page', 'sort', 'period', 'branch'].includes(key),
+  );
+  const clearLocalFilters = () => {
+    const next = new URLSearchParams();
+    const period = searchParams.get('period');
+    const selectedBranch = searchParams.get('branch');
+    if (period) next.set('period', period);
+    if (selectedBranch) next.set('branch', selectedBranch);
+    setSearchParams(next, { replace: true });
+  };
   const pageTotal = (query.data?.items ?? []).reduce(
     (total, row) => total + BigInt(row.totalUzs),
     0n,
@@ -184,7 +196,9 @@ export function RevenueLedgerPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Operatsiyalar' }, { label: 'Kunlik tushum', current: true }]} />
+      <Breadcrumbs
+        items={[{ label: 'Operatsiyalar' }, { label: 'Kunlik tushum', current: true }]}
+      />
       <PageHeader
         title="Kunlik tushum"
         description="Har bir kun va filial uchun bitta yozuv: naqd, karta va bank tushumi."
@@ -209,40 +223,8 @@ export function RevenueLedgerPage() {
         }
       />
 
-      <Card title="Filtrlar" className="mb-5">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <FormField label="Davr" htmlFor="revenue-period">
-            <Select
-              id="revenue-period"
-              value={searchParams.get('period') ?? ''}
-              onChange={(event) =>
-                updateQueryParam(searchParams, setSearchParams, 'period', event.target.value)
-              }
-            >
-              <option value="">Barcha davrlar</option>
-              {(references.periods.data ?? []).map((period) => (
-                <option key={period.id} value={period.id}>
-                  {period.label}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-          <FormField label="Filial" htmlFor="revenue-branch-filter">
-            <Select
-              id="revenue-branch-filter"
-              value={branch}
-              onChange={(event) =>
-                updateQueryParam(searchParams, setSearchParams, 'branch', event.target.value)
-              }
-            >
-              <option value="all">Barchasi</option>
-              {(references.branches.data ?? []).map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </Select>
-          </FormField>
+      <Card title="Qo‘shimcha filtrlar" className="mb-5">
+        <div className="grid gap-3 sm:grid-cols-2 xl:max-w-3xl">
           <FormField label="Boshlanish sanasi" htmlFor="revenue-date-from">
             <Input
               id="revenue-date-from"
@@ -268,7 +250,7 @@ export function RevenueLedgerPage() {
               variant="ghost"
               className="w-full"
               disabled={!hasFilters}
-              onClick={() => setSearchParams(new URLSearchParams(), { replace: true })}
+              onClick={clearLocalFilters}
             >
               <FilterX className="h-4 w-4" /> Filtrlarni tozalash
             </Button>
@@ -353,7 +335,7 @@ function RevenueAmountFields({
         htmlFor={`${prefix}-total`}
         hint="Uch kanal yig‘indisi; serverda qayta hisoblanadi."
       >
-        <Input id={`${prefix}-total`} readOnly value={`${total} so‘m`} />
+        <Input id={`${prefix}-total`} readOnly value={formatMoney(total)} />
       </FormField>
     </>
   );
@@ -388,8 +370,7 @@ export function RevenueCreatePage() {
     references.branches.data ?? [],
     currentUser?.writeBranchScopes,
   );
-  const fixedWriteBranch =
-    writableBranches.length === 1 ? (writableBranches[0] ?? null) : null;
+  const fixedWriteBranch = writableBranches.length === 1 ? (writableBranches[0] ?? null) : null;
   const canChooseBranch = writableBranches.length > 1;
   const hasNoWritableBranch = Boolean(currentUser) && writableBranches.length === 0;
   const watchedDate = watch('businessDate');
@@ -440,9 +421,7 @@ export function RevenueCreatePage() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <Breadcrumbs
-        items={[{ label: 'Kunlik tushum' }, { label: 'Yangi yozuv', current: true }]}
-      />
+      <Breadcrumbs items={[{ label: 'Kunlik tushum' }, { label: 'Yangi yozuv', current: true }]} />
       <PageHeader
         title="Kunlik tushum kiritish"
         description="Bir kun va bir filial uchun bitta yozuv. Hisob davri sanadan serverda aniqlanadi."
@@ -689,7 +668,10 @@ export function RevenueDetailPage() {
   return (
     <div>
       <Breadcrumbs
-        items={[{ label: 'Kunlik tushum' }, { label: formatDate(revenue.businessDate), current: true }]}
+        items={[
+          { label: 'Kunlik tushum' },
+          { label: formatDate(revenue.businessDate), current: true },
+        ]}
       />
       <PageHeader
         title={`${formatDateLong(revenue.businessDate)} · ${revenue.branchName}`}
@@ -833,7 +815,15 @@ export function RevenuePlanPage() {
                 downloadCsv(
                   `tushum-rejasi-${planQuery.data.periodLabel.replace(/\s+/g, '-').toLowerCase()}`,
                   [
-                    ['Davr', 'Filial', 'Oylik reja', 'Kunlik reja', 'Amalda', 'Farq', 'Bajarilish %'],
+                    [
+                      'Davr',
+                      'Filial',
+                      'Oylik reja',
+                      'Kunlik reja',
+                      'Amalda',
+                      'Farq',
+                      'Bajarilish %',
+                    ],
                     ...planQuery.data.lines.map((line) => [
                       planQuery.data.periodLabel,
                       line.branchName,
@@ -857,29 +847,6 @@ export function RevenuePlanPage() {
           </>
         }
       />
-
-      <Card title="Hisob davri" className="mb-5">
-        {periodsQuery.isLoading ? <LoadingState label="Davrlar yuklanmoqda…" /> : null}
-        {periodsQuery.data ? (
-          <div className="max-w-md">
-            <FormField label="Davr" htmlFor="revenue-plan-period">
-              <Select
-                id="revenue-plan-period"
-                value={selectedPeriodId}
-                onChange={(event) =>
-                  setSearchParams({ period: event.target.value }, { replace: true })
-                }
-              >
-                {periodsQuery.data.map((period) => (
-                  <option key={period.id} value={period.id}>
-                    {period.label} — {period.status === 'open' ? 'Ochiq' : 'Yopiq'}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
-          </div>
-        ) : null}
-      </Card>
 
       {selectedPeriod?.status === 'closed' ? (
         <LockedNotice>Yopilgan davr rejasi tahrirlanmaydi, faqat ko‘rish mumkin.</LockedNotice>
@@ -919,60 +886,58 @@ export function RevenuePlanPage() {
                 </thead>
                 <tbody>
                   {planQuery.data.lines
-                    .filter(
-                      (line) => planBranch === 'all' || line.branchId === planBranch,
-                    )
+                    .filter((line) => planBranch === 'all' || line.branchId === planBranch)
                     .map((line) => {
-                    const draft = drafts[line.branchId] ?? null;
-                    const dailyPlan =
-                      draft === null
-                        ? null
-                        : (BigInt(draft || '0') / BigInt(planQuery.data.daysInMonth)).toString();
-                    const variance =
-                      draft === null
-                        ? null
-                        : (BigInt(draft || '0') - BigInt(line.actualAmountUzs)).toString();
-                    return (
-                      <tr key={line.id} className="border-b border-border last:border-0">
-                        <th scope="row" className="px-4 py-3 text-left font-semibold text-ink">
-                          {line.branchName}
-                        </th>
-                        <td className="min-w-52 px-4 py-3 text-right">
-                          {canEdit ? (
-                            <CurrencyInput
-                              aria-label={`${line.branchName} oylik tushum rejasi`}
-                              value={draft ?? '0'}
-                              onChange={(event) => {
-                                if (/^\d*$/.test(event.target.value))
-                                  setDrafts((current) => ({
-                                    ...current,
-                                    [line.branchId]: event.target.value || '0',
-                                  }));
-                              }}
-                            />
-                          ) : (
-                            <MoneyText value={draft} className="font-semibold text-ink" />
-                          )}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-right text-slate-700">
-                          <MoneyText value={dailyPlan} />
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-right font-semibold">
-                          <MoneyText value={line.actualAmountUzs} />
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-right">
-                          {variance === null ? (
-                            <span className="text-sm text-muted">—</span>
-                          ) : (
-                            <VarianceText value={variance} />
-                          )}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-right font-semibold">
-                          <PercentText value={line.completionPercent} />
-                        </td>
-                      </tr>
-                    );
-                  })}
+                      const draft = drafts[line.branchId] ?? null;
+                      const dailyPlan =
+                        draft === null
+                          ? null
+                          : (BigInt(draft || '0') / BigInt(planQuery.data.daysInMonth)).toString();
+                      const variance =
+                        draft === null
+                          ? null
+                          : (BigInt(draft || '0') - BigInt(line.actualAmountUzs)).toString();
+                      return (
+                        <tr key={line.id} className="border-b border-border last:border-0">
+                          <th scope="row" className="px-4 py-3 text-left font-semibold text-ink">
+                            {line.branchName}
+                          </th>
+                          <td className="min-w-52 px-4 py-3 text-right">
+                            {canEdit ? (
+                              <CurrencyInput
+                                aria-label={`${line.branchName} oylik tushum rejasi`}
+                                value={draft ?? '0'}
+                                onChange={(event) => {
+                                  if (/^\d*$/.test(event.target.value))
+                                    setDrafts((current) => ({
+                                      ...current,
+                                      [line.branchId]: event.target.value || '0',
+                                    }));
+                                }}
+                              />
+                            ) : (
+                              <MoneyText value={draft} className="font-semibold text-ink" />
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-right text-slate-700">
+                            <MoneyText value={dailyPlan} />
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-right font-semibold">
+                            <MoneyText value={line.actualAmountUzs} />
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-right">
+                            {variance === null ? (
+                              <span className="text-sm text-muted">—</span>
+                            ) : (
+                              <VarianceText value={variance} />
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-right font-semibold">
+                            <PercentText value={line.completionPercent} />
+                          </td>
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
             </div>

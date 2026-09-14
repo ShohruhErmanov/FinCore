@@ -33,6 +33,13 @@ describe('SessionService', () => {
     expect(ids.size).toBe(50);
   });
 
+  it('bounds active sessions per user and evicts the oldest login', () => {
+    const ids = Array.from({ length: 11 }, () => sessions.create('user-1'));
+    expect(sessions.resolve(ids[0]!)).toBeNull();
+    expect(sessions.resolve(ids[1]!)).toBe('user-1');
+    expect(sessions.resolve(ids[10]!)).toBe('user-1');
+  });
+
   it('rejects an unknown identifier', () => {
     expect(sessions.resolve('soxta-qiymat')).toBeNull();
   });

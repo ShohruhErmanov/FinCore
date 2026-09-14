@@ -8,7 +8,13 @@ import { invalidatePlanningAggregates } from '@/shared/api/invalidation';
 import { downloadCsv } from '@/shared/lib/csv';
 import { queryKeys } from '@/shared/api/query-keys';
 import { formatDateTime, formatPercent } from '@/shared/lib/format';
-import type { BudgetLine, BudgetPlan, ExpenseType } from '@/shared/types/domain';
+import type {
+  BudgetHistory,
+  BudgetHistoryPeriod,
+  BudgetLine,
+  BudgetPlan,
+  ExpenseType,
+} from '@/shared/types/domain';
 import {
   Alert,
   Breadcrumbs,
@@ -16,21 +22,22 @@ import {
   Card,
   CurrencyInput,
   ErrorState,
-  FormField,
   LoadingState,
   LockedNotice,
   MoneyText,
   PageHeader,
-  Select,
+  Textarea,
   VarianceText,
 } from '@/shared/ui';
 
 type BudgetLineDraft = Pick<
   BudgetLine,
-  'id' | 'branchId' | 'categoryId' | 'hasPlan' | 'plannedAmountUzs'
+  'id' | 'branchId' | 'categoryId' | 'hasPlan' | 'plannedAmountUzs' | 'reason'
 >;
 
-function getLinePresentation(line: Pick<BudgetLine, 'hasPlan' | 'plannedAmountUzs' | 'actualAmountUzs' | 'varianceUzs'>) {
+function getLinePresentation(
+  line: Pick<BudgetLine, 'hasPlan' | 'plannedAmountUzs' | 'actualAmountUzs' | 'varianceUzs'>,
+) {
   if (!line.hasPlan || line.plannedAmountUzs === null)
     return {
       label: 'Reja mavjud emas',
@@ -131,6 +138,20 @@ function BudgetLineRow({
           <p className="mt-1 text-xs text-info">0 so‘m — valid nol reja</p>
         ) : null}
       </td>
+      <td className="min-w-64 px-4 py-3">
+        {editable && draft.hasPlan ? (
+          <Textarea
+            aria-label={`${line.branchName}, ${line.categoryNameSnapshot} izoh yoki sabab`}
+            value={draft.reason ?? ''}
+            maxLength={1000}
+            className="min-h-20"
+            placeholder="Izoh yoki reja sababi"
+            onChange={(event) => onChange({ ...draft, reason: event.target.value || null })}
+          />
+        ) : (
+          <span className="text-sm text-slate-700">{draft.reason || '—'}</span>
+        )}
+      </td>
       <td className="whitespace-nowrap px-4 py-3 text-right">
         <MoneyText value={line.actualAmountUzs} className="font-semibold" />
       </td>
@@ -190,7 +211,17 @@ function SummaryBlock({
 
 function exportBudgetPlan(plan: BudgetPlan) {
   downloadCsv(`budjet-${plan.periodLabel.replace(/\s+/g, '-').toLowerCase()}`, [
-    ['Davr', 'Kategoriya', 'Turi', 'Filial', 'Reja mavjud', 'Reja', 'Fakt', 'Farq (reja−fakt)'],
+    [
+      'Davr',
+      'Kategoriya',
+      'Turi',
+      'Filial',
+      'Reja mavjud',
+      'Reja',
+      'Izoh / sabab',
+      'Fakt',
+      'Farq (reja−fakt)',
+    ],
     ...plan.lines.map((line) => [
       plan.periodLabel,
       line.categoryNameSnapshot,
@@ -198,6 +229,7 @@ function exportBudgetPlan(plan: BudgetPlan) {
       line.branchName,
       line.hasPlan ? 'Ha' : 'Yo‘q',
       line.plannedAmountUzs,
+      line.reason,
       line.actualAmountUzs,
       line.varianceUzs,
     ]),
@@ -221,11 +253,30 @@ export function BudgetPage() {
     periodsQuery.data?.[0]?.id ??
     '';
   const selectedPeriod = periodsQuery.data?.find((period) => period.id === selectedPeriodId);
+  const historyYear = selectedPeriod?.year;
   const planQuery = useQuery({
     queryKey: queryKeys.budget(selectedPeriodId),
     queryFn: ({ signal }) => budgetApi.get(selectedPeriodId, signal),
     enabled: Boolean(selectedPeriodId),
   });
+  const historyQuery = useQuery({
+    queryKey: queryKeys.budgetHistory(historyYear),
+    queryFn: ({ signal }) => budgetApi.history(historyYear, signal),
+    enabled: Boolean(selectedPeriod),
+  });
+  const selectedMonthHistory = useMemo(
+    () =>
+      historyQuery.data && selectedPeriod
+        ? {
+            ...historyQuery.data,
+            periods: historyQuery.data.periods.filter(
+              (period) =>
+                period.year === selectedPeriod.year && period.month === selectedPeriod.month,
+            ),
+          }
+        : undefined,
+    [historyQuery.data, selectedPeriod],
+  );
 
   useEffect(() => {
     if (!searchParams.get('period') && selectedPeriodId) {
@@ -247,6 +298,7 @@ export function BudgetPage() {
               categoryId: line.categoryId,
               hasPlan: line.hasPlan,
               plannedAmountUzs: line.plannedAmountUzs,
+              reason: line.reason,
             },
           ]),
         ),
@@ -260,11 +312,13 @@ export function BudgetPage() {
         branchId: line.branchId,
         categoryId: line.categoryId,
         plannedAmountUzs: line.hasPlan ? (line.plannedAmountUzs ?? '0') : null,
+        reason: line.hasPlan ? line.reason : null,
       }));
       return budgetApi.saveLines(selectedPeriodId, inputs);
     },
     onSuccess: async (updated: BudgetPlan) => {
       queryClient.setQueryData(queryKeys.budget(updated.periodId), updated);
+      await queryClient.invalidateQueries({ queryKey: ['budget-history'] });
       await invalidatePlanningAggregates(queryClient);
     },
   });
@@ -296,38 +350,13 @@ export function BudgetPage() {
         }
       />
 
-      <Card
-        title="Hisob davri"
-        description="Ochiq va tarixiy davrlarni alohida ko‘ring."
-        className="mb-5"
-      >
-        {periodsQuery.isLoading ? <LoadingState label="Davrlar yuklanmoqda…" /> : null}
-        {periodsQuery.isError ? (
-          <ErrorState
-            message={getApiErrorMessage(periodsQuery.error)}
-            onRetry={() => void periodsQuery.refetch()}
-          />
-        ) : null}
-        {periodsQuery.data ? (
-          <div className="max-w-md">
-            <FormField label="Davr" htmlFor="budget-period-filter">
-              <Select
-                id="budget-period-filter"
-                value={selectedPeriodId}
-                onChange={(event) =>
-                  setSearchParams({ period: event.target.value }, { replace: true })
-                }
-              >
-                {periodsQuery.data.map((period) => (
-                  <option key={period.id} value={period.id}>
-                    {period.label} — {period.status === 'open' ? 'Ochiq' : 'Yopiq'}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
-          </div>
-        ) : null}
-      </Card>
+      {periodsQuery.isLoading ? <LoadingState label="Davr yuklanmoqda…" /> : null}
+      {periodsQuery.isError ? (
+        <ErrorState
+          message={getApiErrorMessage(periodsQuery.error)}
+          onRetry={() => void periodsQuery.refetch()}
+        />
+      ) : null}
 
       {selectedPeriod?.status === 'closed' ? (
         <LockedNotice>Yopilgan davr budjeti tahrirlanmaydi, faqat ko‘rish mumkin.</LockedNotice>
@@ -354,6 +383,39 @@ export function BudgetPage() {
           onChangeLine={(next) => setDrafts((current) => ({ ...current, [next.id]: next }))}
         />
       ) : null}
+
+      <Card
+        title="Budjet tarixi"
+        description="Navbar’da tanlangan hisob oyi: kategoriya turi, filial rejasi, jami va izoh bilan."
+        className="mt-6"
+      >
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted">
+            Tanlangan davr:{' '}
+            <strong className="font-semibold text-ink">{selectedPeriod?.label ?? '—'}</strong>
+          </p>
+          <Button
+            variant="secondary"
+            disabled={!selectedMonthHistory?.periods.length}
+            onClick={() =>
+              selectedMonthHistory && exportBudgetHistory(selectedMonthHistory, branch)
+            }
+          >
+            <Download className="h-4 w-4" /> Tanlangan oyni CSV yuklab olish
+          </Button>
+        </div>
+
+        {historyQuery.isLoading ? <LoadingState label="Budjet tarixi yuklanmoqda…" /> : null}
+        {historyQuery.isError ? (
+          <ErrorState
+            message={getApiErrorMessage(historyQuery.error)}
+            onRetry={() => void historyQuery.refetch()}
+          />
+        ) : null}
+        {selectedMonthHistory ? (
+          <BudgetHistoryBlocks history={selectedMonthHistory} branch={branch} />
+        ) : null}
+      </Card>
     </div>
   );
 }
@@ -389,9 +451,7 @@ function BudgetPageContent({
         <SummaryBlock label="Doimiy xarajat" type="fixed" lines={lines} />
         <SummaryBlock label="O‘zgaruvchan xarajat" type="variable" lines={lines} />
         <div className="rounded-card border border-border bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-            Oxirgi saqlash
-          </p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Oxirgi saqlash</p>
           <p className="mt-3 text-sm text-slate-700">{updatedLabel}</p>
         </div>
       </div>
@@ -414,6 +474,7 @@ function BudgetPageContent({
                 <th className="px-4 py-3">Filial</th>
                 <th className="px-4 py-3">Reja mavjudligi</th>
                 <th className="px-4 py-3 text-right">Reja</th>
+                <th className="px-4 py-3">Izoh / sabab</th>
                 <th className="px-4 py-3 text-right">Fakt</th>
                 <th className="px-4 py-3 text-right">Farq</th>
                 <th className="px-4 py-3">Holat</th>
@@ -431,6 +492,7 @@ function BudgetPageContent({
                       categoryId: line.categoryId,
                       hasPlan: line.hasPlan,
                       plannedAmountUzs: line.plannedAmountUzs,
+                      reason: line.reason,
                     }
                   }
                   editable={editable}
@@ -459,5 +521,196 @@ function BudgetPageContent({
         </p>
       ) : null}
     </>
+  );
+}
+
+function exportBudgetHistory(history: BudgetHistory, branchFilter: string) {
+  const visibleBranches = history.branches.filter(
+    (branch) => branchFilter === 'all' || branch.id === branchFilter,
+  );
+  downloadCsv(`budjet-tarixi-${history.year ?? 'barcha-yillar'}`, [
+    [
+      'Yil',
+      'Oy',
+      'Oy nomi',
+      'Xarajat kategoriyasi',
+      'Turi',
+      ...visibleBranches.map((branch) => `${branch.name} reja`),
+      'Jami reja',
+      'Izoh / sabab',
+      'Versiya',
+      'Holat',
+    ],
+    ...history.periods.flatMap((period) =>
+      period.rows.map((row) => {
+        const visiblePlans = row.branches.filter(
+          (plan) => branchFilter === 'all' || plan.branchId === branchFilter,
+        );
+        const planned = visiblePlans.filter((plan) => plan.hasPlan);
+        const total =
+          planned.length === 0
+            ? null
+            : planned
+                .reduce((sum, plan) => sum + BigInt(plan.plannedAmountUzs ?? '0'), 0n)
+                .toString();
+        return [
+          period.year,
+          period.month,
+          period.periodLabel.replace(String(period.year), '').trim(),
+          row.categoryNameSnapshot,
+          row.expenseTypeSnapshot === 'fixed' ? 'Doimiy' : 'O‘zgaruvchan',
+          ...visiblePlans.map((plan) => plan.plannedAmountUzs),
+          total,
+          getVisibleHistoryReason(row.branches, branchFilter, row.reason),
+          period.revisionNo,
+          period.versionStatus,
+        ];
+      }),
+    ),
+  ]);
+}
+
+function getVisibleHistoryReason(
+  plans: BudgetHistoryPeriod['rows'][number]['branches'],
+  branchFilter: string,
+  combinedReason: string | null,
+) {
+  if (branchFilter === 'all') return combinedReason;
+  return plans.find((plan) => plan.branchId === branchFilter)?.reason ?? null;
+}
+
+function BudgetHistoryBlocks({ history, branch }: { history: BudgetHistory; branch: string }) {
+  const visibleBranches = history.branches.filter((item) => branch === 'all' || item.id === branch);
+  if (history.periods.length === 0)
+    return (
+      <Alert title="Tarix mavjud emas" tone="info">
+        Navbar’da tanlangan oy uchun budjet tarixi topilmadi.
+      </Alert>
+    );
+
+  return (
+    <div className="space-y-6">
+      {history.periods.map((period) => (
+        <BudgetHistoryMonth key={period.periodId} period={period} branch={branch} />
+      ))}
+      {visibleBranches.length === 0 ? (
+        <Alert title="Filial topilmadi" tone="warning">
+          Navbar orqali tanlangan filial budjet tarixida mavjud emas.
+        </Alert>
+      ) : null}
+    </div>
+  );
+}
+
+function BudgetHistoryMonth({ period, branch }: { period: BudgetHistoryPeriod; branch: string }) {
+  const visibleBranches = period.totalsByBranch.filter(
+    (item) => branch === 'all' || item.branchId === branch,
+  );
+  const plannedTotals = visibleBranches.filter((item) => item.hasPlan);
+  const visibleTotal =
+    plannedTotals.length === 0
+      ? null
+      : plannedTotals
+          .reduce((sum, item) => sum + BigInt(item.plannedAmountUzs ?? '0'), 0n)
+          .toString();
+  const metadata = [
+    period.revisionNo === null ? 'Versiya mavjud emas' : `Reviziya ${period.revisionNo}`,
+    period.versionStatus ?? 'rejasiz',
+    period.updatedAt
+      ? `${period.updatedByName || 'Noma’lum xodim'} · ${formatDateTime(period.updatedAt)}`
+      : null,
+  ].filter(Boolean);
+
+  return (
+    <section className="overflow-hidden rounded-card border border-border bg-white">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-4">
+        <div>
+          <h3 className="text-base font-bold text-ink">{period.periodLabel}</h3>
+          <p className="mt-1 text-xs text-muted">{metadata.join(' · ')}</p>
+          {period.versionReason ? (
+            <p className="mt-2 text-sm text-slate-700">Versiya sababi: {period.versionReason}</p>
+          ) : null}
+        </div>
+        <div className="text-right">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Oy jami</p>
+          <MoneyText value={visibleTotal} className="mt-1 text-lg font-bold text-ink" />
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table
+          className="w-full min-w-[980px] text-left"
+          aria-label={`${period.periodLabel} budjet tarixi`}
+        >
+          <thead>
+            <tr className="border-b border-border bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
+              <th className="px-4 py-3">Xarajat kategoriyasi</th>
+              <th className="px-4 py-3">Turi</th>
+              {visibleBranches.map((item) => (
+                <th key={item.branchId} className="px-4 py-3 text-right">
+                  {item.branchName} reja
+                </th>
+              ))}
+              <th className="px-4 py-3 text-right">Jami reja</th>
+              <th className="px-4 py-3">Izoh / sabab</th>
+            </tr>
+          </thead>
+          <tbody>
+            {period.rows.map((row) => {
+              const visiblePlans = row.branches.filter(
+                (plan) => branch === 'all' || plan.branchId === branch,
+              );
+              const planned = visiblePlans.filter((plan) => plan.hasPlan);
+              const total =
+                planned.length === 0
+                  ? null
+                  : planned
+                      .reduce((sum, plan) => sum + BigInt(plan.plannedAmountUzs ?? '0'), 0n)
+                      .toString();
+              return (
+                <tr key={row.categoryId} className="border-b border-border last:border-0">
+                  <th scope="row" className="min-w-64 px-4 py-3 text-sm font-semibold text-ink">
+                    {row.categoryNameSnapshot}
+                  </th>
+                  <td className="whitespace-nowrap px-4 py-3 text-sm text-muted">
+                    {row.expenseTypeSnapshot === 'fixed' ? 'Doimiy' : 'O‘zgaruvchan'}
+                  </td>
+                  {visiblePlans.map((plan) => (
+                    <td key={plan.branchId} className="whitespace-nowrap px-4 py-3 text-right">
+                      {plan.hasPlan ? (
+                        <MoneyText value={plan.plannedAmountUzs} />
+                      ) : (
+                        <span className="text-sm text-muted">Reja mavjud emas</span>
+                      )}
+                    </td>
+                  ))}
+                  <td className="whitespace-nowrap px-4 py-3 text-right font-semibold">
+                    <MoneyText value={total} />
+                  </td>
+                  <td className="min-w-64 px-4 py-3 text-sm text-slate-700">
+                    {getVisibleHistoryReason(row.branches, branch, row.reason) || '—'}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="bg-slate-900 text-sm font-bold text-white">
+              <th colSpan={2} className="px-4 py-3">
+                OY JAMI
+              </th>
+              {visibleBranches.map((item) => (
+                <td key={item.branchId} className="px-4 py-3 text-right">
+                  <MoneyText value={item.plannedAmountUzs} />
+                </td>
+              ))}
+              <td className="px-4 py-3 text-right">
+                <MoneyText value={visibleTotal} />
+              </td>
+              <td className="px-4 py-3">{period.versionReason || '—'}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
   );
 }

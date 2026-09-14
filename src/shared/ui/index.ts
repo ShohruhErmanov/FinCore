@@ -1,4 +1,5 @@
 export * from './button';
+export * from './brand-mark';
 export * from './controls';
 export * from './data-display';
 export * from './feedback';

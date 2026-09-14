@@ -35,8 +35,8 @@ function revenue(branchId: string, businessDate: string, totalUzs: string): Dail
 
 describe('[FE-TG-01] summa va foiz formati', () => {
   it('summani bo‘shliq bilan ajratadi', () => {
-    expect(telegramMoney('300000000')).toBe("300 000 000 so'm");
-    expect(telegramMoney('-114800000')).toBe("−114 800 000 so'm");
+    expect(telegramMoney('300000000')).toBe('300 000 000 so‘m');
+    expect(telegramMoney('-114800000')).toBe('−114 800 000 so‘m');
     expect(telegramMoney(null)).toBe('—');
   });
 
@@ -123,11 +123,11 @@ describe('[FE-TG-03] xabar matnlari', () => {
     });
 
     expect(message).toContain('Avgust 2026 — oylik yakun');
-    expect(message).toContain("Amalda:  185 100 000 so'm");
+    expect(message).toContain('Amalda:  185 100 000 so‘m');
     expect(message).toContain('Bajarilish: 61,7%');
-    expect(message).toContain("Doimiy: 74 000 000 so'm (66,3%)");
+    expect(message).toContain('Doimiy: 74 000 000 so‘m (66,3%)');
     // Sof natija = tushum − xarajat
-    expect(message).toContain("NATIJA: 73 500 000 so'm");
+    expect(message).toContain('NATIJA: 73 500 000 so‘m');
     expect(message).toContain('• Sayxun');
   });
 
@@ -144,7 +144,7 @@ describe('[FE-TG-03] xabar matnlari', () => {
       variableExpenseUzs: '0',
       branches: [],
     });
-    expect(message).toContain("Doimiy: 0 so'm (—)");
+    expect(message).toContain('Doimiy: 0 so‘m (—)');
     expect(message).not.toContain('NaN');
     expect(message).not.toContain('Infinity');
   });

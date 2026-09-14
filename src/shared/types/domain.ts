@@ -31,6 +31,7 @@ export type RoleCode = 'cashier' | 'finance_manager' | 'director';
 export type UserStatus = 'active' | 'inactive' | 'blocked';
 export type ExpenseType = 'fixed' | 'variable';
 export type PeriodStatus = 'open' | 'closed';
+export type BudgetVersionStatus = 'draft' | 'submitted' | 'approved' | 'locked';
 export type TrendGranularity = 'daily' | 'weekly' | 'monthly';
 
 export interface Branch {
@@ -283,6 +284,7 @@ export interface BudgetLine {
   actualAmountUzs: MoneyUzs;
   varianceUzs: MoneyUzs | null;
   hasPlan: boolean;
+  reason: string | null;
 }
 
 export interface BudgetPlan {
@@ -292,6 +294,47 @@ export interface BudgetPlan {
   updatedAt: IsoDateTime;
   updatedByName: string;
   lines: BudgetLine[];
+}
+
+export interface BudgetHistoryBranchPlan {
+  branchId: UUID;
+  branchName: string;
+  plannedAmountUzs: MoneyUzs | null;
+  hasPlan: boolean;
+  reason: string | null;
+}
+
+export interface BudgetHistoryRow {
+  categoryId: UUID;
+  categoryCodeSnapshot: string;
+  categoryNameSnapshot: string;
+  expenseTypeSnapshot: ExpenseType;
+  branches: BudgetHistoryBranchPlan[];
+  totalPlannedAmountUzs: MoneyUzs | null;
+  reason: string | null;
+}
+
+export interface BudgetHistoryPeriod {
+  periodId: UUID;
+  year: number;
+  month: number;
+  periodLabel: string;
+  periodStatus: AccountingPeriod['status'];
+  budgetVersionId: UUID | null;
+  revisionNo: number | null;
+  versionStatus: BudgetVersionStatus | null;
+  versionReason: string | null;
+  updatedAt: IsoDateTime | null;
+  updatedByName: string;
+  rows: BudgetHistoryRow[];
+  totalsByBranch: BudgetHistoryBranchPlan[];
+  totalPlannedAmountUzs: MoneyUzs | null;
+}
+
+export interface BudgetHistory {
+  year: number | null;
+  branches: Array<Pick<Branch, 'id' | 'code' | 'name' | 'isActive'>>;
+  periods: BudgetHistoryPeriod[];
 }
 
 /** Bir kun + bir filial = bitta kunlik tushum yozuvi. */
@@ -405,6 +448,92 @@ export interface DashboardResponse {
     revenuePlanUzs: MoneyUzs;
     revenueActualUzs: MoneyUzs;
     revenueCompletionPct: number | null;
+  }>;
+}
+
+export interface ExpensePlanAnalytics {
+  period: {
+    id: UUID;
+    year: number;
+    month: number;
+    label: string;
+  };
+  branchFilter: UUID | 'all';
+  hasPlan: boolean;
+  summary: {
+    fixedPlanUzs: MoneyUzs;
+    variablePlanUzs: MoneyUzs;
+    totalPlanUzs: MoneyUzs;
+    branchCount: number;
+  };
+  branches: Array<{
+    branchId: UUID;
+    branchName: string;
+    hasPlan: boolean;
+    fixedPlanUzs: MoneyUzs;
+    variablePlanUzs: MoneyUzs;
+    totalPlanUzs: MoneyUzs;
+  }>;
+}
+
+export interface ExpenseAnalyticsBreakdown {
+  amountUzs: MoneyUzs;
+  transactionCount: number;
+  sharePct: number | null;
+}
+
+export interface ExpenseAnalyticsPaymentMethod extends ExpenseAnalyticsBreakdown {
+  id: UUID;
+  code: string;
+  name: string;
+}
+
+export interface ExpenseAnalytics {
+  filters: { from: IsoDate; to: IsoDate; branch: UUID | 'all' };
+  hasData: boolean;
+  planComparison: {
+    periodId: UUID;
+    periodLabel: string;
+    hasPlan: boolean;
+    plannedAmountUzs: MoneyUzs;
+    actualAmountUzs: MoneyUzs;
+    varianceUzs: MoneyUzs;
+    completionPct: number | null;
+  };
+  summary: {
+    totalAmountUzs: MoneyUzs;
+    transactionCount: number;
+    fixed: ExpenseAnalyticsBreakdown;
+    variable: ExpenseAnalyticsBreakdown;
+  };
+  paymentMethods: ExpenseAnalyticsPaymentMethod[];
+  branches: Array<{
+    branchId: UUID;
+    branchName: string;
+    totalAmountUzs: MoneyUzs;
+    transactionCount: number;
+    fixedAmountUzs: MoneyUzs;
+    variableAmountUzs: MoneyUzs;
+    paymentMethods: ExpenseAnalyticsPaymentMethod[];
+  }>;
+  categories: Array<{
+    categoryId: UUID;
+    categoryCodeSnapshot: string;
+    categoryNameSnapshot: string;
+    expenseTypeSnapshot: ExpenseType;
+    amountUzs: MoneyUzs;
+    transactionCount: number;
+    sharePct: number | null;
+  }>;
+  recentExpenses: Array<{
+    id: UUID;
+    transactionDate: IsoDate;
+    description: string;
+    amountUzs: MoneyUzs;
+    expenseTypeSnapshot: ExpenseType;
+    branchName: string;
+    categoryNameSnapshot: string;
+    paymentMethodName: string;
   }>;
 }
 

@@ -158,11 +158,12 @@ export class ExpensesService {
     await this.assertBranchActive(branchId);
     await this.assertReferencesActive(input);
 
-    const created = await this.prisma.withActor(this.actor.mint(user.id), async (tx) => {
-      // Raw INSERT: accounting_period_id and the three category snapshots are
-      // NOT NULL but populated by trg_expenses_derive_period_snapshot, which
-      // Prisma's typed create() cannot express.
-      const rows = await tx.$queryRaw<Array<{ id: string }>>`
+    const created = await this.prisma
+      .withActor(this.actor.mint(user.id), async (tx) => {
+        // Raw INSERT: accounting_period_id and the three category snapshots are
+        // NOT NULL but populated by trg_expenses_derive_period_snapshot, which
+        // Prisma's typed create() cannot express.
+        const rows = await tx.$queryRaw<Array<{ id: string }>>`
         INSERT INTO fincore.expenses (
           transaction_date, branch_id, category_id, description, amount_uzs,
           payment_method_id, department_id, responsible_user_id, comment,
@@ -182,10 +183,11 @@ export class ExpensesService {
         )
         RETURNING id
       `;
-      return rows[0]!.id;
-    }).catch((error: unknown) => {
-      throw this.translateWriteError(error);
-    });
+        return rows[0]!.id;
+      })
+      .catch((error: unknown) => {
+        throw this.translateWriteError(error);
+      });
 
     return this.detail(user, created);
   }
@@ -203,7 +205,8 @@ export class ExpensesService {
     await this.assertReferencesActive(input);
 
     const data: Prisma.expensesUncheckedUpdateInput = {};
-    if (input.transactionDate !== undefined) data.transaction_date = new Date(input.transactionDate);
+    if (input.transactionDate !== undefined)
+      data.transaction_date = new Date(input.transactionDate);
     if (input.categoryId !== undefined) data.category_id = input.categoryId;
     if (input.description !== undefined) data.description = input.description;
     if (input.amountUzs !== undefined) data.amount_uzs = BigInt(input.amountUzs);
@@ -224,13 +227,19 @@ export class ExpensesService {
 
   // -------------------------------------------------------------------------
 
-  private scopedWhere(user: AuthenticatedUser, query: ExpenseListQueryDto): Prisma.expensesWhereInput {
+  private scopedWhere(
+    user: AuthenticatedUser,
+    query: ExpenseListQueryDto,
+  ): Prisma.expensesWhereInput {
     const branch = pick(query.branch);
     const readable = user.permissions.includes('expense.view_all_branches')
       ? undefined
       : user.branchScopes;
 
-    const where: Prisma.expensesWhereInput = {};
+    // The public ledger is the operational/net expense feed. Reversed rows
+    // remain in the append-only table for audit, but must not be presented as
+    // active expenses (the DTO intentionally has no reversal status field).
+    const where: Prisma.expensesWhereInput = { status: 'approved', is_reversed: false };
     if (branch) where.branch_id = branch;
     else if (readable) where.branch_id = { in: readable };
     // A user with neither all-branch view nor any scope must see nothing.
@@ -278,7 +287,12 @@ export class ExpensesService {
   }
 
   private async assertReferencesActive(
-    input: Partial<Pick<ExpenseCreateDto, 'categoryId' | 'paymentMethodId' | 'departmentId' | 'responsibleUserId'>>,
+    input: Partial<
+      Pick<
+        ExpenseCreateDto,
+        'categoryId' | 'paymentMethodId' | 'departmentId' | 'responsibleUserId'
+      >
+    >,
   ): Promise<void> {
     const checks: Array<Promise<boolean>> = [];
     if (input.categoryId)
@@ -320,7 +334,11 @@ export class ExpensesService {
     if (/accounting period is closed|period is closed/i.test(message))
       return new ApiException(409, 'PERIOD_LOCKED', 'Yopilgan davrga yozuv qo‘shib bo‘lmaydi.');
     if (/actor context|signing key/i.test(message))
-      return new ApiException(500, 'ACTOR_CONTEXT_INVALID', 'Server identifikatsiya konteksti noto‘g‘ri.');
+      return new ApiException(
+        500,
+        'ACTOR_CONTEXT_INVALID',
+        'Server identifikatsiya konteksti noto‘g‘ri.',
+      );
     if (/violates check constraint|invalid input|out of range/i.test(message))
       return new ApiException(422, 'AMOUNT_INVALID', 'Kiritilgan qiymat qoidaga mos emas.');
     return error;

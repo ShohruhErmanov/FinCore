@@ -139,7 +139,10 @@ export function FilterBar({ children, className }: { children: ReactNode; classN
   return (
     <section
       aria-label="Filtrlar"
-      className={cn('rounded-card border border-border bg-white p-4 shadow-card', className)}
+      className={cn(
+        'rounded-card border border-border/90 bg-white/90 p-4 shadow-card backdrop-blur-sm',
+        className,
+      )}
     >
       {children}
     </section>
@@ -157,7 +160,7 @@ export function Tabs({
     <div
       role="tablist"
       aria-label={label}
-      className="flex gap-1 overflow-x-auto border-b border-border"
+      className="flex gap-1 overflow-x-auto rounded-xl bg-slate-100/80 p-1"
     >
       {items.map((item) => (
         <button
@@ -168,10 +171,10 @@ export function Tabs({
           tabIndex={item.selected ? 0 : -1}
           onClick={item.onSelect}
           className={cn(
-            'min-h-11 whitespace-nowrap border-b-2 px-4 text-sm font-semibold focus-visible:outline focus-visible:outline-2',
+            'min-h-10 whitespace-nowrap rounded-lg px-4 text-sm font-semibold transition-all focus-visible:outline focus-visible:outline-2',
             item.selected
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted hover:text-ink',
+              ? 'bg-white text-primary shadow-sm ring-1 ring-slate-200/80'
+              : 'text-muted hover:bg-white/60 hover:text-ink',
           )}
         >
           {item.label}

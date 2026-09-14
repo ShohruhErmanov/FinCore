@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   Bar,
   BarChart,
@@ -15,30 +15,24 @@ import { getApiErrorMessage } from '@/shared/api/client';
 import { downloadCsv } from '@/shared/lib/csv';
 import { referenceApi, reportApi } from '@/shared/api/contracts';
 import { queryKeys } from '@/shared/api/query-keys';
-import { routes } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/cn';
 import { formatMoney, formatPercent, toChartNumber } from '@/shared/lib/format';
-import { drilldownUrl } from '@/shared/lib/url';
 import type {
   BranchComparisonReport,
   ExpenseType,
   MonthlyReport,
-  MonthlyReportRow,
   PlanActual,
 } from '@/shared/types/domain';
 import {
-  Alert,
   Breadcrumbs,
   Button,
   Card,
   EmptyState,
   ErrorState,
-  FormField,
   LoadingState,
   MoneyText,
   PageHeader,
   PercentText,
-  Select,
   VarianceText,
 } from '@/shared/ui';
 import {
@@ -159,242 +153,126 @@ function PlanActualSummary({
   );
 }
 
-function ReportFilters({
-  year,
-  month,
-  branch,
-  onYear,
-  onMonth,
-  onBranch,
-  showMonth = false,
-  showBranch = true,
+type InsightTone = 'danger' | 'warning' | 'success' | 'neutral';
+
+interface ReportInsight {
+  key: string;
+  text: string;
+  detail: string;
+  tone: InsightTone;
+  priority: number;
+}
+
+const insightToneClass: Record<InsightTone, string> = {
+  danger: 'border-red-200 bg-red-50/70',
+  warning: 'border-amber-200 bg-amber-50/70',
+  success: 'border-green-200 bg-green-50/70',
+  neutral: 'border-slate-200 bg-slate-50',
+};
+
+function planActualInsight(key: string, subject: string, data: PlanActual): ReportInsight | null {
+  const actual = BigInt(data.actualAmountUzs);
+  const planned = data.plannedAmountUzs === null ? null : BigInt(data.plannedAmountUzs);
+  if (actual === 0n && planned === null) return null;
+  const detail = `Reja ${formatMoney(data.plannedAmountUzs)} · fakt ${formatMoney(data.actualAmountUzs)}`;
+  if (planned === null || planned === 0n) {
+    if (actual === 0n) return null;
+    return {
+      key,
+      text: `${subject} rejasiz ${formatMoney(data.actualAmountUzs)} sarflangan.`,
+      detail,
+      tone: 'warning',
+      priority: 10_000,
+    };
+  }
+  const completion = data.completionPercent ?? 0;
+  if (actual > planned)
+    return {
+      key,
+      text: `${subject} rejadan ${formatPercent(completion, 0)} oshgan.`,
+      detail,
+      tone: 'danger',
+      priority: completion,
+    };
+  if (actual < planned)
+    return {
+      key,
+      text: `${subject} rejaning ${formatPercent(completion, 0)}ini tashkil qilgan.`,
+      detail,
+      tone: 'success',
+      priority: 100 - completion,
+    };
+  return {
+    key,
+    text: `${subject} reja bilan aynan teng bajarilgan.`,
+    detail,
+    tone: 'neutral',
+    priority: 0,
+  };
+}
+
+function InsightList({
+  title,
+  description,
+  insights,
 }: {
-  year: string;
-  month?: string;
-  branch: string;
-  onYear: (value: string) => void;
-  onMonth?: (value: string) => void;
-  onBranch: (value: string) => void;
-  showMonth?: boolean;
-  showBranch?: boolean;
+  title: string;
+  description: string;
+  insights: ReportInsight[];
 }) {
-  const selectedYear = Number(year);
-  const currentYear = new Date().getFullYear();
-  const years = [
-    ...new Set([selectedYear, ...Array.from({ length: 7 }, (_, index) => currentYear - 4 + index)]),
-  ]
-    .filter((value) => Number.isInteger(value) && value >= 2000 && value <= 2100)
-    .sort((a, b) => b - a);
-  const branchesQuery = useQuery({
-    queryKey: queryKeys.branches,
-    queryFn: ({ signal }) => referenceApi.branches(signal),
-    staleTime: 300_000,
-  });
+  const visible = [...insights].sort((a, b) => b.priority - a.priority).slice(0, 8);
   return (
-    <Card title="Hisobot filtrlari" className="mb-5">
-      <div className="grid gap-4 sm:grid-cols-2 lg:max-w-3xl">
-        <FormField label="Yil" htmlFor={`report-year-${showBranch ? 'branch' : 'single'}`}>
-          <Select
-            id={`report-year-${showBranch ? 'branch' : 'single'}`}
-            value={year}
-            onChange={(event) => onYear(event.target.value)}
-          >
-            {years.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </Select>
-        </FormField>
-        {showMonth ? (
-          <FormField label="Oy" htmlFor="report-month">
-            <Select
-              id="report-month"
-              value={month}
-              onChange={(event) => onMonth?.(event.target.value)}
+    <Card title={title} description={description}>
+      {visible.length ? (
+        <div className="space-y-3">
+          {visible.map((insight) => (
+            <div
+              key={insight.key}
+              className={cn('rounded-xl border p-4', insightToneClass[insight.tone])}
             >
-              {monthLongNames.map((label, index) => (
-                <option key={label} value={index + 1}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-        ) : null}
-        {showBranch ? (
-          <FormField label="Filial" htmlFor="report-branch">
-            <Select
-              id="report-branch"
-              value={branch}
-              onChange={(event) => onBranch(event.target.value)}
-            >
-              <option value="all">Barchasi</option>
-              {(branchesQuery.data ?? []).map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-        ) : null}
-      </div>
+              <p className="font-semibold leading-6 text-ink">{insight.text}</p>
+              <p className="mt-1 text-xs text-muted">{insight.detail}</p>
+            </div>
+          ))}
+          {insights.length > visible.length ? (
+            <p className="text-xs text-muted">
+              Yana {insights.length - visible.length} ta natija CSV eksportida saqlangan.
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <p className="text-sm text-muted">
+          Tanlangan kontekstda tahlil qilinadigan xarajat topilmadi.
+        </p>
+      )}
     </Card>
   );
 }
 
-function MonthlyCell({
-  row,
-  month,
-  year,
-  branch,
-}: {
-  row: MonthlyReportRow;
-  month: MonthlyReportRow['months'][number];
-  year: number;
-  branch: string;
-}) {
-  const meta = reportStatusMeta(month.planActual.status);
-  const content = (
-    <div className="min-w-32 rounded-lg border border-transparent p-2 text-right hover:border-blue-200 hover:bg-blue-50/60">
-      <p className="font-bold text-ink">
-        <MoneyText value={month.planActual.actualAmountUzs} compact />
-      </p>
-      <p className="mt-1 text-[11px] text-muted">
-        Reja: <MoneyText value={month.planActual.plannedAmountUzs} compact />
-      </p>
-      <p
-        className={cn(
-          'mt-1 text-[10px] font-semibold',
-          meta.className.replace('bg-', 'text-').split(' ')[1] ?? 'text-muted',
-        )}
-      >
-        {meta.label}
-      </p>
-    </div>
-  );
-  if (month.transactionCount === 0) return content;
-  return (
-    <Link
-      aria-label={`${row.category.name}, ${monthLongNames[month.month - 1]} tranzaksiyalarini ochish`}
-      to={drilldownUrl(routes.expenses, {
-        year: String(year),
-        month: String(month.month),
-        branch,
-        category: row.category.id,
-      })}
-    >
-      {content}
-    </Link>
-  );
-}
-
-function MonthlySummaryCell({ value }: { value: MonthlyMoneySummary }) {
-  return (
-    <div className="min-w-32 px-2 py-2 text-right">
-      <p className="font-bold tabular-nums">
-        <MoneyText value={value.actualAmountUzs} compact />
-      </p>
-      <p className="mt-1 text-[11px] opacity-75">
-        Reja: <MoneyText value={value.plannedAmountUzs} compact />
-      </p>
-    </div>
-  );
-}
-
-function SectionHeaderRow({ title, tone }: { title: string; tone: 'fixed' | 'variable' }) {
-  return (
-    <tr>
-      <th
-        colSpan={17}
-        className={cn(
-          'sticky left-0 z-10 px-4 py-3 text-left text-sm font-extrabold uppercase tracking-wide',
-          tone === 'fixed' ? 'bg-blue-100 text-blue-950' : 'bg-orange-100 text-orange-950',
-        )}
-      >
-        {title}
-      </th>
-    </tr>
-  );
-}
-
-function MonthlySubtotalRow({
-  label,
-  summary,
-  tone,
-}: {
-  label: string;
-  summary: MonthlyReportSectionSummary;
-  tone: 'fixed' | 'variable' | 'overall';
-}) {
-  const rowTone = {
-    fixed: 'bg-blue-50 text-blue-950',
-    variable: 'bg-orange-50 text-orange-950',
-    overall: 'bg-emerald-100 text-emerald-950',
-  }[tone];
-  return (
-    <tr className={cn('border-y border-border font-bold', rowTone)}>
-      <th scope="row" className={cn('sticky left-0 z-10 px-4 py-3 text-left', rowTone)}>
-        {label}
-      </th>
-      <td className="whitespace-nowrap px-4 py-3 text-right">
-        <MoneyText value={summary.averageMonthlyPlanUzs} compact />
-      </td>
-      {summary.months.map((month, index) => (
-        <td key={index} className="px-1 py-1">
-          <MonthlySummaryCell value={month} />
-        </td>
-      ))}
-      <td className="whitespace-nowrap px-4 py-3 text-right">
-        <MoneyText value={summary.annual.actualAmountUzs} compact />
-      </td>
-      <td className="whitespace-nowrap px-4 py-3 text-right">
-        <MoneyText value={summary.annual.plannedAmountUzs} compact />
-      </td>
-      <td className="whitespace-nowrap px-4 py-3 text-right">
-        {summary.annual.varianceUzs === null ? (
-          '—'
-        ) : (
-          <VarianceText value={summary.annual.varianceUzs} />
-        )}
-      </td>
-    </tr>
-  );
-}
-
-function MonthlyCategoryRow({
-  row,
-  year,
-  branch,
-}: {
-  row: MonthlyReportRow;
-  year: number;
-  branch: string;
-}) {
-  return (
-    <tr className="border-b border-border bg-white">
-      <th scope="row" className="sticky left-0 z-10 bg-white px-4 py-3 text-left">
-        <p className="font-semibold text-ink">{row.category.name}</p>
-        <p className="mt-1 text-xs text-muted">{row.category.code}</p>
-      </th>
-      <td className="whitespace-nowrap px-4 py-3 text-right font-semibold">
-        <MoneyText value={averageMonthlyPlan(row.annual.plannedAmountUzs)} compact />
-      </td>
-      {row.months.map((month) => (
-        <td key={month.month} className="px-1 py-1">
-          <MonthlyCell row={row} month={month} year={year} branch={branch} />
-        </td>
-      ))}
-      <td className="whitespace-nowrap px-4 py-3 text-right font-bold text-ink">
-        <MoneyText value={row.annual.actualAmountUzs} compact />
-      </td>
-      <td className="whitespace-nowrap px-4 py-3 text-right font-semibold">
-        <MoneyText value={row.annual.plannedAmountUzs} compact />
-      </td>
-      <td className="whitespace-nowrap px-4 py-3 text-right">
-        {row.annual.varianceUzs === null ? '—' : <VarianceText value={row.annual.varianceUzs} />}
-      </td>
-    </tr>
-  );
+function monthlySummaryPlanActual(value: MonthlyMoneySummary): PlanActual {
+  const actual = BigInt(value.actualAmountUzs);
+  const planned = value.plannedAmountUzs === null ? null : BigInt(value.plannedAmountUzs);
+  const completionPercent =
+    planned === null || planned === 0n
+      ? null
+      : Number((actual * 10_000n + planned / 2n) / planned) / 100;
+  return {
+    hasPlan: planned !== null,
+    plannedAmountUzs: value.plannedAmountUzs,
+    actualAmountUzs: value.actualAmountUzs,
+    varianceUzs: value.varianceUzs,
+    completionPercent,
+    status:
+      planned === null
+        ? actual > 0n
+          ? 'unplanned'
+          : 'no_plan'
+        : actual > planned
+          ? 'over_plan'
+          : actual < planned
+            ? 'under_plan'
+            : 'on_plan',
+  };
 }
 
 function exportMonthlyReport(report: MonthlyReport) {
@@ -448,175 +326,95 @@ function exportMonthlyReport(report: MonthlyReport) {
 }
 
 export function MonthlyReportPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const year = searchParams.get('year') ?? '2026';
+  const [searchParams] = useSearchParams();
+  const periodsQuery = useQuery({
+    queryKey: queryKeys.periods,
+    queryFn: ({ signal }) => referenceApi.periods(signal),
+    staleTime: 300_000,
+  });
+  const requestedPeriod = searchParams.get('period');
+  const selectedPeriod = periodsQuery.data?.find((period) => period.id === requestedPeriod);
+  const now = new Date();
+  const year = String(selectedPeriod?.year ?? now.getFullYear());
+  const month = selectedPeriod?.month ?? now.getMonth() + 1;
   const branch = searchParams.get('branch') ?? 'all';
-  const filterKey = `year=${year}&branch=${branch}`;
+  const filterKey = `year=${year}&month=${month}&branch=${branch}`;
   const reportQuery = useQuery({
     queryKey: queryKeys.report('monthly', filterKey),
     queryFn: ({ signal }) => reportApi.monthly({ year, branch }, signal),
+    enabled: !requestedPeriod || periodsQuery.isSuccess,
   });
-  const setFilter = (key: string, value: string) => {
-    const next = new URLSearchParams(searchParams);
-    next.set(key, value);
-    setSearchParams(next, { replace: true });
-  };
 
   return (
     <div>
       <Breadcrumbs items={[{ label: 'Hisobotlar' }, { label: 'Oylik hisobot', current: true }]} />
       <PageHeader
         title="Oylik hisobot"
-        description="Excel matritsasiga mos: doimiy va o‘zgaruvchan xarajatlar, 12 oy, yillik fakt, reja va farq. Fakt katagidan Jurnalga o‘ting."
+        description={`${monthLongNames[month - 1]} ${year} uchun reja-fakt va eng muhim xarajat xulosalari.`}
         actions={
           <Button
             variant="secondary"
             disabled={!reportQuery.data?.rows.length}
             onClick={() => reportQuery.data && exportMonthlyReport(reportQuery.data)}
           >
-            <Download className="h-4 w-4" /> CSV yuklab olish
+            <Download className="h-4 w-4" /> Yillik CSV yuklab olish
           </Button>
         }
       />
-      <ReportFilters
-        year={year}
-        branch={branch}
-        onYear={(value) => setFilter('year', value)}
-        onBranch={(value) => setFilter('branch', value)}
-      />
-      {reportQuery.isLoading ? <LoadingState label="Oylik hisobot hisoblanmoqda…" /> : null}
+      {reportQuery.isLoading || (requestedPeriod && periodsQuery.isLoading) ? (
+        <LoadingState label="Oylik hisobot hisoblanmoqda…" />
+      ) : null}
       {reportQuery.isError ? (
         <ErrorState
           message={getApiErrorMessage(reportQuery.error)}
           onRetry={() => void reportQuery.refetch()}
         />
       ) : null}
-      {reportQuery.data ? <MonthlyReportContent report={reportQuery.data} /> : null}
+      {reportQuery.data ? <MonthlyReportContent report={reportQuery.data} month={month} /> : null}
     </div>
   );
 }
 
-function MonthlyReportContent({ report }: { report: MonthlyReport }) {
+function MonthlyReportContent({ report, month }: { report: MonthlyReport; month: number }) {
   if (!report.rows.length)
     return (
       <EmptyState
         title="Hisobot ma’lumoti yo‘q"
-        description="Tanlangan yil va filial uchun kategoriya agregatlari topilmadi."
+        description="Navbar’da tanlangan oy va filial uchun kategoriya agregatlari topilmadi."
       />
     );
   const matrix = buildMonthlyReportMatrix(report);
-  const fixedRows = report.rows.filter((row) => row.category.expenseTypeSnapshot === 'fixed');
-  const variableRows = report.rows.filter((row) => row.category.expenseTypeSnapshot === 'variable');
+  const monthIndex = Math.max(0, Math.min(month - 1, 11));
+  const monthLabel = monthLongNames[monthIndex] ?? String(month);
+  const insights = report.rows
+    .map((row) => {
+      const selected = row.months.find((item) => item.month === month)?.planActual;
+      return selected
+        ? planActualInsight(row.category.id, `${row.category.name} xarajati`, selected)
+        : null;
+    })
+    .filter((item): item is ReportInsight => item !== null);
   return (
     <>
       <div className="mb-5 grid gap-4 lg:grid-cols-3">
-        <PlanActualSummary title="Doimiy jami" data={report.totals.fixed} />
-        <PlanActualSummary title="O‘zgaruvchan jami" data={report.totals.variable} />
-        <PlanActualSummary title="Umumiy jami" data={report.totals.overall} />
+        <PlanActualSummary
+          title="Doimiy jami"
+          data={monthlySummaryPlanActual(matrix.fixed.months[monthIndex]!)}
+        />
+        <PlanActualSummary
+          title="O‘zgaruvchan jami"
+          data={monthlySummaryPlanActual(matrix.variable.months[monthIndex]!)}
+        />
+        <PlanActualSummary
+          title="Umumiy jami"
+          data={monthlySummaryPlanActual(matrix.overall.months[monthIndex]!)}
+        />
       </div>
-      <Alert title="Excel bilan bir xil hisoblash tartibi" tone="info" className="mb-5">
-        “O‘rtacha oylik reja” yillik reja yig‘indisini 12 kalendar oyga bo‘lish orqali hisoblanadi.
-        Fakt mavjud oylar: <strong>{report.averagePolicy.denominator} ta</strong>. Reja mavjud
-        bo‘lmagan davrlar “reja yo‘q” holatida qoladi, nol reja deb talqin qilinmaydi.
-      </Alert>
-      <Card
-        title={`${report.year} yil · Oylik hisobot matritsasi`}
-        description="Excel tartibi saqlangan. Oy katagida yuqorida fakt, pastda shu oy rejasi ko‘rsatiladi."
-        className="overflow-hidden"
-      >
-        <div className="-m-5 overflow-x-auto">
-          <table className="min-w-[2450px] w-full text-sm">
-            <caption className="sr-only">{report.year} yil oylik plan-fakt hisoboti</caption>
-            <thead>
-              <tr className="border-b border-border bg-slate-50">
-                <th
-                  scope="col"
-                  className="sticky left-0 z-20 min-w-64 bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600"
-                >
-                  Kategoriya
-                </th>
-                <th
-                  scope="col"
-                  className="min-w-40 px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-600"
-                >
-                  O‘rtacha oylik reja
-                </th>
-                {monthLongNames.map((month) => (
-                  <th
-                    key={month}
-                    scope="col"
-                    className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-600"
-                  >
-                    {month}
-                  </th>
-                ))}
-                <th
-                  scope="col"
-                  className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-600"
-                >
-                  Yillik fakt
-                </th>
-                <th
-                  scope="col"
-                  className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-600"
-                >
-                  Yillik reja
-                </th>
-                <th
-                  scope="col"
-                  className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-600"
-                >
-                  Farq
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <SectionHeaderRow title="Doimiy xarajatlar" tone="fixed" />
-              {fixedRows.map((row) => (
-                <MonthlyCategoryRow
-                  key={row.category.id}
-                  row={row}
-                  year={report.year}
-                  branch={report.branchFilter}
-                />
-              ))}
-              <MonthlySubtotalRow label="DOIMIY JAMI" summary={matrix.fixed} tone="fixed" />
-
-              <SectionHeaderRow title="O‘zgaruvchan xarajatlar" tone="variable" />
-              {variableRows.map((row) => (
-                <MonthlyCategoryRow
-                  key={row.category.id}
-                  row={row}
-                  year={report.year}
-                  branch={report.branchFilter}
-                />
-              ))}
-              <MonthlySubtotalRow
-                label="O‘ZGARUVCHAN JAMI"
-                summary={matrix.variable}
-                tone="variable"
-              />
-              <MonthlySubtotalRow label="UMUMIY JAMI" summary={matrix.overall} tone="overall" />
-              <tr className="border-y border-border bg-violet-50 font-semibold text-violet-950">
-                <th scope="row" className="sticky left-0 z-10 bg-violet-50 px-4 py-3 text-left">
-                  DOIMIY XARAJAT ULUSHI
-                </th>
-                <td className="px-4 py-3 text-right text-muted">—</td>
-                {matrix.fixedShareByMonth.map((value, index) => (
-                  <td key={index} className="px-3 py-3 text-right tabular-nums">
-                    {formatPercent(value)}
-                  </td>
-                ))}
-                <td className="px-4 py-3 text-right font-bold tabular-nums">
-                  {formatPercent(matrix.fixedShareAnnual)}
-                </td>
-                <td className="px-4 py-3 text-right text-muted">—</td>
-                <td className="px-4 py-3 text-right text-muted">—</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <InsightList
+        title={`${monthLabel} ${report.year} · asosiy xulosalar`}
+        description="Uzun jadval o‘rniga reja-faktdagi eng muhim og‘ishlar. To‘liq ma’lumot CSV’da saqlanadi."
+        insights={insights}
+      />
     </>
   );
 }
@@ -724,21 +522,9 @@ export function BranchComparisonPage() {
   });
   const requestedPeriod = searchParams.get('period');
   const selectedPeriod = periodsQuery.data?.find((period) => period.id === requestedPeriod);
-  const legacyYear = Number(searchParams.get('year'));
-  const legacyMonth = Number(searchParams.get('month'));
   const now = new Date();
-  const year = String(
-    selectedPeriod?.year ??
-      (Number.isInteger(legacyYear) && legacyYear >= 2000 && legacyYear <= 2100
-        ? legacyYear
-        : now.getFullYear()),
-  );
-  const month = String(
-    selectedPeriod?.month ??
-      (Number.isInteger(legacyMonth) && legacyMonth >= 1 && legacyMonth <= 12
-        ? legacyMonth
-        : now.getMonth() + 1),
-  );
+  const year = String(selectedPeriod?.year ?? now.getFullYear());
+  const month = String(selectedPeriod?.month ?? now.getMonth() + 1);
   const branch = searchParams.get('branch') ?? 'all';
   const reportQuery = useQuery({
     queryKey: queryKeys.report('branches', `year=${year}&month=${month}&branch=${branch}`),
@@ -752,7 +538,7 @@ export function BranchComparisonPage() {
       />
       <PageHeader
         title="Filiallar taqqoslash"
-        description="Excel’dagi «2_filial_bitta_jadval»: tanlangan oyda kategoriya kesimi, ikki filial reja-fakti va mavjud yillik taqqoslashlar."
+        description={`${monthLongNames[Number(month) - 1]} ${year} uchun filiallar reja-fakti va muhim og‘ishlar.`}
         actions={
           <Button
             variant="secondary"
@@ -777,27 +563,22 @@ export function BranchComparisonPage() {
   );
 }
 
-function ExpensePlanActualCells({ data }: { data: PlanActual }) {
-  return (
-    <>
-      <td className="whitespace-nowrap px-4 py-3 text-right">
-        <MoneyText value={data.plannedAmountUzs} />
-      </td>
-      <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-ink">
-        <MoneyText value={data.actualAmountUzs} />
-      </td>
-      <td className="whitespace-nowrap px-4 py-3 text-right">
-        {data.varianceUzs === null ? '—' : <VarianceText value={data.varianceUzs} />}
-      </td>
-    </>
-  );
-}
-
-function TwoBranchMonthMatrix({ report }: { report: BranchComparisonReport }) {
+function BranchMonthInsights({ report }: { report: BranchComparisonReport }) {
   const selected = report.selectedMonth;
   const branchCount = selected.branches.length;
   const showCombinedTotal = branchCount > 1;
   const resultRows = showCombinedTotal ? [...selected.branches, selected.total] : selected.branches;
+  const insights = selected.rows
+    .flatMap((row) =>
+      row.branches.map((branch) =>
+        planActualInsight(
+          `${row.category.id}:${branch.branch.id}`,
+          `${branch.branch.name} filialida ${row.category.name} xarajati`,
+          branch.expense,
+        ),
+      ),
+    )
+    .filter((item): item is ReportInsight => item !== null);
   const chartData = selected.branches.map((item) => ({
     name: item.branch.name,
     plan: toChartNumber(item.expense.plannedAmountUzs ?? '0'),
@@ -805,161 +586,24 @@ function TwoBranchMonthMatrix({ report }: { report: BranchComparisonReport }) {
   }));
 
   return (
-    <section aria-labelledby="two-branch-month-title" className="mb-5 space-y-5">
-      <Card
-        title={
-          showCombinedTotal
-            ? 'Oylik xarajatlar — ikki filial bitta jadvalda'
-            : `Oylik xarajatlar — ${selected.branches[0]?.branch.name ?? 'filial kesimi'}`
-        }
-        description={`${report.year} yil · ${selected.label}. Reja tasdiqlangan budjetdan, fakt Jurnalning server agregatidan olinadi.`}
-        className="overflow-hidden"
-      >
-        <h2 id="two-branch-month-title" className="sr-only">
-          Ikki filial bitta jadval
-        </h2>
-        {selected.rows.length === 0 ? (
-          <EmptyState
-            title="Tanlangan oy uchun kategoriya ma’lumoti yo‘q"
-            description="Hisob davri yoki ruxsat doirasidagi filiallar mavjudligini tekshiring."
-          />
-        ) : (
-          <div className="-m-5 overflow-x-auto">
-            <table
-              aria-label={`${selected.label} ikki filial bitta jadval`}
-              className="w-full min-w-[1900px] text-sm"
-            >
-              <thead>
-                <tr className="border-b border-white text-xs font-extrabold uppercase tracking-wide text-white">
-                  <th rowSpan={2} className="bg-slate-800 px-4 py-3 text-left">
-                    Turi
-                  </th>
-                  <th rowSpan={2} className="bg-slate-800 px-4 py-3 text-left">
-                    Xarajat kategoriyasi
-                  </th>
-                  {selected.branches.map((item, index) => (
-                    <th
-                      key={item.branch.id}
-                      colSpan={3}
-                      className={cn(
-                        'px-4 py-3 text-center',
-                        index === 0 ? 'bg-blue-800' : 'bg-orange-700',
-                      )}
-                    >
-                      {item.branch.name} filiali
-                    </th>
-                  ))}
-                  {showCombinedTotal ? (
-                    <th colSpan={3} className="bg-emerald-700 px-4 py-3 text-center">
-                      Ikki filial jami
-                    </th>
-                  ) : null}
-                </tr>
-                <tr className="border-b border-white text-xs font-semibold uppercase tracking-wide text-white">
-                  {selected.branches.map((item, index) =>
-                    ['Reja', 'Fakt', 'Farq'].map((label) => (
-                      <th
-                        key={`${item.branch.id}:${label}`}
-                        className={cn(
-                          'px-4 py-3 text-right',
-                          index === 0 ? 'bg-blue-800' : 'bg-orange-700',
-                        )}
-                      >
-                        {label}
-                      </th>
-                    )),
-                  )}
-                  {showCombinedTotal
-                    ? ['Reja', 'Fakt', 'Farq'].map((label) => (
-                        <th key={label} className="bg-emerald-700 px-4 py-3 text-right">
-                          {label}
-                        </th>
-                      ))
-                    : null}
-                </tr>
-              </thead>
-              <tbody>
-                {selected.rows.map((row) => (
-                  <tr
-                    key={row.category.id}
-                    className="border-b border-border bg-white last:border-0"
-                  >
-                    <td className="px-4 py-3 text-muted">
-                      {row.category.expenseTypeSnapshot === 'fixed' ? 'Doimiy' : 'O‘zgaruvchan'}
-                    </td>
-                    <th scope="row" className="px-4 py-3 text-left font-semibold text-ink">
-                      {row.category.name}
-                    </th>
-                    {selected.branches.map((branch) => {
-                      const cell = row.branches.find((item) => item.branch.id === branch.branch.id);
-                      return cell ? (
-                        <ExpensePlanActualCells key={branch.branch.id} data={cell.expense} />
-                      ) : (
-                        <td key={branch.branch.id} colSpan={3} className="px-4 py-3 text-center">
-                          —
-                        </td>
-                      );
-                    })}
-                    {showCombinedTotal ? <ExpensePlanActualCells data={row.total.expense} /> : null}
-                  </tr>
-                ))}
-                <tr className="border-t-4 border-slate-800 bg-slate-100 font-bold text-slate-950">
-                  <th
-                    scope="row"
-                    colSpan={2}
-                    className="px-4 py-4 text-left text-sm uppercase tracking-wide"
-                  >
-                    Umumiy jami
-                  </th>
-                  {selected.branches.map((item) => (
-                    <ExpensePlanActualCells key={item.branch.id} data={item.expense} />
-                  ))}
-                  {showCombinedTotal ? (
-                    <ExpensePlanActualCells data={selected.total.expense} />
-                  ) : null}
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+    <section aria-label={`${selected.label} filiallar xulosasi`} className="mb-5 space-y-5">
+      <InsightList
+        title={`${selected.label} ${report.year} · muhim xulosalar`}
+        description="Kategoriya va filial kesimidagi eng muhim reja-fakt og‘ishlari. To‘liq jadval CSV’da saqlanadi."
+        insights={insights}
+      />
 
       <div className="grid gap-5 xl:grid-cols-2">
-        <Card
-          title="Filial natijasi"
-          description={`${selected.label} · Reja, fakt va ishlatilgan budjet ulushi`}
-        >
-          <div className="-m-5 overflow-x-auto">
-            <table aria-label="Filial natijasi" className="w-full min-w-[620px] text-sm">
-              <thead>
-                <tr className="border-b border-border bg-blue-800 text-xs font-semibold uppercase tracking-wide text-white">
-                  <th className="px-4 py-3 text-left">Filial</th>
-                  <th className="px-4 py-3 text-right">Reja</th>
-                  <th className="px-4 py-3 text-right">Fakt</th>
-                  <th className="px-4 py-3 text-right">Ishlatildi %</th>
-                </tr>
-              </thead>
-              <tbody>
-                {resultRows.map((item) => (
-                  <tr key={item.branch.id} className="border-b border-border last:border-0">
-                    <th scope="row" className="px-4 py-3 text-left font-semibold text-ink">
-                      {item.branch.name}
-                    </th>
-                    <td className="px-4 py-3 text-right">
-                      <MoneyText value={item.expense.plannedAmountUzs} />
-                    </td>
-                    <td className="px-4 py-3 text-right font-bold">
-                      <MoneyText value={item.expense.actualAmountUzs} />
-                    </td>
-                    <td className="px-4 py-3 text-right font-bold">
-                      <FixedReportPercent value={item.expense.completionPercent} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <div className="grid gap-4">
+          {resultRows.map((item) => (
+            <PlanActualSummary
+              key={item.branch.id}
+              title={item.branch.name}
+              data={item.expense}
+              fixedCompletion
+            />
+          ))}
+        </div>
         <Card title={`${selected.label}: Reja / Fakt`} description="Filiallar kesimi, UZS">
           <div
             role="img"
@@ -971,8 +615,9 @@ function TwoBranchMonthMatrix({ report }: { report: BranchComparisonReport }) {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="name" fontSize={12} />
                 <YAxis
-                  tickFormatter={(value: number) => `${Math.round(value / 1_000_000)}m`}
+                  tickFormatter={(value: number) => formatMoney(String(value))}
                   fontSize={11}
+                  width={130}
                 />
                 <Tooltip formatter={(value) => formatMoney(String(value))} />
                 <Legend />
@@ -1021,7 +666,7 @@ function BranchComparisonContent({ report }: { report: BranchComparisonReport })
   }));
   return (
     <>
-      <TwoBranchMonthMatrix report={report} />
+      <BranchMonthInsights report={report} />
       <div className="mb-5 grid gap-5 xl:grid-cols-3">
         {(showCombinedTotal ? [...reportBranches, report.annual.total] : reportBranches).map(
           (summary) => (
@@ -1047,8 +692,9 @@ function BranchComparisonContent({ report }: { report: BranchComparisonReport })
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="month" fontSize={12} />
                 <YAxis
-                  tickFormatter={(value: number) => `${Math.round(value / 1_000_000)}m`}
+                  tickFormatter={(value: number) => formatMoney(String(value))}
                   fontSize={11}
+                  width={130}
                 />
                 <Tooltip formatter={(value) => formatMoney(String(value))} />
                 <Legend />
@@ -1076,8 +722,9 @@ function BranchComparisonContent({ report }: { report: BranchComparisonReport })
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="name" fontSize={12} />
                 <YAxis
-                  tickFormatter={(value: number) => `${Math.round(value / 1_000_000)}m`}
+                  tickFormatter={(value: number) => formatMoney(String(value))}
                   fontSize={11}
+                  width={130}
                 />
                 <Tooltip formatter={(value) => formatMoney(String(value))} />
                 <Legend />
@@ -1088,135 +735,6 @@ function BranchComparisonContent({ report }: { report: BranchComparisonReport })
           </div>
         </Card>
       </div>
-      <Card
-        title="Oylik taqqoslash jadvali"
-        description="Grafikning matnli/jadval fallback’i va tranzaksiya drill-downi."
-        className="overflow-hidden"
-      >
-        <div className="-m-5 overflow-x-auto">
-          <table className="w-full min-w-[1540px] text-sm">
-            <caption className="sr-only">
-              {report.year} yil filiallar oylik taqqoslash jadvali
-            </caption>
-            <thead>
-              <tr className="border-b border-border bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
-                <th className="px-4 py-3 text-left">Oy</th>
-                {report.annual.branches.map((branch) => (
-                  <th key={`${branch.branch.id}:actual`} className="px-4 py-3 text-right">
-                    {branch.branch.name} fakt
-                  </th>
-                ))}
-                {showCombinedTotal ? <th className="px-4 py-3 text-right">Jami fakt</th> : null}
-                {report.annual.branches.map((branch) => (
-                  <th key={`${branch.branch.id}:plan`} className="px-4 py-3 text-right">
-                    {branch.branch.name} reja
-                  </th>
-                ))}
-                {showCombinedTotal ? <th className="px-4 py-3 text-right">Jami reja</th> : null}
-                <th className="px-4 py-3 text-right">Farq</th>
-                <th className="px-4 py-3 text-right">Bajarilish</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.months.map((month) => (
-                <tr key={month.month} className="border-b border-border last:border-0">
-                  <th scope="row" className="px-4 py-3 text-left font-semibold text-ink">
-                    {monthLongNames[month.month - 1]}
-                  </th>
-                  {report.annual.branches.map((annualBranch) => {
-                    const row = month.branches.find(
-                      (item) => item.branch.id === annualBranch.branch.id,
-                    );
-                    return (
-                      <td key={`${annualBranch.branch.id}:actual`} className="px-4 py-3 text-right">
-                        <Link
-                          className="font-semibold text-primary hover:underline"
-                          to={drilldownUrl(routes.expenses, {
-                            year: String(report.year),
-                            month: String(month.month),
-                            branch: annualBranch.branch.id,
-                          })}
-                        >
-                          <MoneyText value={row?.expense.actualAmountUzs ?? '0'} compact />
-                        </Link>
-                      </td>
-                    );
-                  })}
-                  {showCombinedTotal ? (
-                    <td className="px-4 py-3 text-right font-bold">
-                      <MoneyText value={month.total.expense.actualAmountUzs} compact />
-                    </td>
-                  ) : null}
-                  {report.annual.branches.map((annualBranch) => {
-                    const row = month.branches.find(
-                      (item) => item.branch.id === annualBranch.branch.id,
-                    );
-                    return (
-                      <td key={`${annualBranch.branch.id}:plan`} className="px-4 py-3 text-right">
-                        <MoneyText value={row?.expense.plannedAmountUzs ?? null} compact />
-                      </td>
-                    );
-                  })}
-                  {showCombinedTotal ? (
-                    <td className="px-4 py-3 text-right">
-                      <MoneyText value={month.total.expense.plannedAmountUzs} compact />
-                    </td>
-                  ) : null}
-                  <td className="px-4 py-3 text-right">
-                    {month.total.expense.varianceUzs === null ? (
-                      '—'
-                    ) : (
-                      <VarianceText value={month.total.expense.varianceUzs} />
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold">
-                    <FixedReportPercent value={month.total.expense.completionPercent} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-      <Card
-        title="Yillik yakun"
-        description="Excel shaklidagi filial kesimida yillik fakt, reja va reja bajarilishi."
-        className="mt-5 overflow-hidden"
-      >
-        <div className="-m-5 overflow-x-auto">
-          <table className="w-full min-w-[720px] text-sm">
-            <caption className="sr-only">
-              {report.year} yil filiallar yillik fakt, reja va reja bajarilishi
-            </caption>
-            <thead>
-              <tr className="border-b border-border bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
-                <th className="px-4 py-3 text-left">Filial</th>
-                <th className="px-4 py-3 text-right">Yillik fakt</th>
-                <th className="px-4 py-3 text-right">Yillik reja</th>
-                <th className="px-4 py-3 text-right">Reja bajarilishi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.annual.branches.map((summary) => (
-                <tr key={summary.branch.id} className="border-b border-border last:border-0">
-                  <th scope="row" className="px-4 py-3 text-left font-semibold text-ink">
-                    {summary.branch.name}
-                  </th>
-                  <td className="px-4 py-3 text-right font-bold">
-                    <MoneyText value={summary.expense.actualAmountUzs} compact />
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <MoneyText value={summary.expense.plannedAmountUzs} compact />
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold">
-                    <FixedReportPercent value={summary.expense.completionPercent} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
     </>
   );
 }

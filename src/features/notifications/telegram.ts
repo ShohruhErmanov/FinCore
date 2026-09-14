@@ -5,7 +5,7 @@ export function telegramMoney(value: MoneyUzs | null | undefined): string {
   if (value === null || value === undefined) return '—';
   const negative = value.startsWith('-');
   const digits = (negative ? value.slice(1) : value).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-  return `${negative ? '−' : ''}${digits} so'm`;
+  return `${negative ? '−' : ''}${digits} so‘m`;
 }
 
 export function telegramPercent(value: number | null | undefined): string {
@@ -92,8 +92,7 @@ export function buildMonthlyReportMessage(data: MonthlyReportInput): string {
   const fixed = BigInt(data.fixedExpenseUzs);
   const variable = BigInt(data.variableExpenseUzs);
   const totalExpense = fixed + variable;
-  const fixedShare =
-    totalExpense === 0n ? null : Number((fixed * 1000n) / totalExpense) / 10;
+  const fixedShare = totalExpense === 0n ? null : Number((fixed * 1000n) / totalExpense) / 10;
   const net = BigInt(data.revenueActualUzs) - BigInt(data.expenseActualUzs);
 
   return [

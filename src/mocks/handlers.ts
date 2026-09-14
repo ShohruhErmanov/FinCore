@@ -3,10 +3,12 @@ import type {
   AccountingPeriod,
   AnnualExpenseSummary,
   AuthenticatedUser,
+  BudgetHistory,
   BudgetPlan,
   DailyRevenue,
   DailyRevenueInput,
   Expense,
+  ExpenseAnalytics,
   ExpenseCreateInput,
   MoneyUzs,
   PaginatedResponse,
@@ -346,6 +348,7 @@ function buildBudgetPlan(periodId: string): BudgetPlan {
             ? (BigInt(plannedAmountUzs) - BigInt(actualAmountUzs)).toString()
             : null,
           hasPlan,
+          reason: savedLine?.reason ?? null,
         };
       }),
     );
@@ -356,6 +359,101 @@ function buildBudgetPlan(periodId: string): BudgetPlan {
     updatedAt: existing?.updatedAt ?? new Date().toISOString(),
     updatedByName: existing?.updatedByName ?? '—',
     lines,
+  };
+}
+
+function buildBudgetHistory(year?: number): BudgetHistory {
+  const selectedPeriods = periodRows
+    .filter((period) => year === undefined || period.year === year)
+    .sort((left, right) => left.year - right.year || left.month - right.month);
+  return {
+    year:
+      year ??
+      (new Set(selectedPeriods.map((period) => period.year)).size === 1
+        ? (selectedPeriods[0]?.year ?? null)
+        : null),
+    branches: branches.map((branch) => ({
+      id: branch.id,
+      code: branch.code,
+      name: branch.name,
+      isActive: branch.isActive,
+    })),
+    periods: selectedPeriods.map((period) => {
+      const stored = budgetPlanRows.find((plan) => plan.periodId === period.id);
+      const plan = buildBudgetPlan(period.id);
+      const rows = categoryRows
+        .filter((category) => category.isActive)
+        .map((category) => {
+          const branchPlans = branches.map((branch) => {
+            const line = plan.lines.find(
+              (candidate) =>
+                candidate.branchId === branch.id && candidate.categoryId === category.id,
+            );
+            return {
+              branchId: branch.id,
+              branchName: branch.name,
+              plannedAmountUzs: line?.plannedAmountUzs ?? null,
+              hasPlan: line?.hasPlan ?? false,
+              reason: line?.reason ?? null,
+            };
+          });
+          const planned = branchPlans.filter((item) => item.hasPlan);
+          const reasons = branchPlans.filter((item): item is typeof item & { reason: string } =>
+            Boolean(item.reason),
+          );
+          const uniqueReasons = [...new Set(reasons.map((item) => item.reason))];
+          return {
+            categoryId: category.id,
+            categoryCodeSnapshot: category.code,
+            categoryNameSnapshot: category.name,
+            expenseTypeSnapshot: category.expenseType,
+            branches: branchPlans,
+            totalPlannedAmountUzs:
+              planned.length === 0
+                ? null
+                : sumMoney(planned.map((item) => item.plannedAmountUzs ?? '0')),
+            reason:
+              uniqueReasons.length === 0
+                ? null
+                : uniqueReasons.length === 1
+                  ? uniqueReasons[0]!
+                  : reasons.map((item) => `${item.branchName}: ${item.reason}`).join(' · '),
+          };
+        });
+      const totalsByBranch = branches.map((branch) => {
+        const planned = plan.lines.filter((line) => line.branchId === branch.id && line.hasPlan);
+        return {
+          branchId: branch.id,
+          branchName: branch.name,
+          plannedAmountUzs:
+            planned.length === 0
+              ? null
+              : sumMoney(planned.map((line) => line.plannedAmountUzs ?? '0')),
+          hasPlan: planned.length > 0,
+          reason: null,
+        };
+      });
+      const plannedTotals = totalsByBranch.filter((item) => item.hasPlan);
+      return {
+        periodId: period.id,
+        year: period.year,
+        month: period.month,
+        periodLabel: plan.periodLabel,
+        periodStatus: period.status,
+        budgetVersionId: stored?.id ?? null,
+        revisionNo: stored ? 1 : null,
+        versionStatus: stored ? 'draft' : null,
+        versionReason: null,
+        updatedAt: stored?.updatedAt ?? null,
+        updatedByName: stored?.updatedByName ?? '',
+        rows,
+        totalsByBranch,
+        totalPlannedAmountUzs:
+          plannedTotals.length === 0
+            ? null
+            : sumMoney(plannedTotals.map((item) => item.plannedAmountUzs ?? '0')),
+      };
+    }),
   };
 }
 
@@ -794,6 +892,135 @@ function filterExpenses(request: Request, user: AuthenticatedUser): Expense[] {
   );
 }
 
+function buildExpenseAnalytics(
+  user: AuthenticatedUser,
+  periodId: string,
+  from: string,
+  to: string,
+  requestedBranch: string,
+): ExpenseAnalytics {
+  const scopedBranches = branches.filter(
+    (branch) =>
+      branch.isActive &&
+      canUseBranch(user, branch.id) &&
+      (requestedBranch === 'all' || branch.id === requestedBranch),
+  );
+  const branchIds = new Set(scopedBranches.map((branch) => branch.id));
+  const filtered = expenseRows.filter(
+    (expense) =>
+      branchIds.has(expense.branchId) &&
+      expense.transactionDate >= from &&
+      expense.transactionDate <= to,
+  );
+  const totalAmountUzs = sumMoney(filtered.map((expense) => expense.amountUzs));
+  const period = periodRows.find((item) => item.id === periodId)!;
+  const planLines = buildBudgetPlan(periodId).lines.filter(
+    (line) => branchIds.has(line.branchId) && line.hasPlan,
+  );
+  const plannedAmountUzs = sumMoney(planLines.map((line) => line.plannedAmountUzs ?? '0'));
+  const breakdown = (rows: Expense[]) => {
+    const amountUzs = sumMoney(rows.map((expense) => expense.amountUzs));
+    return {
+      amountUzs,
+      transactionCount: rows.length,
+      sharePct: percentageValue(amountUzs, totalAmountUzs),
+    };
+  };
+  const paymentBreakdowns = (rows: Expense[]) =>
+    paymentMethodRows
+      .filter(
+        (method) =>
+          method.isActive || rows.some((expense) => expense.paymentMethodId === method.id),
+      )
+      .map((method) => ({
+        id: method.id,
+        code: method.code,
+        name: method.name,
+        ...breakdown(rows.filter((expense) => expense.paymentMethodId === method.id)),
+      }));
+  const categoryGroups = new Map<string, Expense[]>();
+  for (const expense of filtered) {
+    const key = `${expense.categoryId}:${expense.expenseTypeSnapshot}`;
+    categoryGroups.set(key, [...(categoryGroups.get(key) ?? []), expense]);
+  }
+
+  return {
+    filters: { from, to, branch: requestedBranch },
+    hasData: filtered.length > 0,
+    planComparison: {
+      periodId,
+      periodLabel: period.label,
+      hasPlan: planLines.length > 0,
+      plannedAmountUzs,
+      actualAmountUzs: totalAmountUzs,
+      varianceUzs: (BigInt(plannedAmountUzs) - BigInt(totalAmountUzs)).toString(),
+      completionPct: percentageValue(totalAmountUzs, plannedAmountUzs),
+    },
+    summary: {
+      totalAmountUzs,
+      transactionCount: filtered.length,
+      fixed: breakdown(filtered.filter((expense) => expense.expenseTypeSnapshot === 'fixed')),
+      variable: breakdown(filtered.filter((expense) => expense.expenseTypeSnapshot === 'variable')),
+    },
+    paymentMethods: paymentBreakdowns(filtered),
+    branches: scopedBranches.map((branch) => {
+      const rows = filtered.filter((expense) => expense.branchId === branch.id);
+      return {
+        branchId: branch.id,
+        branchName: branch.name,
+        totalAmountUzs: sumMoney(rows.map((expense) => expense.amountUzs)),
+        transactionCount: rows.length,
+        fixedAmountUzs: sumMoney(
+          rows
+            .filter((expense) => expense.expenseTypeSnapshot === 'fixed')
+            .map((expense) => expense.amountUzs),
+        ),
+        variableAmountUzs: sumMoney(
+          rows
+            .filter((expense) => expense.expenseTypeSnapshot === 'variable')
+            .map((expense) => expense.amountUzs),
+        ),
+        paymentMethods: paymentBreakdowns(rows),
+      };
+    }),
+    categories: [...categoryGroups.values()]
+      .map((rows) => {
+        const first = rows[0]!;
+        return {
+          categoryId: first.categoryId,
+          categoryCodeSnapshot: first.categoryCodeSnapshot,
+          categoryNameSnapshot: first.categoryNameSnapshot,
+          expenseTypeSnapshot: first.expenseTypeSnapshot,
+          ...breakdown(rows),
+        };
+      })
+      .sort((left, right) => {
+        const leftAmount = BigInt(left.amountUzs);
+        const rightAmount = BigInt(right.amountUzs);
+        return leftAmount === rightAmount ? 0 : leftAmount > rightAmount ? -1 : 1;
+      })
+      .slice(0, 8),
+    recentExpenses: [...filtered]
+      .sort(
+        (left, right) =>
+          right.transactionDate.localeCompare(left.transactionDate) ||
+          right.createdAt.localeCompare(left.createdAt) ||
+          right.id.localeCompare(left.id),
+      )
+      .slice(0, 10)
+      .map((expense) => ({
+        id: expense.id,
+        transactionDate: expense.transactionDate,
+        description: expense.description,
+        categoryNameSnapshot: expense.categoryNameSnapshot,
+        branchName: expense.branchName,
+        amountUzs: expense.amountUzs,
+        expenseTypeSnapshot: expense.expenseTypeSnapshot,
+        paymentMethodName: expense.paymentMethodName,
+      })),
+  };
+}
+
 export const handlers = [
   http.post(`${API}/auth/login`, async ({ request }) => {
     await delay(LATENCY_MS);
@@ -886,6 +1113,25 @@ export const handlers = [
         ? requestedGranularity
         : 'monthly';
     return ok(buildDashboard(branchId, periodId, granularity));
+  }),
+
+  http.get(`${API}/reports/expense-analytics`, ({ request }) => {
+    const user = requireUser();
+    if (user instanceof HttpResponse) return user;
+    if (!hasPermission(user, 'dashboard.view'))
+      return problem(403, 'PERMISSION_DENIED', 'Dashboardni ko‘rish huquqi yo‘q.');
+    const url = new URL(request.url);
+    const from = url.searchParams.get('from');
+    const to = url.searchParams.get('to');
+    const periodId = url.searchParams.get('period');
+    const requestedBranch = url.searchParams.get('branch') ?? 'all';
+    if (!periodId || !periodRows.some((period) => period.id === periodId))
+      return problem(404, 'PERIOD_NOT_FOUND', 'Hisob davri topilmadi.');
+    if (!from || !to || from > to)
+      return problem(422, 'INVALID_DATE_RANGE', 'Sana oralig‘i noto‘g‘ri.');
+    if (requestedBranch !== 'all' && !canUseBranch(user, requestedBranch))
+      return problem(403, 'BRANCH_SCOPE_DENIED', 'Bu filial ma’lumotini ko‘rish huquqi yo‘q.');
+    return ok(buildExpenseAnalytics(user, periodId, from, to, requestedBranch));
   }),
 
   http.get(`${API}/expenses`, ({ request }) => {
@@ -1043,6 +1289,17 @@ export const handlers = [
     return ok(updated);
   }),
 
+  http.get(`${API}/budget-plans/history`, ({ request }) => {
+    const user = requireUser();
+    if (user instanceof HttpResponse) return user;
+    if (!hasPermission(user, 'budget.view'))
+      return problem(403, 'PERMISSION_DENIED', 'Budjet tarixini ko‘rish huquqi yo‘q.');
+    const yearText = new URL(request.url).searchParams.get('year');
+    const year = yearText === null ? undefined : Number(yearText);
+    if (year !== undefined && (!Number.isInteger(year) || year < 2000 || year > 2100))
+      return problem(422, 'VALIDATION_ERROR', 'Yil 2000–2100 oralig‘ida bo‘lishi kerak.');
+    return ok(buildBudgetHistory(year));
+  }),
   http.get(`${API}/budget-plans/:periodId`, ({ params }) => {
     const user = requireUser();
     if (user instanceof HttpResponse) return user;
@@ -1063,7 +1320,7 @@ export const handlers = [
       return problem(409, 'PERIOD_CLOSED', 'Yopiq davrdagi budjet tahrirlanmaydi.');
     const body = (await request.json()) as {
       lines: Array<
-        Pick<BudgetPlan['lines'][number], 'branchId' | 'categoryId' | 'plannedAmountUzs'>
+        Pick<BudgetPlan['lines'][number], 'branchId' | 'categoryId' | 'plannedAmountUzs' | 'reason'>
       >;
     };
     if (
@@ -1088,6 +1345,7 @@ export const handlers = [
       return {
         ...line,
         plannedAmountUzs: input.plannedAmountUzs,
+        reason: input.reason?.trim() || null,
         hasPlan,
         varianceUzs: hasPlan
           ? (BigInt(input.plannedAmountUzs!) - BigInt(line.actualAmountUzs)).toString()

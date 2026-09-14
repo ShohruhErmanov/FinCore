@@ -1,7 +1,7 @@
 import { Inject, Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { PermissionsGuard } from '@/common';
+import { CsrfGuard, PermissionsGuard } from '@/common';
 import { APP_ENV, AppConfigModule, type AppEnv } from '@/config';
 import { DatabaseModule } from '@/database';
 import { AuthModule, SessionGuard } from '@/auth';
@@ -48,7 +48,9 @@ import { DailyRevenuesModule } from './daily-revenues/daily-revenues.module';
     DailyRevenuesModule,
   ],
   providers: [
-    // Order matters: authenticate, then check permissions, then rate-limit.
+    // Order matters: reject cross-site cookie mutations before authentication,
+    // then authenticate, check permissions and rate-limit.
+    { provide: APP_GUARD, useClass: CsrfGuard },
     { provide: APP_GUARD, useClass: SessionGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
     { provide: APP_GUARD, useClass: ThrottlerGuard },

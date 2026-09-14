@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsArray,
@@ -26,7 +26,8 @@ export class TelegramRecipientDto {
 
   @ApiProperty({
     readOnly: true,
-    description: 'Xodim o‘z Telegramini tasdiqlaganmi. Server hisoblaydi — so‘rovdan qabul qilinmaydi.',
+    description:
+      'Xodim o‘z Telegramini tasdiqlaganmi. Server hisoblaydi — so‘rovdan qabul qilinmaydi.',
   })
   @IsOptional()
   @IsBoolean()

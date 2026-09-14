@@ -7,6 +7,9 @@ interface SessionRecord {
   expiresAt: number;
 }
 
+/** Bounds process memory even if one valid account repeatedly signs in. */
+const MAX_SESSIONS_PER_USER = 10;
+
 /**
  * Opaque server-side sessions. The cookie carries only a random identifier, so
  * no user data or permission set ever leaves the server, and logout genuinely
@@ -37,6 +40,7 @@ export class SessionService implements OnModuleDestroy {
   }
 
   create(userId: string): string {
+    this.pruneUserSessions(userId);
     const id = randomBytes(32).toString('base64url');
     this.sessions.set(id, { userId, expiresAt: Date.now() + this.ttlMs });
     return id;
@@ -61,6 +65,19 @@ export class SessionService implements OnModuleDestroy {
   destroyAllForUser(userId: string): void {
     for (const [id, record] of this.sessions)
       if (constantTimeEquals(record.userId, userId)) this.sessions.delete(id);
+  }
+
+  private pruneUserSessions(userId: string): void {
+    const now = Date.now();
+    const active: string[] = [];
+    for (const [id, record] of this.sessions) {
+      if (!constantTimeEquals(record.userId, userId)) continue;
+      if (record.expiresAt <= now) this.sessions.delete(id);
+      else active.push(id);
+    }
+    // Map iteration order is insertion order, so the oldest sessions go first.
+    for (const id of active.slice(0, Math.max(0, active.length - MAX_SESSIONS_PER_USER + 1)))
+      this.sessions.delete(id);
   }
 
   private sweep(): void {

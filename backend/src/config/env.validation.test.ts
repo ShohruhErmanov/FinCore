@@ -25,12 +25,21 @@ describe('validateEnv', () => {
   });
 
   it('requires a session secret at all', () => {
-    const { SESSION_SECRET: _omitted, ...without } = base;
-    expect(() => validateEnv(without)).toThrow(/SESSION_SECRET/);
+    expect(() => validateEnv({ ...base, SESSION_SECRET: undefined })).toThrow(/SESSION_SECRET/);
   });
 
   it('rejects a wildcard CORS origin', () => {
-    expect(() => validateEnv({ ...base, FRONTEND_URL: 'https://*.fincore.uz' })).toThrow(/wildcard/);
+    expect(() => validateEnv({ ...base, FRONTEND_URL: 'https://*.fincore.uz' })).toThrow(
+      /wildcard/,
+    );
+  });
+
+  it.each([
+    'https://user:secret@app.fincore.uz',
+    'https://app.fincore.uz/admin',
+    'https://app.fincore.uz?tenant=one',
+  ])('rejects a FRONTEND_URL that is not a bare origin: %s', (value) => {
+    expect(() => validateEnv({ ...base, FRONTEND_URL: value })).toThrow(/only an origin/);
   });
 
   it('rejects a non-postgres database url', () => {
@@ -54,6 +63,7 @@ describe('validateEnv', () => {
       ...base,
       NODE_ENV: 'production',
       DATABASE_URL: 'postgresql://u@h/db',
+      FRONTEND_URL: 'https://app.fincore.uz',
       COOKIE_SECURE: 'true',
       SWAGGER_ENABLED: 'false',
     };
@@ -63,8 +73,9 @@ describe('validateEnv', () => {
     });
 
     it('requires DATABASE_URL', () => {
-      const { DATABASE_URL: _omitted, ...without } = prod;
-      expect(() => validateEnv(without)).toThrow(/DATABASE_URL is required in production/);
+      expect(() => validateEnv({ ...prod, DATABASE_URL: undefined })).toThrow(
+        /DATABASE_URL is required in production/,
+      );
     });
 
     it('refuses an insecure cookie', () => {
@@ -73,6 +84,12 @@ describe('validateEnv', () => {
 
     it('refuses to expose Swagger', () => {
       expect(() => validateEnv({ ...prod, SWAGGER_ENABLED: 'true' })).toThrow(/SWAGGER_ENABLED/);
+    });
+
+    it('requires an HTTPS frontend origin for production cookie authentication', () => {
+      expect(() => validateEnv({ ...prod, FRONTEND_URL: 'http://app.fincore.uz' })).toThrow(
+        /FRONTEND_URL must use https/,
+      );
     });
   });
 
@@ -88,6 +105,7 @@ describe('validateEnv', () => {
       ...base,
       NODE_ENV: 'production',
       DATABASE_URL: 'postgresql://u@h/db',
+      FRONTEND_URL: 'https://app.fincore.uz',
       COOKIE_SECURE: 'true',
       SWAGGER_ENABLED: 'false',
     };
@@ -116,14 +134,15 @@ describe('validateEnv', () => {
       'TELEGRAM_WEBHOOK_SECRET',
       'TELEGRAM_LINK_TOKEN_PEPPER',
     ])('requires %s once the integration is enabled', (missing) => {
-      const { [missing]: _omitted, ...rest } = telegram as Record<string, string>;
+      const rest = { ...telegram } as Record<string, string>;
+      delete rest[missing];
       expect(() => validateEnv({ ...prod, ...rest })).toThrow(new RegExp(missing));
     });
 
     it('refuses a webhook secret that is too short to be worth comparing', () => {
-      expect(() =>
-        validateEnv({ ...prod, ...telegram, TELEGRAM_WEBHOOK_SECRET: 'short' }),
-      ).toThrow(/TELEGRAM_WEBHOOK_SECRET/);
+      expect(() => validateEnv({ ...prod, ...telegram, TELEGRAM_WEBHOOK_SECRET: 'short' })).toThrow(
+        /TELEGRAM_WEBHOOK_SECRET/,
+      );
     });
 
     it('refuses a link pepper that is too short', () => {
@@ -183,7 +202,11 @@ describe('validateEnv', () => {
 
     it('refuses a retry ceiling below the base delay', () => {
       expect(() =>
-        validateEnv({ ...base, NOTIFICATION_RETRY_BASE_MS: '60000', NOTIFICATION_RETRY_MAX_MS: '30000' }),
+        validateEnv({
+          ...base,
+          NOTIFICATION_RETRY_BASE_MS: '60000',
+          NOTIFICATION_RETRY_MAX_MS: '30000',
+        }),
       ).toThrow(/NOTIFICATION_RETRY_MAX_MS/);
     });
   });

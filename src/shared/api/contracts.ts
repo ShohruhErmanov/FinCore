@@ -3,13 +3,16 @@ import type {
   AuthenticatedUser,
   Branch,
   BudgetLine,
+  BudgetHistory,
   BudgetPlan,
   DailyRevenue,
   DailyRevenueInput,
   DashboardResponse,
   Expense,
+  ExpenseAnalytics,
   ExpenseCategory,
   ExpenseCreateInput,
+  ExpensePlanAnalytics,
   CategoryBaselineBoard,
   CategoryBaselineInput,
   ImportSummary,
@@ -65,6 +68,12 @@ export const dashboardApi = {
 };
 
 export const reportApi = {
+  expenseAnalytics: (
+    query: { period: string; from: string; to: string; branch: string },
+    signal?: AbortSignal,
+  ) => api.get<ExpenseAnalytics>('/reports/expense-analytics', query, signal),
+  expensePlan: (query: { period: string; branch: string }, signal?: AbortSignal) =>
+    api.get<ExpensePlanAnalytics>('/reports/expense-plan', query, signal),
   monthly: (query: { year: string | number; branch: string }, signal?: AbortSignal) =>
     api.get<MonthlyReport>('/reports/monthly', query, signal),
   branchComparison: (
@@ -88,9 +97,11 @@ export const expenseApi = {
 export const budgetApi = {
   get: (periodId: string, signal?: AbortSignal) =>
     api.get<BudgetPlan>(`/budget-plans/${periodId}`, undefined, signal),
+  history: (year?: number, signal?: AbortSignal) =>
+    api.get<BudgetHistory>('/budget-plans/history', { year }, signal),
   saveLines: (
     periodId: string,
-    lines: Array<Pick<BudgetLine, 'branchId' | 'categoryId' | 'plannedAmountUzs'>>,
+    lines: Array<Pick<BudgetLine, 'branchId' | 'categoryId' | 'plannedAmountUzs' | 'reason'>>,
   ) => api.put<BudgetPlan>(`/budget-plans/${periodId}/lines`, { lines }),
 };
 

@@ -8,7 +8,6 @@ import {
   ClipboardList,
   FileBarChart,
   FileSpreadsheet,
-  Landmark,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -30,7 +29,7 @@ import { queryKeys } from '@/shared/api/query-keys';
 import { navigation, routes, type NavigationItem } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/cn';
 import { monthNameUz } from '@/shared/lib/format';
-import { Button, Select, StatusBadge } from '@/shared/ui';
+import { BrandMark, Button, Select, StatusBadge } from '@/shared/ui';
 
 const iconByPath: Record<string, typeof LayoutDashboard> = {
   [routes.dashboard]: LayoutDashboard,
@@ -66,13 +65,17 @@ function NavigationLink({
       {...(collapsed ? { title: item.label } : {})}
       className={({ isActive }) =>
         cn(
-          'flex min-h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400',
-          isActive && 'bg-primary text-white shadow-sm',
+          'group flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium text-slate-300 transition-all duration-200 hover:translate-x-0.5 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400',
+          isActive &&
+            'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-[0_12px_28px_-16px_rgba(37,99,235,0.95)] ring-1 ring-white/10',
           collapsed && 'justify-center px-2',
         )
       }
     >
-      <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+      <Icon
+        className="h-[18px] w-[18px] shrink-0 transition-transform group-hover:scale-105"
+        aria-hidden="true"
+      />
       {!collapsed ? <span>{item.label}</span> : <span className="sr-only">{item.label}</span>}
     </NavLink>
   );
@@ -103,7 +106,7 @@ function Sidebar({
   return (
     <aside
       className={cn(
-        'flex h-full flex-col bg-navy text-white',
+        'fincore-sidebar flex h-full flex-col text-white',
         mobile ? 'w-[286px]' : collapsed ? 'w-[76px]' : 'w-[252px]',
       )}
     >
@@ -117,13 +120,13 @@ function Sidebar({
           to={routes.dashboard}
           className="flex items-center gap-3 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400"
         >
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary">
-            <Landmark className="h-5 w-5" />
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white shadow-[0_12px_28px_-14px_rgba(59,130,246,0.95)] ring-1 ring-white/30">
+            <BrandMark className="h-8 w-8" />
           </div>
           {!collapsed ? (
             <div>
-              <p className="font-bold tracking-tight">FINCORE</p>
-              <p className="text-[10px] text-slate-400">Moliya nazorati</p>
+              <p className="font-bold tracking-[0.04em]">FINCORE</p>
+              <p className="text-[10px] font-medium text-slate-400">Moliya nazorati</p>
             </div>
           ) : null}
         </Link>
@@ -229,13 +232,23 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
   const defaultBranch = canSeeAllBranches ? 'all' : (accessibleBranches[0]?.id ?? '');
   const rememberedBranch =
     lastChoice.current.branch === 'all'
-      ? (canSeeAllBranches ? 'all' : undefined)
+      ? canSeeAllBranches
+        ? 'all'
+        : undefined
       : accessibleBranches.some((branch) => branch.id === lastChoice.current.branch)
         ? lastChoice.current.branch
         : undefined;
   const selectedBranch = searchParams.get('branch') ?? rememberedBranch ?? defaultBranch;
 
   const currentPeriod = periods.find((period) => period.id === selectedPeriod);
+  const selectedBranchName =
+    selectedBranch === 'all'
+      ? 'Barcha filiallar'
+      : (accessibleBranches.find((branch) => branch.id === selectedBranch)?.name ??
+        'Filial tanlanmagan');
+  const globalScopeLabel = currentPeriod
+    ? `${monthNameUz(currentPeriod.month)} ${currentPeriod.year} · ${selectedBranchName}`
+    : `Davr tanlanmagan · ${selectedBranchName}`;
   const years = [...new Set(periods.map((period) => period.year))].sort((a, b) => b - a);
   const selectedYear = currentPeriod?.year ?? years[0];
   const monthsOfYear = periods
@@ -280,8 +293,8 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
   }, [selectedPeriod, selectedBranch, searchParams, setSearchParams]);
 
   return (
-    <header className="sticky top-0 z-30 flex min-h-[72px] items-center justify-between gap-3 border-b border-border bg-white/95 px-4 backdrop-blur sm:px-6">
-      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+    <header className="fincore-topbar sticky top-0 z-30 flex min-h-[76px] flex-wrap items-center gap-3 border-b border-white/80 px-4 py-2 sm:flex-nowrap sm:px-6">
+      <div className="contents">
         <button
           type="button"
           onClick={onOpenMenu}
@@ -290,12 +303,12 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
         >
           <Menu className="h-5 w-5" />
         </button>
-        <div className="hidden items-center gap-2 sm:flex">
+        <div className="order-3 grid w-full grid-cols-3 gap-2 sm:order-none sm:flex sm:w-auto sm:items-center">
           <Select
             aria-label="Hisobot yili"
             value={selectedYear ?? ''}
             onChange={(event) => selectYear(Number(event.target.value))}
-            className="w-28 border-0 bg-slate-100 font-medium"
+            className="w-full border-slate-200/70 bg-slate-100/80 font-semibold shadow-none sm:w-28"
           >
             {years.map((year) => (
               <option key={year} value={year}>
@@ -307,7 +320,7 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
             aria-label="Hisobot oyi"
             value={selectedPeriod}
             onChange={(event) => updateFilter('period', event.target.value)}
-            className="w-36 border-0 bg-slate-100 font-medium"
+            className="w-full border-slate-200/70 bg-slate-100/80 font-semibold shadow-none sm:w-36"
           >
             {monthsOfYear.map((period) => (
               <option key={period.id} value={period.id}>
@@ -319,7 +332,7 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
             aria-label="Filial"
             value={selectedBranch}
             onChange={(event) => updateFilter('branch', event.target.value)}
-            className="w-44 border-0 bg-slate-100 font-medium"
+            className="w-full border-slate-200/70 bg-slate-100/80 font-semibold shadow-none sm:w-44"
           >
             {hasPermission('expense.view_all_branches') ? (
               <option value="all">Barcha filiallar</option>
@@ -332,18 +345,26 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
           </Select>
         </div>
       </div>
+      <div className="order-4 flex w-full min-w-0 justify-center sm:order-none sm:w-auto sm:flex-1">
+        <p
+          className="max-w-full truncate rounded-full border border-slate-200/80 bg-white/70 px-3.5 py-2 text-xs font-bold text-slate-600 shadow-sm"
+          aria-label="Global hisobot konteksti"
+        >
+          {globalScopeLabel}
+        </p>
+      </div>
       <div className="relative">
         <button
           type="button"
           onClick={() => setAccountOpen((value) => !value)}
-          className="flex min-h-11 items-center gap-3 rounded-lg px-2 text-left hover:bg-slate-100"
+          className="flex min-h-11 items-center gap-3 rounded-xl px-2 text-left transition hover:bg-white hover:shadow-sm"
           // Mobil ekranda ism yashiriladi va faqat bosh harflar qoladi —
           // tugmaning nomi baribir to‘liq bo‘lishi kerak.
           aria-label={user ? `${user.fullName} — hisob menyusi` : 'Hisob menyusi'}
           aria-expanded={accountOpen}
           aria-haspopup="menu"
         >
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-blue-100 text-sm font-bold text-blue-700">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-blue-100 to-sky-100 text-sm font-bold text-blue-700 ring-1 ring-blue-200/70">
             {user?.fullName
               .split(' ')
               .map((part) => part[0])
@@ -361,7 +382,7 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
         {accountOpen ? (
           <div
             role="menu"
-            className="absolute right-0 top-12 w-64 rounded-xl border border-border bg-white p-2 shadow-xl"
+            className="absolute right-0 top-14 w-64 rounded-card border border-border/90 bg-white/95 p-2 shadow-elevated backdrop-blur-xl"
           >
             <div className="border-b border-border px-3 py-2">
               <p className="text-sm font-semibold text-ink">{user?.fullName}</p>
@@ -475,7 +496,7 @@ export function AppShell() {
         <TopBar onOpenMenu={() => setMobileOpen(true)} />
         <main
           id="main-content"
-          className="mx-auto w-full max-w-[1600px] px-4 py-6 pb-24 sm:px-6 lg:pb-8 xl:px-8"
+          className="premium-enter mx-auto w-full max-w-[1600px] px-4 py-7 pb-24 sm:px-6 lg:pb-10 xl:px-8"
         >
           <Outlet />
         </main>

@@ -211,7 +211,7 @@ export class ReportsService {
         };
       })
       .sort((a, b) => a.sortOrder - b.sortOrder || a.category.code.localeCompare(b.category.code))
-      .map(({ sortOrder: _sortOrder, ...row }) => row);
+      .map((row) => ({ category: row.category, months: row.months, annual: row.annual }));
 
     const aggregate = (type?: 'fixed' | 'variable'): PlanActual => {
       const selected = type

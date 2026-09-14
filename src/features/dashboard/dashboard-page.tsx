@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, CalendarPlus, Download, ReceiptText } from 'lucide-react';
+import { Activity, ArrowRight, CalendarPlus, Download, ReceiptText, Sparkles } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   Bar,
@@ -32,7 +32,6 @@ import {
   MoneyText,
   PageHeader,
   PercentText,
-  Select,
   VarianceText,
 } from '@/shared/ui';
 
@@ -42,8 +41,19 @@ const granularityOptions: Array<{ value: TrendGranularity; label: string }> = [
   { value: 'monthly', label: 'Oylik' },
 ];
 
-function axisMillions(value: number): string {
-  return `${Math.round(value / 1_000_000)} mln`;
+function axisMoney(value: number): string {
+  return formatMoney(String(value));
+}
+
+function expensePlanComparison(
+  planUzs: string,
+  varianceUzs: string,
+  completionPct: number | null,
+): string {
+  const variance = BigInt(varianceUzs);
+  const difference = formatMoney((variance < 0n ? -variance : variance).toString());
+  const differenceLabel = variance >= 0n ? 'Rejagacha yetmagan' : 'Rejadan oshgan';
+  return `Reja ${formatMoney(planUzs)} · ${differenceLabel} ${difference} · Bajarilish ${formatPercent(completionPct)}`;
 }
 
 function TrendChart({
@@ -78,11 +88,11 @@ function TrendChart({
               interval="preserveStartEnd"
             />
             <YAxis
-              tickFormatter={axisMillions}
+              tickFormatter={axisMoney}
               tickLine={false}
               axisLine={false}
               fontSize={11}
-              width={58}
+              width={130}
             />
             <Tooltip
               formatter={(value: number) => formatMoney(String(value))}
@@ -180,11 +190,11 @@ function AnnualCompositionCharts({ data }: { data: AnnualExpenseSummary }) {
                 interval="preserveStartEnd"
               />
               <YAxis
-                tickFormatter={axisMillions}
+                tickFormatter={axisMoney}
                 tickLine={false}
                 axisLine={false}
                 fontSize={11}
-                width={58}
+                width={130}
               />
               <Tooltip
                 formatter={(value: number) => formatMoney(String(value))}
@@ -192,12 +202,7 @@ function AnnualCompositionCharts({ data }: { data: AnnualExpenseSummary }) {
               />
               <Legend />
               <Bar dataKey="fixed" name="Doimiy" fill="#2563eb" radius={[5, 5, 0, 0]} />
-              <Bar
-                dataKey="variable"
-                name="O‘zgaruvchan"
-                fill="#f59e0b"
-                radius={[5, 5, 0, 0]}
-              />
+              <Bar dataKey="variable" name="O‘zgaruvchan" fill="#f59e0b" radius={[5, 5, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -448,6 +453,8 @@ export function DashboardPage() {
   if (dashboardQuery.isError || !dashboardQuery.data)
     return <ErrorState onRetry={() => void dashboardQuery.refetch()} />;
   const data = dashboardQuery.data;
+  const netResult = BigInt(data.revenueActualUzs) - BigInt(data.expenseActualUzs);
+  const netResultUzs = netResult.toString();
   const queryBase = { period, branch };
   const trendScope =
     granularity === 'monthly'
@@ -483,31 +490,60 @@ export function DashboardPage() {
         }
       />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:hidden">
-        <Select
-          aria-label="Davr"
-          value={period}
-          onChange={(event) => setFilter('period', event.target.value)}
-        >
-          {(periodsQuery.data ?? []).map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.label}
-            </option>
-          ))}
-        </Select>
-        <Select
-          aria-label="Filial"
-          value={branch}
-          onChange={(event) => setFilter('branch', event.target.value)}
-        >
-          {canSeeAll ? <option value="all">Barchasi</option> : null}
-          {visibleBranches.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name}
-            </option>
-          ))}
-        </Select>
-      </div>
+      <section
+        aria-label="FinCore Pulse"
+        className="relative mb-5 overflow-hidden rounded-[24px] border border-blue-400/20 bg-[linear-gradient(120deg,#071a3b_0%,#0b2f68_55%,#1259d6_100%)] p-6 text-white shadow-[0_28px_70px_-36px_rgba(30,64,175,0.85)] sm:p-7"
+      >
+        <div className="pointer-events-none absolute -right-24 -top-32 h-80 w-80 rounded-full bg-cyan-300/20 blur-3xl" />
+        <div className="pointer-events-none absolute bottom-0 left-1/3 h-28 w-72 rounded-full bg-blue-400/20 blur-3xl" />
+        <div className="relative grid gap-7 lg:grid-cols-[1.35fr_0.65fr] lg:items-end">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-blue-100 backdrop-blur">
+              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+              FinCore Pulse
+            </div>
+            <p className="mt-5 max-w-2xl text-sm font-medium text-blue-100">
+              {data.period.label} uchun tushum va xarajatning tezkor operatsion natijasi
+            </p>
+            <div className="mt-2 text-3xl font-bold tracking-[-0.04em] sm:text-4xl">
+              <MoneyText value={netResultUzs} compact />
+            </div>
+            <p className="mt-2 text-sm text-blue-100/85">
+              {netResult > 0n
+                ? 'Tushum xarajatdan yuqori — davr natijasi musbat.'
+                : netResult < 0n
+                  ? 'Xarajat tushumdan yuqori — rahbar e’tibori talab qilinadi.'
+                  : 'Davr uchun tushum va xarajat ma’lumoti hali shakllanmagan.'}
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+            <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-md">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-semibold text-blue-100">Tushum rejasi</span>
+                <Activity className="h-4 w-4 text-cyan-300" aria-hidden="true" />
+              </div>
+              <p className="mt-2 text-2xl font-bold tabular-nums">
+                {formatPercent(data.revenueCompletionPct)}
+              </p>
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/15">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-cyan-300 to-blue-300"
+                  style={{
+                    width: `${Math.max(0, Math.min(data.revenueCompletionPct ?? 0, 100))}%`,
+                  }}
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-between rounded-2xl border border-white/15 bg-slate-950/15 px-4 py-3 text-xs backdrop-blur-md">
+              <span className="text-blue-100">Ma’lumot holati</span>
+              <span className="inline-flex items-center gap-2 font-bold text-white">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.9)]" />
+                Server agregati
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <section
         aria-label="Tushum ko‘rsatkichlari"
@@ -534,26 +570,27 @@ export function DashboardPage() {
           demo={data.isDemo}
         />
         <KpiCard
-          label="Jami xarajat"
+          label="Jami xarajatlar"
           value={<MoneyText value={data.expenseActualUzs} compact />}
-          helper={`Budjet bajarilishi ${formatPercent(data.expenseCompletionPct)}`}
+          helper={expensePlanComparison(
+            data.expensePlanUzs,
+            data.expenseVarianceUzs,
+            data.expenseCompletionPct,
+          )}
           tone="neutral"
-          to={drilldownUrl(routes.expenses, queryBase)}
+          to={drilldownUrl(routes.expenseAnalytics, queryBase)}
           demo={data.isDemo}
         />
         <KpiCard
-          label="Tushum farqi"
-          value={<MoneyText value={data.revenueVarianceUzs} compact />}
-          helper="Musbat qiymat — rejadan ortiq tushum"
-          tone={BigInt(data.revenueVarianceUzs) >= 0n ? 'success' : 'danger'}
-          to={drilldownUrl(routes.revenuePlans, { period })}
+          label="Xarajat rejasi"
+          value={<MoneyText value={data.expensePlanUzs} compact />}
+          helper="Budjetdagi tasdiqlangan reja"
+          tone="info"
+          to={drilldownUrl(routes.expensePlanAnalytics, queryBase)}
         />
       </section>
 
-      <section
-        aria-label="Xarajat ko‘rsatkichlari"
-        className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
-      >
+      <section aria-label="Xarajat ko‘rsatkichlari" className="mt-4 grid gap-4 sm:grid-cols-2">
         <KpiCard
           label="Xarajat variansi"
           value={<MoneyText value={data.expenseVarianceUzs} compact />}
@@ -562,22 +599,11 @@ export function DashboardPage() {
           to={drilldownUrl(routes.monthlyReport, queryBase)}
         />
         <KpiCard
-          label="Doimiy xarajat"
-          value={<MoneyText value={data.fixedExpenseUzs} compact />}
-          helper="Kategoriya snapshot turi bo‘yicha"
-          to={drilldownUrl(routes.expenses, { ...queryBase, expenseType: 'fixed' })}
-        />
-        <KpiCard
-          label="O‘zgaruvchan xarajat"
-          value={<MoneyText value={data.variableExpenseUzs} compact />}
-          helper="Kategoriya snapshot turi bo‘yicha"
-          to={drilldownUrl(routes.expenses, { ...queryBase, expenseType: 'variable' })}
-        />
-        <KpiCard
-          label="Xarajat rejasi"
-          value={<MoneyText value={data.expensePlanUzs} compact />}
-          helper="Budjetdagi tasdiqlangan reja"
-          to={drilldownUrl(routes.budgets, { period })}
+          label="Tushum farqi"
+          value={<MoneyText value={data.revenueVarianceUzs} compact />}
+          helper="Musbat qiymat — rejadan ortiq tushum"
+          tone={BigInt(data.revenueVarianceUzs) >= 0n ? 'success' : 'danger'}
+          to={drilldownUrl(routes.revenuePlans, { period })}
         />
       </section>
 
@@ -650,7 +676,9 @@ export function DashboardPage() {
                 <div>
                   <div className="flex items-end justify-between gap-3">
                     <div>
-                      <p className="text-xs text-muted">Tushum · reja {formatMoney(item.revenuePlanUzs)}</p>
+                      <p className="text-xs text-muted">
+                        Tushum · reja {formatMoney(item.revenuePlanUzs)}
+                      </p>
                       <MoneyText
                         value={item.revenueActualUzs}
                         className="text-lg font-bold text-ink"

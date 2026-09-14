@@ -30,6 +30,15 @@ const schema = z
       .string()
       .url('FRONTEND_URL must be an absolute URL, e.g. http://localhost:5173')
       .refine((value) => !value.includes('*'), 'FRONTEND_URL must not contain a wildcard')
+      .refine((value) => {
+        try {
+          const url = new URL(value);
+          return !url.username && !url.password && url.pathname === '/' && !url.search && !url.hash;
+        } catch {
+          return false;
+        }
+      }, 'FRONTEND_URL must contain only an origin (no credentials, path, query or hash)')
+      .transform((value) => new URL(value).origin)
       .default('http://localhost:5173'),
 
     /** Signs the session cookie. Rotating it invalidates every live session. */
@@ -95,14 +104,24 @@ const schema = z
      */
     NOTIFICATION_WORKER_ENABLED: booleanish.default('false'),
     /** Bounded polling — never a tight loop. */
-    NOTIFICATION_WORKER_INTERVAL_MS: z.coerce.number().int().min(1_000).max(300_000).default(15_000),
+    NOTIFICATION_WORKER_INTERVAL_MS: z.coerce
+      .number()
+      .int()
+      .min(1_000)
+      .max(300_000)
+      .default(15_000),
     NOTIFICATION_WORKER_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(10),
     /** Must outlast one batch, or a slow worker loses its own rows. */
     NOTIFICATION_WORKER_LEASE_SECONDS: z.coerce.number().int().min(5).max(3_600).default(120),
     /** Attempts are counted by the claim itself; this caps them. */
     NOTIFICATION_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
     NOTIFICATION_RETRY_BASE_MS: z.coerce.number().int().min(1_000).max(3_600_000).default(30_000),
-    NOTIFICATION_RETRY_MAX_MS: z.coerce.number().int().min(1_000).max(86_400_000).default(3_600_000),
+    NOTIFICATION_RETRY_MAX_MS: z.coerce
+      .number()
+      .int()
+      .min(1_000)
+      .max(86_400_000)
+      .default(3_600_000),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production') {
@@ -123,6 +142,12 @@ const schema = z
           code: z.ZodIssueCode.custom,
           path: ['SWAGGER_ENABLED'],
           message: 'SWAGGER_ENABLED must be false in production',
+        });
+      if (new URL(env.FRONTEND_URL).protocol !== 'https:')
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['FRONTEND_URL'],
+          message: 'FRONTEND_URL must use https:// in production',
         });
     }
 

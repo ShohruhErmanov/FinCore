@@ -121,6 +121,8 @@ function renderDashboard() {
         <Routes>
           <Route path={routes.dashboard} element={<DashboardPage />} />
           <Route path={routes.revenues} element={<LocationProbe />} />
+          <Route path={routes.expensePlanAnalytics} element={<LocationProbe />} />
+          <Route path={routes.expenseAnalytics} element={<LocationProbe />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -147,11 +149,17 @@ describe('[FE-MSW, AC-14, AC-16] dashboard integration', () => {
   it('tushum va xarajat KPI’larini API javobidan render qiladi', async () => {
     renderDashboard();
 
-    expect(await screen.findByText("300 mln so'm")).toBeInTheDocument();
-    expect(screen.getByText("186 mln so'm")).toBeInTheDocument();
+    expect(await screen.findByText('300 000 000 so‘m')).toBeInTheDocument();
+    expect(screen.getByText('186 000 000 so‘m')).toBeInTheDocument();
     expect(screen.getByText('Reja bajarilishi 62%')).toBeInTheDocument();
-    expect(screen.getByText("110 mln so'm")).toBeInTheDocument();
-    expect(screen.getByText('Budjet bajarilishi 88%')).toBeInTheDocument();
+    expect(screen.getByText('110 000 000 so‘m')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Reja 125 000 000 so‘m · Rejagacha yetmagan 15 000 000 so‘m · Bajarilish 88%/,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Doimiy xarajat')).not.toBeInTheDocument();
+    expect(screen.queryByText('O‘zgaruvchan xarajat')).not.toBeInTheDocument();
   });
 
   it('Excel «Xulosa» ko‘rsatkichlarini va oylik dinamika jadvalini chiqaradi', async () => {
@@ -167,7 +175,7 @@ describe('[FE-MSW, AC-14, AC-16] dashboard integration', () => {
     expect(screen.getByText('Doimiy xarajatlar (yil)')).toBeInTheDocument();
     expect(screen.getByText('O‘zgaruvchan xarajatlar (yil)')).toBeInTheDocument();
     expect(screen.getByText('O‘rtacha kiritilgan oylik reja')).toBeInTheDocument();
-    expect(screen.getByText("101 mln so'm")).toBeInTheDocument();
+    expect(screen.getByText('101 000 000 so‘m')).toBeInTheDocument();
     expect(screen.getByText('Reja mavjud 2 oy bo‘yicha')).toBeInTheDocument();
     expect(screen.getByText('Yillik farq')).toBeInTheDocument();
     expect(
@@ -203,6 +211,28 @@ describe('[FE-MSW, AC-14, AC-16] dashboard integration', () => {
 
     expect(screen.getByTestId('current-location')).toHaveTextContent(
       `${routes.revenues}?period=${ids.periodAug}&branch=all`,
+    );
+  });
+
+  it('Xarajat rejasi kartasi read-only analytics route’ini ochadi', async () => {
+    const user = userEvent.setup();
+    renderDashboard();
+
+    await user.click(await screen.findByRole('link', { name: /Xarajat rejasi/ }));
+
+    expect(screen.getByTestId('current-location')).toHaveTextContent(
+      `${routes.expensePlanAnalytics}?period=${ids.periodAug}&branch=all`,
+    );
+  });
+
+  it('Jami xarajatlar kartasini saqlaydi va expense analytics route’ini ochadi', async () => {
+    const user = userEvent.setup();
+    renderDashboard();
+
+    await user.click(await screen.findByRole('link', { name: /Jami xarajatlar/ }));
+
+    expect(screen.getByTestId('current-location')).toHaveTextContent(
+      `${routes.expenseAnalytics}?period=${ids.periodAug}&branch=all`,
     );
   });
 });

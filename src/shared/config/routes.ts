@@ -3,6 +3,8 @@ import type { PermissionCode } from '@/shared/types/domain';
 export const routes = {
   login: '/login',
   dashboard: '/dashboard',
+  expensePlanAnalytics: '/dashboard/expense-plan',
+  expenseAnalytics: '/dashboard/expenses',
   expenses: '/expenses',
   expenseNew: '/expenses/new',
   expenseDetail: (id: string) => `/expenses/${id}`,

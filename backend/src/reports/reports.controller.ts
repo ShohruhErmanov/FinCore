@@ -13,10 +13,17 @@ import {
   CashierReportResponseDto,
   CashiersQueryDto,
   DashboardQueryDto,
+  ExpenseAnalyticsQueryDto,
+  ExpensePlanAnalyticsQueryDto,
   MonthlyQueryDto,
 } from './dto/reports.dto';
 import { CashierReportService, type CashierReportDto } from './cashier-report.service';
-import { DashboardService, type DashboardResponse } from './dashboard.service';
+import {
+  DashboardService,
+  type DashboardResponse,
+  type ExpenseAnalyticsResponse,
+  type ExpensePlanAnalyticsResponse,
+} from './dashboard.service';
 import { ReportsService, type BranchComparisonReport, type MonthlyReport } from './reports.service';
 
 /**
@@ -53,6 +60,45 @@ export class ReportsController {
       query.period,
       query.branch ?? 'all',
       query.granularity ?? 'monthly',
+    );
+  }
+
+  @Get('expense-plan')
+  @RequirePermissions('dashboard.view')
+  @ApiOperation({ summary: 'Xarajat rejasi: filial va xarajat turi bo‘yicha read-only tahlil' })
+  @ApiQuery({ name: 'period', description: 'Hisob davri UUID' })
+  @ApiQuery({ name: 'branch', required: false, description: 'Filial UUID yoki "all"' })
+  @ApiResponse({ status: 200, description: 'ExpensePlanAnalyticsResponse' })
+  @ApiResponse({ status: 401, description: 'UNAUTHENTICATED' })
+  @ApiResponse({ status: 403, description: 'FORBIDDEN — dashboard.view yo‘q' })
+  @ApiResponse({ status: 404, description: 'PERIOD_NOT_FOUND' })
+  getExpensePlan(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: ExpensePlanAnalyticsQueryDto,
+  ): Promise<ExpensePlanAnalyticsResponse> {
+    return this.dashboard.getExpensePlanAnalytics(user, query.period, query.branch ?? 'all');
+  }
+
+  @Get('expense-analytics')
+  @RequirePermissions('dashboard.view')
+  @ApiOperation({ summary: 'Xarajatlar: davr va filial scope bo‘yicha read-only tahlil' })
+  @ApiQuery({ name: 'from', description: 'YYYY-MM-DD' })
+  @ApiQuery({ name: 'to', description: 'YYYY-MM-DD' })
+  @ApiQuery({ name: 'branch', required: false, description: 'Filial UUID yoki "all"' })
+  @ApiResponse({ status: 200, description: 'ExpenseAnalyticsResponse' })
+  @ApiResponse({ status: 401, description: 'UNAUTHENTICATED' })
+  @ApiResponse({ status: 403, description: 'FORBIDDEN — dashboard.view yo‘q' })
+  @ApiResponse({ status: 422, description: 'INVALID_DATE_RANGE' })
+  getExpenseAnalytics(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: ExpenseAnalyticsQueryDto,
+  ): Promise<ExpenseAnalyticsResponse> {
+    return this.dashboard.getExpenseAnalytics(
+      user,
+      query.period,
+      query.from,
+      query.to,
+      query.branch ?? 'all',
     );
   }
 

@@ -136,13 +136,17 @@ function sameWord(a: string, b: string): boolean {
  * Noaniq (bir xil ballga ega) natijalar qaytarilmaydi — pul noto‘g‘ri
  * kategoriyaga tushib qolmasligi uchun.
  */
-function findByName<T extends { name: string }>(items: T[], value: RawCell): T | undefined {
+function findByName<T extends { name: string; aliases?: string[] }>(
+  items: T[],
+  value: RawCell,
+): T | undefined {
   const exact = normalizeName(value);
   if (!exact) return undefined;
 
+  const names = (item: T) => [item.name, ...(item.aliases ?? [])];
   const direct =
-    items.find((item) => normalizeName(item.name) === exact) ??
-    items.find((item) => baseName(item.name) === baseName(value));
+    items.find((item) => names(item).some((name) => normalizeName(name) === exact)) ??
+    items.find((item) => names(item).some((name) => baseName(name) === baseName(value)));
   if (direct) return direct;
 
   const source = tokens(value);
@@ -151,10 +155,12 @@ function findByName<T extends { name: string }>(items: T[], value: RawCell): T |
   let best: { item: T; score: number } | null = null;
   let tied = false;
   for (const item of items) {
-    const target = tokens(item.name);
-    if (target.length === 0) continue;
-    const shared = source.filter((word) => target.some((other) => sameWord(word, other))).length;
-    const score = shared / Math.min(source.length, target.length);
+    const score = names(item).reduce((highest, name) => {
+      const target = tokens(name);
+      if (target.length === 0) return highest;
+      const shared = source.filter((word) => target.some((other) => sameWord(word, other))).length;
+      return Math.max(highest, shared / Math.min(source.length, target.length));
+    }, 0);
     if (best === null || score > best.score) {
       best = { item, score };
       tied = false;
@@ -192,7 +198,12 @@ export function normalizeKassaRows(
 
   rows.forEach((row, index) => {
     const sourceRow = firstRowNumber + index;
-    const add = (field: string, value: RawCell, message: string, severity: 'error' | 'info' = 'error') =>
+    const add = (
+      field: string,
+      value: RawCell,
+      message: string,
+      severity: 'error' | 'info' = 'error',
+    ) =>
       result.issues.push({
         severity,
         sourceSheet: sheetName,
@@ -223,11 +234,25 @@ export function normalizeKassaRows(
       return;
     }
 
-    const category = findByName(refs.categories, row[COL.category]);
+    const categoryText = String(row[COL.category] ?? '').trim();
+    const category = categoryText
+      ? findByName(refs.categories, row[COL.category])
+      : refs.categories.find((item) => item.code === 'OTHER_EXPENSES' && item.isActive);
     if (!category) {
       add('Kategoriya', row[COL.category], 'Kategoriya sozlamalarda topilmadi.');
       return;
     }
+    if (!category.isActive) {
+      add('Kategoriya', row[COL.category], 'Kategoriya faol emas.');
+      return;
+    }
+    if (!categoryText)
+      add(
+        'Kategoriya',
+        row[COL.category],
+        `Bo‘sh kategoriya «${category.name}» sifatida import qilindi.`,
+        'info',
+      );
 
     const paymentMethod = findByName(refs.paymentMethods, row[COL.paymentMethod]);
     if (!paymentMethod) {
@@ -235,18 +260,39 @@ export function normalizeKassaRows(
       return;
     }
 
-    const department = findByName(refs.departments, row[COL.department]);
+    const departmentText = String(row[COL.department] ?? '').trim();
+    const department = departmentText
+      ? findByName(refs.departments, row[COL.department])
+      : refs.departments.find((item) => item.code === 'GENERAL' && item.isActive);
     if (!department) {
       add('Bo‘lim', row[COL.department], 'Bo‘lim topilmadi.');
       return;
     }
+    if (!departmentText)
+      add(
+        'Bo‘lim',
+        row[COL.department],
+        `Bo‘sh bo‘lim «${department.name}» sifatida import qilindi.`,
+        'info',
+      );
 
     const responsibleText = String(row[COL.responsible] ?? '').trim();
-    const responsible = refs.users.find(
-      (user) =>
-        normalizeName(user.fullName) === normalizeName(responsibleText) ||
-        normalizeName(user.fullName).split(' ').includes(normalizeName(responsibleText)),
-    );
+    const responsible =
+      (normalizeName(responsibleText) === 'kassir'
+        ? refs.users.find(
+            (user) =>
+              user.status === 'active' &&
+              user.roles.some(
+                (assignment) => assignment.role === 'cashier' && assignment.branchId === branch.id,
+              ),
+          )
+        : undefined) ??
+      refs.users.find(
+        (user) =>
+          user.status === 'active' &&
+          (normalizeName(user.fullName) === normalizeName(responsibleText) ||
+            normalizeName(user.fullName).split(' ').includes(normalizeName(responsibleText))),
+      );
     if (!responsible && responsibleText)
       add(
         'Mas’ul',
@@ -256,6 +302,8 @@ export function normalizeKassaRows(
       );
 
     const commentParts = [String(row[COL.comment] ?? '').trim()];
+    if (!categoryText) commentParts.push(`Kategoriya (Excel): bo‘sh → ${category.name}`);
+    if (!departmentText) commentParts.push(`Bo‘lim (Excel): bo‘sh → ${department.name}`);
     if (!responsible && responsibleText) commentParts.push(`Mas’ul (Excel): ${responsibleText}`);
     const comment = commentParts.filter(Boolean).join(' · ') || null;
 

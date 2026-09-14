@@ -1,8 +1,8 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Put } from '@nestjs/common';
-import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Put, Query } from '@nestjs/common';
+import { ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, RequirePermissions, type AuthenticatedUser } from '@/common';
-import { SaveBudgetLinesDto } from './dto/budget.dto';
-import { BudgetService, type BudgetPlanDto } from './budget.service';
+import { BudgetHistoryQueryDto, SaveBudgetLinesDto } from './dto/budget.dto';
+import { BudgetService, type BudgetHistoryDto, type BudgetPlanDto } from './budget.service';
 
 /**
  * Permission codes match the mock backend: budget.view to read, budget.create_edit
@@ -13,6 +13,17 @@ import { BudgetService, type BudgetPlanDto } from './budget.service';
 @Controller('budget-plans')
 export class BudgetController {
   constructor(private readonly budget: BudgetService) {}
+
+  @Get('history')
+  @RequirePermissions('budget.view')
+  @ApiOperation({ summary: 'Budjet tarixi: yil × oy × kategoriya × filial' })
+  @ApiQuery({ name: 'year', required: false, type: Number, minimum: 2000, maximum: 2100 })
+  @ApiResponse({ status: 200, description: 'Oylar bo‘yicha filial rejalari, jami va izohlar' })
+  @ApiResponse({ status: 401, description: 'UNAUTHENTICATED' })
+  @ApiResponse({ status: 403, description: 'FORBIDDEN — budget.view yo‘q' })
+  history(@Query() query: BudgetHistoryQueryDto): Promise<BudgetHistoryDto> {
+    return this.budget.history(query.year);
+  }
 
   @Get(':periodId')
   @RequirePermissions('budget.view')

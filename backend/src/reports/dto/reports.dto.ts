@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class YearQueryDto {
@@ -58,6 +58,36 @@ export class DashboardQueryDto {
   @IsOptional()
   @IsIn(['daily', 'weekly', 'monthly'])
   granularity?: 'daily' | 'weekly' | 'monthly';
+}
+
+export class ExpensePlanAnalyticsQueryDto {
+  @ApiProperty({ description: 'Hisob davri UUID' })
+  @IsUUID()
+  period!: string;
+
+  @ApiPropertyOptional({ description: 'Filial UUID yoki "all"' })
+  @IsOptional()
+  @IsString()
+  branch?: string;
+}
+
+export class ExpenseAnalyticsQueryDto {
+  @ApiProperty({ description: 'Reja taqqoslanadigan hisob davri UUID' })
+  @IsUUID()
+  period!: string;
+
+  @ApiProperty({ example: '2026-08-01', description: 'Boshlanish sanasi (YYYY-MM-DD)' })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  from!: string;
+
+  @ApiProperty({ example: '2026-08-31', description: 'Tugash sanasi (YYYY-MM-DD)' })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  to!: string;
+
+  @ApiPropertyOptional({ description: 'Filial UUID yoki "all"' })
+  @IsOptional()
+  @IsString()
+  branch?: string;
 }
 
 export class CashierRowResponseDto {

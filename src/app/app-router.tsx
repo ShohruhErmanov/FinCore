@@ -9,6 +9,13 @@ import { EmptyState, LoadingState } from '@/shared/ui';
 const DashboardPage = lazy(async () => ({
   default: (await import('@/features/dashboard/dashboard-page')).DashboardPage,
 }));
+const ExpensePlanAnalyticsPage = lazy(async () => ({
+  default: (await import('@/features/dashboard/expense-plan-analytics-page'))
+    .ExpensePlanAnalyticsPage,
+}));
+const ExpenseAnalyticsPage = lazy(async () => ({
+  default: (await import('@/features/dashboard/expense-analytics-page')).ExpenseAnalyticsPage,
+}));
 const loadExpensePages = () => import('@/features/expenses/ExpensePages');
 const ExpenseLedgerPage = lazy(async () => ({
   default: (await loadExpensePages()).ExpenseLedgerPage,
@@ -79,6 +86,8 @@ export function AppRouter() {
             <Route index element={<Navigate to={routes.dashboard} replace />} />
             <Route element={<PermissionRoute permission="dashboard.view" />}>
               <Route path={routes.dashboard} element={<DashboardPage />} />
+              <Route path={routes.expensePlanAnalytics} element={<ExpensePlanAnalyticsPage />} />
+              <Route path={routes.expenseAnalytics} element={<ExpenseAnalyticsPage />} />
             </Route>
 
             <Route element={<PermissionRoute permission="expense.view_own_branch" />}>

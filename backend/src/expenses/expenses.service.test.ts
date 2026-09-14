@@ -78,10 +78,10 @@ function expectApiCode(error: unknown, status: number, code: string): void {
 }
 
 function harness() {
-  const expenseFindFirst = vi.fn(
-    async (): Promise<ReturnType<typeof expenseRow> | null> => null,
-  );
+  const expenseFindFirst = vi.fn(async (): Promise<ReturnType<typeof expenseRow> | null> => null);
   const expenseFindUnique = vi.fn(async () => expenseRow());
+  const expenseCount = vi.fn(async () => 0);
+  const expenseFindMany = vi.fn(async () => []);
   const branchFindUnique = vi.fn(async () => ({ is_active: true }));
   const categoryCount = vi.fn(async () => 1);
   const paymentMethodCount = vi.fn(async () => 1);
@@ -102,7 +102,12 @@ function harness() {
   );
   const prisma = {
     db: {
-      expenses: { findFirst: expenseFindFirst, findUnique: expenseFindUnique },
+      expenses: {
+        findFirst: expenseFindFirst,
+        findUnique: expenseFindUnique,
+        count: expenseCount,
+        findMany: expenseFindMany,
+      },
       branches: { findUnique: branchFindUnique },
       expense_categories: { count: categoryCount },
       payment_methods: { count: paymentMethodCount },
@@ -118,12 +123,45 @@ function harness() {
     service: new ExpensesService(prisma, actor),
     expenseFindFirst,
     expenseFindUnique,
+    expenseCount,
+    expenseFindMany,
     branchFindUnique,
     categoryCount,
     withActor,
     mint,
   };
 }
+
+describe('ExpensesService operational ledger', () => {
+  it('excludes reversed historical rows from the public list', async () => {
+    const test = harness();
+
+    await expect(
+      test.service.list(user({ permissions: ['expense.view_own_branch'] }), {
+        branch: 'all',
+        page: 1,
+        pageSize: 20,
+      }),
+    ).resolves.toMatchObject({ total: 0, items: [] });
+
+    expect(test.expenseCount).toHaveBeenCalledWith({
+      where: {
+        status: 'approved',
+        is_reversed: false,
+        branch_id: { in: [BRANCH_ID] },
+      },
+    });
+    expect(test.expenseFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          status: 'approved',
+          is_reversed: false,
+          branch_id: { in: [BRANCH_ID] },
+        },
+      }),
+    );
+  });
+});
 
 describe('ExpensesService branch write guards', () => {
   it('creates on an active branch inside current write scope', async () => {

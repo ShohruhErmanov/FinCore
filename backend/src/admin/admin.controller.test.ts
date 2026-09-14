@@ -35,8 +35,9 @@ function user(role: 'director' | 'finance_manager' | 'cashier', permissions: str
 
 function contextFor(
   actor: AuthenticatedUser,
-  handler: typeof AdminController.prototype.updateStatus | typeof AdminController.prototype.deleteUser =
-    AdminController.prototype.updateStatus,
+  handler:
+    | typeof AdminController.prototype.updateStatus
+    | typeof AdminController.prototype.deleteUser = AdminController.prototype.updateStatus,
 ): ExecutionContext {
   return {
     getHandler: () => handler,
@@ -78,7 +79,9 @@ describe('AdminController user status permission', () => {
 
 describe('AdminController user delete permission', () => {
   it('allows a Director holding user.delete to reach the hard-delete service', async () => {
-    const users = { deleteUser: vi.fn().mockResolvedValue(undefined) } as unknown as AdminUsersService;
+    const users = {
+      deleteUser: vi.fn().mockResolvedValue(undefined),
+    } as unknown as AdminUsersService;
     const controller = new AdminController(users, {} as AdminRolesService);
     const guard = new PermissionsGuard(new Reflector());
     const actor = user('director', ['user.manage', 'user.delete']);
@@ -94,7 +97,6 @@ describe('AdminController user delete permission', () => {
     ['Cashier', user('cashier', [])],
   ])('denies %s before the hard-delete service is called', (_label, actor) => {
     const users = { deleteUser: vi.fn() } as unknown as AdminUsersService;
-    const controller = new AdminController(users, {} as AdminRolesService);
     const guard = new PermissionsGuard(new Reflector());
 
     expect(() =>

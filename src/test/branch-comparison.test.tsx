@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -210,50 +210,26 @@ describe('Filiallar taqqoslash — Excel bilan mos ko‘rinish', () => {
     vi.mocked(reportApi.branchComparison).mockResolvedValue(report);
   });
 
-  it('oylik jadvalda har bir filial fakt va rejasini, jami hamda mavjud qo‘shimcha ustunlarni saqlaydi', async () => {
+  it('uzun oylik jadval o‘rniga filial va kategoriya kesimidagi qisqa xulosalarni ko‘rsatadi', async () => {
     renderPage();
 
-    const table = await screen.findByRole('table', { name: /oylik taqqoslash/i });
-    const headers = within(table)
-      .getAllByRole('columnheader')
-      .map((cell) => cell.textContent);
-
-    expect(headers).toEqual([
-      'Oy',
-      'Sayxun fakt',
-      'Xalqlar do‘stligi fakt',
-      'Jami fakt',
-      'Sayxun reja',
-      'Xalqlar do‘stligi reja',
-      'Jami reja',
-      'Farq',
-      'Bajarilish',
-    ]);
-    expect(within(table).getByRole('row', { name: /Avgust/ })).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'Sayxun filialida Ijara (bino arendasi) xarajati rejadan 286% oshgan.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Xalqlar do‘stligi filialida Ijara (bino arendasi) xarajati rejaning 75%ini tashkil qilgan.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('table', { name: /oylik taqqoslash/i })).not.toBeInTheDocument();
   });
 
-  it('Excel 2_filial_bitta_jadval kesimida kategoriya va uchta reja-fakt-farq blokini ko‘rsatadi', async () => {
+  it('global davr va filialni API so‘roviga uzatib, takroriy hisobot filtrini chiqarmaydi', async () => {
     renderPage();
 
-    const table = await screen.findByRole('table', { name: /Avgust ikki filial bitta jadval/i });
-    const headers = within(table)
-      .getAllByRole('columnheader')
-      .map((cell) => cell.textContent);
-    expect(headers).toEqual(
-      expect.arrayContaining([
-        'Turi',
-        'Xarajat kategoriyasi',
-        'Sayxun filiali',
-        'Xalqlar do‘stligi filiali',
-        'Ikki filial jami',
-      ]),
-    );
-    expect(within(table).getByRole('row', { name: /Ijara \(bino arendasi\)/ })).toBeInTheDocument();
-    expect(within(table).getByRole('row', { name: /Marketing va reklama/ })).toBeInTheDocument();
-    expect(within(table).getByRole('row', { name: /Umumiy jami/i })).toBeInTheDocument();
-
-    const result = screen.getByRole('table', { name: 'Filial natijasi' });
-    expect(within(result).getByRole('columnheader', { name: 'Ishlatildi %' })).toBeInTheDocument();
+    expect(await screen.findByText('Avgust 2026 · muhim xulosalar')).toBeInTheDocument();
     expect(vi.mocked(reportApi.branchComparison)).toHaveBeenCalledWith(
       { year: '2026', month: '8', branch: 'all' },
       expect.any(AbortSignal),
@@ -265,7 +241,7 @@ describe('Filiallar taqqoslash — Excel bilan mos ko‘rinish', () => {
     vi.mocked(reportApi.branchComparison).mockResolvedValue(singleBranchReport);
     renderPage(SAYXUN);
 
-    await screen.findByText('Oylik xarajatlar — Sayxun');
+    await screen.findByText('Sayxun filialida Ijara (bino arendasi) xarajati rejadan 286% oshgan.');
     expect(vi.mocked(reportApi.branchComparison)).toHaveBeenCalledWith(
       { year: '2026', month: '8', branch: SAYXUN },
       expect.any(AbortSignal),
@@ -274,24 +250,18 @@ describe('Filiallar taqqoslash — Excel bilan mos ko‘rinish', () => {
     expect(screen.queryByText('Filial ma’lumoti mavjud emas')).not.toBeInTheDocument();
   });
 
-  it('Excel shaklidagi yillik fakt, reja va bajarilish jadvalini chiqaradi', async () => {
+  it('yillik uzun jadval o‘rniga kartalar va grafikni saqlaydi', async () => {
     renderPage();
 
-    const table = await screen.findByRole('table', { name: /yillik fakt, reja/i });
-    expect(within(table).getByRole('columnheader', { name: 'Filial' })).toBeInTheDocument();
-    expect(within(table).getByRole('columnheader', { name: 'Yillik fakt' })).toBeInTheDocument();
-    expect(within(table).getByRole('columnheader', { name: 'Yillik reja' })).toBeInTheDocument();
-    expect(
-      within(table).getByRole('columnheader', { name: 'Reja bajarilishi' }),
-    ).toBeInTheDocument();
-    expect(within(table).getByRole('row', { name: /Sayxun/ })).toBeInTheDocument();
-    expect(within(table).getByRole('row', { name: /Xalqlar do‘stligi/ })).toBeInTheDocument();
+    await screen.findByText('Avgust 2026 · muhim xulosalar');
+    expect(screen.getByText('Yillik xarajat: Reja / Fakt')).toBeInTheDocument();
+    expect(screen.queryByRole('table', { name: /yillik fakt, reja/i })).not.toBeInTheDocument();
   });
 
   it('mavjud kartalar, diagrammalar va CSV eksportini saqlaydi', async () => {
     renderPage();
 
-    await screen.findByRole('table', { name: /oylik taqqoslash/i });
+    await screen.findByText('Avgust 2026 · muhim xulosalar');
     expect(screen.getByRole('button', { name: /CSV yuklab olish/i })).toBeEnabled();
     expect(
       screen.getByLabelText(/Sayxun va Xalqlar do‘stligi oylar bo‘yicha xarajat/i),

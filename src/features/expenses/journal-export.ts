@@ -8,7 +8,7 @@ export const JOURNAL_HEADERS = [
   'Kategoriya',
   'Turi',
   'Tavsif / nima uchun',
-  "Summa, so'm",
+  'Summa, so‘m',
   "To'lov usuli",
   "Bo'lim",
   "Mas'ul",

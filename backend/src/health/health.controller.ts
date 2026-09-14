@@ -34,7 +34,9 @@ export class HealthController {
       status: status === 'CONNECTED' && reachable ? 'ok' : 'degraded',
       environment: this.env.NODE_ENV,
       uptimeSeconds: Math.round(process.uptime()),
-      database: { status, detail: this.prisma.statusDetail },
+      // Keep driver/host diagnostics server-side. Even with credentials
+      // redacted, a public health endpoint must not reveal infrastructure.
+      database: { status, detail: null },
       checkedAt: new Date().toISOString(),
     };
   }

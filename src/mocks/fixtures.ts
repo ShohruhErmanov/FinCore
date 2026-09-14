@@ -544,6 +544,7 @@ function seedBudgetPlan(
           actualAmountUzs: actual,
           varianceUzs: plan === null ? null : String(BigInt(plan) - BigInt(actual)),
           hasPlan,
+          reason: null,
         };
       }),
     ),

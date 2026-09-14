@@ -12,7 +12,7 @@ export function telegramMoney(value: string | null | undefined): string {
   if (value === null || value === undefined) return '—';
   const negative = value.startsWith('-');
   const digits = (negative ? value.slice(1) : value).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-  return `${negative ? '−' : ''}${digits} so'm`;
+  return `${negative ? '−' : ''}${digits} so‘m`;
 }
 
 export function telegramPercent(value: number | null | undefined): string {

@@ -18,18 +18,18 @@ function groupDigits(digits: string): string {
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 }
 
-export function formatMoney(value: MoneyUzs | null | undefined, compact = false): string {
+/**
+ * Pul qiymati har doim to‘liq ko‘rsatiladi: 124 800 000 so‘m.
+ * Ikkinchi argument eski chaqiruvlar bilan moslik uchun saqlangan; u endi summani qisqartirmaydi.
+ */
+export function formatMoney(value: MoneyUzs | null | undefined, _compact = false): string {
+  void _compact;
   if (value === null || value === undefined) return 'Reja mavjud emas';
   const amount = BigInt(value);
   const negative = amount < 0n;
   const absolute = negative ? -amount : amount;
   const sign = negative ? '−' : '';
-  if (compact && absolute >= 1_000_000n) {
-    const whole = absolute / 1_000_000n;
-    const decimal = (absolute % 1_000_000n) / 100_000n;
-    return `${sign}${groupDigits(whole.toString())}${decimal > 0n ? `,${decimal}` : ''} mln so'm`;
-  }
-  return `${sign}${groupDigits(absolute.toString())} so'm`;
+  return `${sign}${groupDigits(absolute.toString())} so‘m`;
 }
 
 /** Kasr qismi vergul bilan: 93,75% — o‘zbek/CIS yozuvi. */

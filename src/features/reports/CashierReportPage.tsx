@@ -14,12 +14,10 @@ import {
   Card,
   EmptyState,
   ErrorState,
-  FormField,
   LoadingState,
   MoneyText,
   PageHeader,
   PercentText,
-  Select,
   VarianceText,
 } from '@/shared/ui';
 
@@ -93,16 +91,11 @@ function Tile({ label, value, helper }: { label: string; value: React.ReactNode;
 }
 
 export function CashierReportPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const periods = useQuery({
     queryKey: queryKeys.periods,
     queryFn: ({ signal }) => referenceApi.periods(signal),
     staleTime: 60_000,
-  });
-  const branches = useQuery({
-    queryKey: queryKeys.branches,
-    queryFn: ({ signal }) => referenceApi.branches(signal),
-    staleTime: 300_000,
   });
   const period =
     searchParams.get('period') ??
@@ -118,16 +111,13 @@ export function CashierReportPage() {
 
   const ownScope = report.data?.scope === 'own';
 
-  const setFilter = (key: string, value: string) => {
-    const next = new URLSearchParams(searchParams);
-    next.set(key, value);
-    setSearchParams(next, { replace: true });
-  };
-
   return (
     <div>
       <Breadcrumbs
-        items={[{ label: 'Hisobotlar' }, { label: ownScope ? 'Mening natijam' : 'Kassirlar', current: true }]}
+        items={[
+          { label: 'Hisobotlar' },
+          { label: ownScope ? 'Mening natijam' : 'Kassirlar', current: true },
+        ]}
       />
       <PageHeader
         title={ownScope ? 'Mening natijam' : 'Kassirlar hisoboti'}
@@ -146,40 +136,6 @@ export function CashierReportPage() {
           </Button>
         }
       />
-
-      <Card title="Filtrlar" className="mb-5">
-        <div className="grid gap-4 sm:grid-cols-2 lg:max-w-2xl">
-          <FormField label="Davr" htmlFor="cashier-period">
-            <Select
-              id="cashier-period"
-              value={period}
-              onChange={(event) => setFilter('period', event.target.value)}
-            >
-              {(periods.data ?? []).map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.label}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-          {!ownScope ? (
-            <FormField label="Markaz" htmlFor="cashier-branch">
-              <Select
-                id="cashier-branch"
-                value={branch}
-                onChange={(event) => setFilter('branch', event.target.value)}
-              >
-                <option value="all">Barchasi</option>
-                {(branches.data ?? []).map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
-          ) : null}
-        </div>
-      </Card>
 
       {report.isLoading ? <LoadingState label="Kassirlar hisoboti hisoblanmoqda…" /> : null}
       {report.isError ? (
@@ -409,9 +365,9 @@ function CashierReportContent({ report }: { report: CashierReport }) {
 
       <Alert title="Reja qanday bo‘linadi" tone="info" className="mt-5">
         Kassirning rejasi — <strong>markazning oylik tushum rejasi</strong> shu filialdagi{' '}
-        <strong>faol</strong> kassirlar orasida teng bo‘lingani. Nofaol xodimga reja
-        berilmaydi, lekin uning tarixiy tushumi hisobotdan yo‘qolmaydi. Fix oylikni
-        «Foydalanuvchilar» sahifasida o‘zgartirasiz.
+        <strong>faol</strong> kassirlar orasida teng bo‘lingani. Nofaol xodimga reja berilmaydi,
+        lekin uning tarixiy tushumi hisobotdan yo‘qolmaydi. Fix oylikni «Foydalanuvchilar»
+        sahifasida o‘zgartirasiz.
       </Alert>
     </>
   );

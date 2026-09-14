@@ -13,11 +13,34 @@ const refs: ImportReference = {
     { id: 'b-xalqlar', name: "Xalqlar do'stligi" },
   ],
   categories: [
-    { id: 'c-rent', code: 'RENT', name: 'Ijara', expenseType: 'fixed', isActive: true, aliases: [] },
+    {
+      id: 'c-rent',
+      code: 'RENT',
+      name: 'Ijara',
+      expenseType: 'fixed',
+      isActive: true,
+      aliases: [],
+    },
     {
       id: 'c-stationery',
       code: 'STATIONERY',
       name: 'Kanselyariya va o‘quv materiallari',
+      expenseType: 'variable',
+      isActive: true,
+      aliases: [],
+    },
+    {
+      id: 'c-equipment',
+      code: 'EQUIPMENT_PURCHASE',
+      name: 'Texnika xaridi',
+      expenseType: 'variable',
+      isActive: true,
+      aliases: ['Texnika sotib olish va yangilash'],
+    },
+    {
+      id: 'c-other',
+      code: 'OTHER_EXPENSES',
+      name: 'Boshqa xarajatlar',
       expenseType: 'variable',
       isActive: true,
       aliases: [],
@@ -28,7 +51,23 @@ const refs: ImportReference = {
     { id: 'p-click', code: 'CLICK_PAYME', name: 'Click/Payme', isActive: true },
   ],
   departments: [{ id: 'd-general', code: 'GENERAL', name: 'Umumiy', isActive: true }],
-  users: [{ id: 'u-madina', fullName: 'Madina Karimova', status: 'active', roles: [] }],
+  users: [
+    { id: 'u-madina', fullName: 'Madina Karimova', status: 'active', roles: [] },
+    {
+      id: 'u-xalqlar-cashier',
+      fullName: 'Maftuna Kassir',
+      status: 'active',
+      roles: [
+        {
+          id: 'ur-xalqlar-cashier',
+          role: 'cashier',
+          roleName: 'Kassir',
+          branchId: 'b-xalqlar',
+          branchName: "Xalqlar do'stligi",
+        },
+      ],
+    },
+  ],
   fallbackUserId: 'u-current',
 };
 
@@ -116,10 +155,46 @@ describe('[FE-IMPORT-03] kassa varag‘ini import qilish', () => {
     expect(result.rows[0]?.categoryId).toBe('c-stationery');
   });
 
+  it('DB aliasi orqali Excel kategoriyasini aniq moslaydi', () => {
+    const result = normalizeKassaRows(
+      'Xalqlar_kassa',
+      [row('08.08.2026', 25000, { 4: 'Texnika sotib olish va yangilash' })],
+      refs,
+    );
+    expect(result.rows[0]?.categoryId).toBe('c-equipment');
+  });
+
+  it('bo‘sh kategoriya va bo‘limni xavfsiz umumiy qiymatlarga bog‘lab, izohda saqlaydi', () => {
+    const result = normalizeKassaRows(
+      'Xalqlar_kassa',
+      [row('12.08.2026', 250000, { 4: null, 9: null })],
+      refs,
+    );
+    expect(result.rows[0]).toMatchObject({
+      categoryId: 'c-other',
+      departmentId: 'd-general',
+    });
+    expect(result.rows[0]?.comment).toContain('Kategoriya (Excel): bo‘sh');
+    expect(result.rows[0]?.comment).toContain('Bo‘lim (Excel): bo‘sh');
+    expect(result.issues.filter((issue) => issue.severity === 'info')).toHaveLength(2);
+  });
+
+  it('«Kassir»ni qator filialining faol kassiriga bog‘laydi', () => {
+    const result = normalizeKassaRows(
+      'Xalqlar_kassa',
+      [row('12.08.2026', 5000, { 10: 'Kassir', 11: 'Xalqlar do‘stligi' })],
+      refs,
+    );
+    expect(result.rows[0]?.responsibleUserId).toBe('u-xalqlar-cashier');
+    expect(result.issues).toEqual([]);
+  });
+
   it('apostrof va bo‘shliq farqiga qaramay filialni topadi', () => {
-    const result = normalizeKassaRows('Xalqlar_kassa', [
-      row(46235, 5000, { 11: 'Xalqlar do‘stligi ' }),
-    ], refs);
+    const result = normalizeKassaRows(
+      'Xalqlar_kassa',
+      [row(46235, 5000, { 11: 'Xalqlar do‘stligi ' })],
+      refs,
+    );
     expect(result.rows[0]?.branchId).toBe('b-xalqlar');
   });
 

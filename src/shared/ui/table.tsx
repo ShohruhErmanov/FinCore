@@ -27,12 +27,12 @@ export function DataTable<T extends { id: string }>({
       <table className="w-full min-w-[760px] text-left text-sm">
         <caption className="sr-only">{caption}</caption>
         <thead>
-          <tr className="border-b border-border bg-slate-50">
+          <tr className="border-b border-border bg-slate-50/80">
             {columns.map((column) => (
               <th
                 key={column.key}
                 scope="col"
-                className={`whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600 ${column.className ?? ''}`}
+                className={`whitespace-nowrap px-4 py-3.5 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500 ${column.className ?? ''}`}
               >
                 {column.header}
               </th>
@@ -53,14 +53,14 @@ export function DataTable<T extends { id: string }>({
               }}
               className={
                 onRowClick
-                  ? 'cursor-pointer border-b border-border last:border-0 hover:bg-blue-50/50 focus:bg-blue-50/50'
-                  : 'border-b border-border last:border-0'
+                  ? 'cursor-pointer border-b border-border/80 transition-colors last:border-0 hover:bg-blue-50/55 focus:bg-blue-50/55'
+                  : 'border-b border-border/80 transition-colors last:border-0 hover:bg-slate-50/60'
               }
             >
               {columns.map((column) => (
                 <td
                   key={column.key}
-                  className={`px-4 py-3 align-middle text-slate-700 ${column.className ?? ''}`}
+                  className={`px-4 py-3.5 align-middle text-slate-700 ${column.className ?? ''}`}
                 >
                   {column.cell(row)}
                 </td>

@@ -5,9 +5,18 @@ const BOM = '\ufeff';
 
 /** RFC 4180 bo‘yicha qator: har katak qo‘shtirnoqda, ichki qo‘shtirnoq ikkilanadi. */
 export function buildCsv(rows: CsvCell[][]): string {
-  return rows
-    .map((row) => row.map((cell) => `"${String(cell ?? '').replaceAll('"', '""')}"`).join(','))
-    .join('\r\n');
+  return rows.map((row) => row.map((cell) => quoteCell(cell)).join(',')).join('\r\n');
+}
+
+/**
+ * Spreadsheet programs can execute a string beginning with =, +, - or @ as a
+ * formula even when the CSV field is quoted. Prefix only string cells with an
+ * apostrophe; numeric amounts remain numeric and untrusted labels stay inert.
+ */
+function quoteCell(cell: CsvCell): string {
+  const value = String(cell ?? '');
+  const safe = typeof cell === 'string' && /^[\s]*[=+\-@]/.test(value) ? `'${value}` : value;
+  return `"${safe.replaceAll('"', '""')}"`;
 }
 
 /** Fayl nomi: fincore-<nom>-YYYY-MM-DD.csv */

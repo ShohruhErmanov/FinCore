@@ -23,6 +23,12 @@ describe('[FE-EXPORT-01] CSV quruvchisi', () => {
     expect(buildCsv([[null, undefined, 0]])).toBe('"","","0"');
   });
 
+  it('foydalanuvchi matnidagi spreadsheet formulalarini zararsizlantiradi', () => {
+    expect(buildCsv([['=HYPERLINK("https://evil.example")', '  +SUM(1,1)', -25]])).toBe(
+      '"\'=HYPERLINK(""https://evil.example"")","\'  +SUM(1,1)","-25"',
+    );
+  });
+
   it('fayl nomiga sana qo‘shadi', () => {
     expect(csvFileName('oylik-hisobot-2026')).toMatch(
       /^fincore-oylik-hisobot-2026-\d{4}-\d{2}-\d{2}\.csv$/,

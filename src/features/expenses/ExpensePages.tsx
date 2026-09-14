@@ -63,7 +63,6 @@ const expenseFormSchema = z.object({
   paymentMethodId: z.string().min(1, 'To‘lov usulini tanlang.'),
   departmentId: z.string().min(1, 'Bo‘limni tanlang.'),
   responsibleUserId: z.string().min(1, 'Mas’ul xodimni tanlang.'),
-  comment: z.string().max(1000, '1000 belgidan oshmasin.').optional(),
 });
 
 type ExpenseFormValues = z.infer<typeof expenseFormSchema>;
@@ -95,9 +94,7 @@ export function ExpenseLedgerPage() {
     : 20;
   const branch = searchParams.get('branch') ?? 'all';
 
-  // The ledger follows the period chosen in the top bar. An explicit
-  // year/month filter on this page still wins, so a user can look outside
-  // the selected period without changing it for every other screen.
+  // Navbar davri va filiali barcha sahifalar uchun yagona kontekst hisoblanadi.
   const periodsQuery = useQuery({
     queryKey: queryKeys.periods,
     queryFn: ({ signal }) => referenceApi.periods(signal),
@@ -105,8 +102,8 @@ export function ExpenseLedgerPage() {
   });
   const selectedPeriodId = searchParams.get('period');
   const selectedPeriod = periodsQuery.data?.find((period) => period.id === selectedPeriodId);
-  const year = searchParams.get('year') ?? selectedPeriod?.year?.toString();
-  const month = searchParams.get('month') ?? selectedPeriod?.month?.toString();
+  const year = selectedPeriod?.year?.toString();
+  const month = selectedPeriod?.month?.toString();
 
   const listFilters = {
     dateFrom: searchParams.get('dateFrom') ?? undefined,
@@ -143,11 +140,6 @@ export function ExpenseLedgerPage() {
     },
   });
 
-  const branchesQuery = useQuery({
-    queryKey: queryKeys.branches,
-    queryFn: ({ signal }) => referenceApi.branches(signal),
-    staleTime: 300_000,
-  });
   const categoriesQuery = useQuery({
     queryKey: queryKeys.master('categories'),
     queryFn: ({ signal }) => referenceApi.categories(signal),
@@ -240,9 +232,16 @@ export function ExpenseLedgerPage() {
     [rowNumberById],
   );
 
-  const clearFilters = () => setSearchParams(new URLSearchParams(), { replace: true });
+  const clearFilters = () => {
+    const next = new URLSearchParams();
+    const period = searchParams.get('period');
+    const selectedBranch = searchParams.get('branch');
+    if (period) next.set('period', period);
+    if (selectedBranch) next.set('branch', selectedBranch);
+    setSearchParams(next, { replace: true });
+  };
   const hasFilters = [...searchParams.keys()].some(
-    (key) => !['page', 'pageSize', 'sort'].includes(key),
+    (key) => !['page', 'pageSize', 'sort', 'period', 'branch'].includes(key),
   );
 
   return (
@@ -319,22 +318,6 @@ export function ExpenseLedgerPage() {
                 updateQueryParam(searchParams, setSearchParams, 'dateTo', event.target.value)
               }
             />
-          </FormField>
-          <FormField label="Filial" htmlFor="expense-branch">
-            <Select
-              id="expense-branch"
-              value={branch}
-              onChange={(event) =>
-                updateQueryParam(searchParams, setSearchParams, 'branch', event.target.value)
-              }
-            >
-              <option value="all">Barchasi</option>
-              {(branchesQuery.data ?? []).map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </Select>
           </FormField>
           <FormField label="Kategoriya" htmlFor="expense-category">
             <Select
@@ -550,7 +533,6 @@ export function ExpenseCreatePage() {
       paymentMethodId: '',
       departmentId: '',
       responsibleUserId: '',
-      comment: '',
     },
   });
 
@@ -616,7 +598,6 @@ export function ExpenseCreatePage() {
     mutation.mutate({
       ...values,
       branchId,
-      comment: values.comment?.trim() || undefined,
       idempotencyKey: idempotencyKey.current,
     });
   });
@@ -856,20 +837,6 @@ export function ExpenseCreatePage() {
                   />
                 </FormField>
               </div>
-              <div className="md:col-span-2">
-                <FormField
-                  label="Qo‘shimcha izoh"
-                  htmlFor="expense-form-comment"
-                  error={errors.comment?.message}
-                >
-                  <Textarea
-                    id="expense-form-comment"
-                    aria-invalid={Boolean(errors.comment)}
-                    aria-describedby={errors.comment ? 'expense-form-comment-error' : undefined}
-                    {...register('comment')}
-                  />
-                </FormField>
-              </div>
             </div>
             <Alert title="Server tekshiruvi majburiy" tone="info" className="mt-5">
               Filial scope’i, ochiq davr, kategoriya turi va audit maydonlari backend tomonidan
@@ -922,7 +889,6 @@ function ExpenseEditForm({ expense, onDone }: { expense: Expense; onDone: () => 
       paymentMethodId: expense.paymentMethodId,
       departmentId: expense.departmentId,
       responsibleUserId: expense.responsibleUserId,
-      comment: expense.comment ?? '',
     },
   });
   const selectedCategory = references.categories.data?.find(
@@ -938,7 +904,6 @@ function ExpenseEditForm({ expense, onDone }: { expense: Expense; onDone: () => 
         paymentMethodId: values.paymentMethodId,
         departmentId: values.departmentId,
         responsibleUserId: values.responsibleUserId,
-        comment: values.comment?.trim() || undefined,
       }),
     onSuccess: async () => {
       await Promise.all([
@@ -1066,11 +1031,6 @@ function ExpenseEditForm({ expense, onDone }: { expense: Expense; onDone: () => 
             error={errors.description?.message}
           >
             <Textarea id="edit-expense-description" {...register('description')} />
-          </FormField>
-        </div>
-        <div className="md:col-span-2">
-          <FormField label="Izoh" htmlFor="edit-expense-comment" error={errors.comment?.message}>
-            <Textarea id="edit-expense-comment" {...register('comment')} />
           </FormField>
         </div>
       </div>

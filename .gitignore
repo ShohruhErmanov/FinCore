@@ -12,3 +12,10 @@ test-results
 .codex/*
 !.codex/config.example.toml
 .claude/
+
+# Local database investigation artifacts (may contain real row IDs/counts).
+backend/db-analysis.json
+backend/db-august-analysis.json
+backend/scripts/inspect-db.mjs
+backend/scripts/inspect-db-fks.mjs
+backend/scripts/inspect-db-fns.mjs

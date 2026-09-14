@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="FinCore">
+  <title>FinCore</title>
+  <!--
+    Cap height 40 (y 12–52), stem 9, counter 9. The arms begin inside the stem
+    so their left rounding is covered and the union stays one clean letterform.
+
+    Two tones, not decoration: the stem is the shared axis (one ledger), the
+    long arm is plan and the short cyan arm is actual. An F is already two bars
+    on a common axis, so the meaning costs no extra shape — which is why it
+    still reads at 16px.
+  -->
+  <g fill="#1A5BF6">
+    <rect x="20" y="12" width="9" height="40" rx="2.5"/>
+    <rect x="23" y="12" width="21" height="9" rx="2.5"/>
+  </g>
+  <rect x="23" y="30" width="18" height="9" rx="2.5" fill="#22D3EE"/>
+</svg>

@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Eye, EyeOff, Landmark, LockKeyhole, Phone, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff, LockKeyhole, Phone, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { getApiErrorMessage } from '@/shared/api/client';
 import { environment } from '@/shared/config/env';
 import { routes } from '@/shared/config/routes';
-import { Alert, Button, FormField, Input } from '@/shared/ui';
+import { Alert, BrandMark, Button, FormField, Input } from '@/shared/ui';
 import { useAuth } from './auth-context';
 
 const schema = z.object({
@@ -57,14 +57,14 @@ export function LoginPage() {
   return (
     <main className="min-h-screen bg-navy lg:grid lg:grid-cols-[1.05fr_0.95fr]">
       <section
-        className="relative hidden overflow-hidden p-12 text-white lg:flex lg:flex-col lg:justify-between"
+        className="relative hidden overflow-hidden bg-[linear-gradient(145deg,#041126_0%,#071a3a_58%,#0b2f68_100%)] p-12 text-white lg:flex lg:flex-col lg:justify-between"
         aria-label="FINCORE haqida"
       >
         <div className="absolute -left-40 top-1/3 h-96 w-96 rounded-full bg-blue-500/20 blur-3xl" />
         <div className="absolute -right-32 -top-24 h-80 w-80 rounded-full bg-cyan-300/10 blur-3xl" />
         <div className="relative flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-xl bg-primary text-white shadow-lg">
-            <Landmark className="h-6 w-6" />
+          <div className="grid h-11 w-11 place-items-center rounded-xl bg-white shadow-[0_16px_34px_-16px_rgba(59,130,246,0.9)] ring-1 ring-white/30">
+            <BrandMark className="h-9 w-9" />
           </div>
           <div>
             <p className="text-xl font-bold tracking-tight">FINCORE</p>
@@ -72,11 +72,11 @@ export function LoginPage() {
           </div>
         </div>
         <div className="relative max-w-xl">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-blue-300">
-            Aniq. Nazoratli. Shaffof.
+          <p className="inline-flex rounded-full border border-blue-300/20 bg-blue-400/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-blue-200 backdrop-blur">
+            Financial operating system
           </p>
-          <h1 className="mt-5 text-5xl font-bold leading-tight tracking-tight">
-            Ikki filial moliyasini bitta ishonchli ledgerda boshqaring.
+          <h1 className="mt-6 text-5xl font-bold leading-[1.08] tracking-[-0.045em]">
+            Moliyani real vaqtda, ishonch bilan boshqaring.
           </h1>
           <p className="mt-6 max-w-lg text-base leading-7 text-slate-300">
             Budjet va xarajat bitta ledgerda bog‘langan. Har KPI manba tranzaksiyasigacha ochiladi.
@@ -94,18 +94,20 @@ export function LoginPage() {
         </div>
       </section>
 
-      <section className="flex min-h-screen items-center justify-center bg-canvas px-5 py-10 sm:px-10">
+      <section className="relative flex min-h-screen items-center justify-center overflow-hidden bg-canvas px-5 py-10 sm:px-10">
+        <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-blue-300/20 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-32 left-8 h-72 w-72 rounded-full bg-cyan-200/20 blur-3xl" />
         <div className="w-full max-w-md">
           <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary text-white">
-              <Landmark className="h-5 w-5" />
+            <div className="grid h-10 w-10 place-items-center rounded-xl border border-blue-100 bg-white shadow-sm">
+              <BrandMark className="h-8 w-8" />
             </div>
             <div>
               <p className="font-bold text-ink">FINCORE</p>
               <p className="text-xs text-muted">Moliya platformasi</p>
             </div>
           </div>
-          <div className="rounded-2xl border border-border bg-white p-6 shadow-xl shadow-slate-900/5 sm:p-8">
+          <div className="relative rounded-[28px] border border-white/80 bg-white/90 p-6 shadow-[0_32px_80px_-38px_rgba(15,23,42,0.4)] ring-1 ring-slate-200/70 backdrop-blur-xl sm:p-8">
             <h2 className="text-2xl font-bold tracking-tight text-ink">Tizimga kirish</h2>
             <p className="mt-2 text-sm text-muted">Telefon raqamingiz va parolingizni kiriting.</p>
             {serverError ? (
