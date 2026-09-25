@@ -44,7 +44,9 @@ function harness(roleCode: string) {
     },
     withActor,
   } as unknown as PrismaService;
-  const actor = { mint: vi.fn().mockReturnValue('signed-actor-token') } as unknown as ActorContextService;
+  const actor = {
+    mint: vi.fn().mockReturnValue('signed-actor-token'),
+  } as unknown as ActorContextService;
   return { service: new AdminRolesService(prisma, actor), prisma, withActor };
 }
 
@@ -95,5 +97,16 @@ describe('AdminRolesService Director-only user.delete policy', () => {
     ).resolves.toEqual({ role: 'director', permissions: ['user.delete'] });
 
     expect(test.withActor).toHaveBeenCalledOnce();
+  });
+});
+
+describe('AdminRolesService Business Owner invariant', () => {
+  it('does not let even a Director widen the strategic read-only permission set', async () => {
+    const test = harness('business_owner');
+
+    await expect(
+      test.service.replacePermissions(director(), 'business_owner', ['user.delete']),
+    ).rejects.toMatchObject({ code: 'BUSINESS_OWNER_ROLE_IMMUTABLE' });
+    expect(test.withActor).not.toHaveBeenCalled();
   });
 });

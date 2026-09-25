@@ -252,7 +252,9 @@ describe('AdminUsersService.deleteUser (PHASE 36)', () => {
       code: 'LAST_DIRECTOR_REQUIRED',
     });
 
-    expect(tx.$executeRaw).toHaveBeenCalledOnce();
+    // User deletion serializes both protected high-authority lifecycles:
+    // Director and Business Owner.
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(2);
     expect(tx.$queryRaw).toHaveBeenCalledOnce();
     expect(users.delete).not.toHaveBeenCalled();
     expect(sessions.destroyAllForUser).not.toHaveBeenCalled();

@@ -85,6 +85,7 @@ export class AuthService {
                 name: true,
                 is_active: true,
                 allows_all_branch_scope: true,
+                allows_branchless_scope: true,
                 role_permissions: { select: { permission: { select: { code: true } } } },
               },
             },
@@ -122,7 +123,17 @@ export class AuthService {
     const activeScopedBranchIds = assignments
       .filter((item) => item.branch_id !== null && item.branch?.is_active)
       .map((item) => item.branch_id as string);
-    const hasAllBranchRead = assignments.some((item) => item.role.allows_all_branch_scope);
+    // Two different reasons to read company-wide, kept apart on purpose:
+    //   allows_all_branch_scope  — the role reads every branch's ledger;
+    //   allows_branchless_scope  — the role has no branch dimension at all
+    //                              (the investor), so filtering by branch would
+    //                              hide their own data behind a scope they can
+    //                              never hold.
+    // Both widen READ only. WRITE stays with GLOBAL_WRITE_ROLE_CODES below, so
+    // a branchless role never gains a mutation scope it has no permission for.
+    const hasAllBranchRead = assignments.some(
+      (item) => item.role.allows_all_branch_scope || item.role.allows_branchless_scope,
+    );
     const hasAllBranchWrite = assignments.some(
       (item) => item.branch_id === null && GLOBAL_WRITE_ROLE_CODES.has(item.role.code),
     );

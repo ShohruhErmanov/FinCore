@@ -279,6 +279,67 @@ export const EVENT_CATALOG = {
     payload: z.object({ periodId: uuid }).strict(),
     dedupe: (p) => `monthly_report.ready:${p.periodId}`,
   }),
+
+  /**
+   * An investor has asked to be paid their share of a period. Company scope:
+   * an investor's stake is not a branch's business, and the people who decide
+   * these are resolved by permission at fan-out time, not by branch.
+   *
+   * The payload carries ids and the requested amount and nothing else. The
+   * investor's name, phone and ownership percentage stay out of notification
+   * history — a renderer that needs them looks them up under the recipient's
+   * own permissions.
+   */
+  'investor_payout.requested': define({
+    aggregateType: 'investor_payout_request',
+    scope: 'company',
+    sensitivity: 'restricted',
+    policyVersion: 1,
+    templateVersion: 1,
+    payload: z
+      .object({ requestId: uuid, investorId: uuid, periodId: uuid, requestedAmountUzs: moneyUzs })
+      .strict(),
+    dedupe: (p) => `investor_payout.requested:${p.requestId}`,
+  }),
+
+  /** Approved or rejected. The reason is not carried — it is often personal. */
+  'investor_payout.decided': define({
+    aggregateType: 'investor_payout_request',
+    scope: 'company',
+    sensitivity: 'restricted',
+    policyVersion: 1,
+    templateVersion: 1,
+    payload: z
+      .object({
+        requestId: uuid,
+        investorId: uuid,
+        periodId: uuid,
+        decision: z.enum(['approved', 'rejected']),
+      })
+      .strict(),
+    // The status is part of the key: a request is decided once, but approving
+    // and then later cancelling must not collide with each other.
+    dedupe: (p) => `investor_payout.decided:${p.requestId}:${p.decision}`,
+  }),
+
+  /** The money has actually moved; there is a posted payment behind this. */
+  'investor_payout.paid': define({
+    aggregateType: 'investor_payout_request',
+    scope: 'company',
+    sensitivity: 'restricted',
+    policyVersion: 1,
+    templateVersion: 1,
+    payload: z
+      .object({
+        requestId: uuid,
+        investorId: uuid,
+        periodId: uuid,
+        paidAmountUzs: moneyUzs,
+        paidOn: isoDate,
+      })
+      .strict(),
+    dedupe: (p) => `investor_payout.paid:${p.requestId}`,
+  }),
 } as const;
 
 export type NotificationEventType = keyof typeof EVENT_CATALOG;

@@ -1,9 +1,19 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Put } from '@nestjs/common';
-import { ApiBody, ApiOkResponse, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { CurrentUser, RequirePermissions, type AuthenticatedUser } from '@/common';
-import { MasterCreateDto, MasterUpdateDto } from '@/admin/dto/admin.dto';
+import { AccountingYearCreateDto, MasterCreateDto, MasterUpdateDto } from '@/admin/dto/admin.dto';
 import { MasterWriteService } from './master-write.service';
-import { CategoryBaselinesService, type CategoryBaselineBoardDto } from './category-baselines.service';
+import {
+  CategoryBaselinesService,
+  type CategoryBaselineBoardDto,
+} from './category-baselines.service';
 import {
   CategoryBaselineBoardResponseDto,
   CategoryBaselinesInputDto,
@@ -42,6 +52,21 @@ export class MasterDataController {
   @ApiOperation({ summary: 'Hisobot davrlari' })
   periods(): Promise<AccountingPeriodDto[]> {
     return this.masterData.periods();
+  }
+
+  @Post('periods/years')
+  @RequirePermissions('master_data.manage')
+  @ApiOperation({ summary: 'Yil uchun 12 ta ochiq hisob davrini yaratish' })
+  @ApiBody({ type: AccountingYearCreateDto })
+  @ApiOkResponse({ description: 'Yaratilgan yilning 12 ta hisob davri' })
+  @ApiResponse({ status: 400, description: 'VALIDATION_ERROR' })
+  @ApiResponse({ status: 403, description: 'FORBIDDEN — master_data.manage yo‘q' })
+  @ApiResponse({ status: 409, description: 'ACCOUNTING_YEAR_EXISTS' })
+  createAccountingYear(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: AccountingYearCreateDto,
+  ): Promise<AccountingPeriodDto[]> {
+    return this.masterWrite.createAccountingYear(user, body.year);
   }
 
   @Get('master/categories')

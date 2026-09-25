@@ -166,6 +166,6 @@ export class ReportsController {
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: CashiersQueryDto,
   ): Promise<CashierReportDto> {
-    return this.cashiers.get(user, query.period, query.branch);
+    return this.cashiers.get(user, query.period, query.branch, query.scope);
   }
 }

@@ -1,6 +1,24 @@
 import { Injectable } from '@nestjs/common';
 import { ApiException, type AuthenticatedUser } from '@/common';
 import { toIsoDateTime, toMoneyUzs } from '@/common/serialization/financial';
+import {
+  buildAnnualRevenue,
+  netMarginPct,
+  type AnnualRevenue,
+  type MonthlyRevenueRow,
+} from './annual-revenue';
+import {
+  buildAnnualNetProfit,
+  buildNetProfitPaymentMethodBreakdown,
+  type AnnualNetProfit,
+  type NetProfitPaymentMethodInput,
+} from './net-profit';
+import {
+  buildRevenueGrowth,
+  monthlyGrowthSpans,
+  type MonthlyGrowthSpans,
+  type RevenueGrowth,
+} from './revenue-growth';
 import { PrismaService } from '@/database';
 import { ReportsService } from './reports.service';
 import {
@@ -70,6 +88,9 @@ export interface DashboardResponse {
       completionPct: number | null;
     }>;
   };
+  annualRevenue: AnnualRevenue;
+  revenueGrowth: RevenueGrowth;
+  annualNetProfit: AnnualNetProfit & { netMarginPct: number | null };
   branches: Array<{
     branchId: string;
     name: string;
@@ -235,12 +256,26 @@ export class DashboardService {
       orderBy: { code: 'asc' },
     });
 
-    const [expense, revenue, byType, perBranch, annual, trends, closer] = await Promise.all([
+    const [
+      expense,
+      revenue,
+      byType,
+      perBranch,
+      annual,
+      monthlyRevenue,
+      paymentMethodNetProfitRows,
+      growthSpans,
+      trends,
+      closer,
+    ] = await Promise.all([
       this.expenseTotals(period.id, branchIds),
       this.revenueTotals(period.id, branchIds),
       this.expenseByType(period.id, branchIds),
       this.perBranchTotals(period.id, branchIds),
       this.annualSummary(period.year, branchIds),
+      this.monthlyRevenue(period.year, branchIds),
+      this.annualNetProfitByPaymentMethod(period.year, branchIds),
+      this.revenueBetween(monthlyGrowthSpans(period.year, period.month), branchIds),
       this.buildTrends(granularity, period, branchIds),
       period.closed_by
         ? this.prisma.db.users.findUnique({
@@ -250,8 +285,34 @@ export class DashboardService {
         : Promise.resolve(null),
     ]);
 
+    const annualRevenue = buildAnnualRevenue(
+      period.year,
+      monthlyRevenue.byMonth,
+      monthlyRevenue.previousYearTotal,
+    );
+    const netProfit = buildAnnualNetProfit(
+      period.year,
+      new Map([...monthlyRevenue.byMonth].map(([month, row]) => [month, row.actual])),
+      new Map(annual.months.map((row) => [row.month, BigInt(row.actualUzs)])),
+    );
+    const paymentMethodBreakdown = buildNetProfitPaymentMethodBreakdown(paymentMethodNetProfitRows);
+    const paymentMethodTotal = paymentMethodBreakdown.paymentMethods.reduce(
+      (total, method) => total + BigInt(method.netProfitUzs),
+      0n,
+    );
+    const monthsReconcile = netProfit.months.every(
+      (month) =>
+        paymentMethodBreakdown.paymentMethodMonths.find((row) => row.month === month.month)
+          ?.totalNetProfitUzs === month.netProfitUzs,
+    );
+    if (paymentMethodTotal !== BigInt(netProfit.totalNetProfitUzs) || !monthsReconcile)
+      throw new ApiException(
+        500,
+        'REPORT_RECONCILIATION_FAILED',
+        'Sof foyda to‘lov usullari bo‘yicha yillik jami bilan mos kelmadi.',
+      );
+
     return {
-      // Real backend, real rows — the mock is the only thing that says otherwise.
       isDemo: false,
       period: {
         id: period.id,
@@ -277,6 +338,26 @@ export class DashboardService {
       revenueCompletionPct: percentageValue(revenue.actual, revenue.planned),
       revenueTrend: trends.revenue,
       annual,
+      annualRevenue,
+      revenueGrowth: buildRevenueGrowth(
+        monthlyGrowthSpans(period.year, period.month),
+        growthSpans,
+        {
+          year: period.year,
+          current: BigInt(annualRevenue.totalActualUzs),
+          previous: monthlyRevenue.previousYearTotal,
+        },
+      ),
+      // The total still reuses the revenue/expense aggregates already loaded;
+      // payment-method detail comes from one additional grouped query.
+      annualNetProfit: {
+        ...netProfit,
+        ...paymentMethodBreakdown,
+        netMarginPct: netMarginPct(
+          BigInt(netProfit.totalNetProfitUzs),
+          BigInt(annualRevenue.totalActualUzs),
+        ),
+      },
       branches: branches.map((branch) => {
         const totals = perBranch.get(branch.id) ?? {
           expense: { planned: 0n, actual: 0n },
@@ -680,6 +761,138 @@ export class DashboardService {
       });
     }
     return totals;
+  }
+
+  /**
+   * Actual revenue per month for a year, scoped to the branches the reader may
+   * see. The expense side is already loaded by annualSummary, so the two are
+   * combined in memory rather than queried together.
+   */
+  private async monthlyRevenue(
+    year: number,
+    branchIds: string[],
+  ): Promise<{ byMonth: Map<number, MonthlyRevenueRow>; previousYearTotal: bigint }> {
+    if (branchIds.length === 0) return { byMonth: new Map(), previousYearTotal: 0n };
+    // Two years in one pass: the previous one is only needed as a total, so a
+    // second query would be a round trip for a single number.
+    const rows = await this.prisma.db.$queryRaw<
+      Array<{ year: number; month: number; actual: unknown; planned: unknown }>
+    >`
+      SELECT year, month,
+             coalesce(sum(actual_uzs), 0) AS actual,
+             coalesce(sum(planned_amount_uzs), 0) AS planned
+      FROM fincore.v_revenue_plan_vs_actual
+      WHERE year IN (${year}, ${year - 1}) AND branch_id = ANY(${branchIds}::uuid[])
+      GROUP BY year, month
+    `;
+
+    const byMonth = new Map<number, MonthlyRevenueRow>();
+    let previousYearTotal = 0n;
+    for (const row of rows) {
+      if (Number(row.year) === year)
+        byMonth.set(Number(row.month), {
+          actual: toBigInt(row.actual),
+          planned: toBigInt(row.planned),
+        });
+      else previousYearTotal += toBigInt(row.actual);
+    }
+    return { byMonth, previousYearTotal };
+  }
+
+  /**
+   * Annual net profit split by the payment-method foreign key shared by both
+   * ledgers. Revenue and expense are aggregated in one database round trip;
+   * generate_series guarantees twelve cells for every real reference method.
+   */
+  private async annualNetProfitByPaymentMethod(
+    year: number,
+    branchIds: string[],
+  ): Promise<NetProfitPaymentMethodInput[]> {
+    const from = `${year}-01-01`;
+    const to = `${year + 1}-01-01`;
+    const rows = await this.prisma.db.$queryRaw<
+      Array<{
+        payment_method_id: string;
+        code: string;
+        name: string;
+        sort_order: number;
+        month: number;
+        revenue_uzs: unknown;
+        expense_uzs: unknown;
+      }>
+    >`
+      WITH method_months AS (
+        SELECT pm.id AS payment_method_id, pm.code, pm.name, pm.sort_order,
+               month_number::int AS month
+        FROM fincore.payment_methods pm
+        CROSS JOIN generate_series(1, 12) AS month_number
+      ),
+      revenue AS (
+        SELECT payment_method_id,
+               EXTRACT(MONTH FROM payment_business_date)::int AS month,
+               SUM(amount_uzs) AS amount_uzs
+        FROM fincore.v_revenue_net_rows
+        WHERE payment_business_date >= ${from}::date
+          AND payment_business_date < ${to}::date
+          AND branch_id = ANY(${branchIds}::uuid[])
+        GROUP BY payment_method_id, EXTRACT(MONTH FROM payment_business_date)
+      ),
+      expense AS (
+        SELECT payment_method_id,
+               EXTRACT(MONTH FROM transaction_date)::int AS month,
+               SUM(amount_uzs) AS amount_uzs
+        FROM fincore.v_expense_net_rows
+        WHERE transaction_date >= ${from}::date
+          AND transaction_date < ${to}::date
+          AND branch_id = ANY(${branchIds}::uuid[])
+        GROUP BY payment_method_id, EXTRACT(MONTH FROM transaction_date)
+      )
+      SELECT mm.payment_method_id, mm.code, mm.name, mm.sort_order, mm.month,
+             COALESCE(r.amount_uzs, 0) AS revenue_uzs,
+             COALESCE(e.amount_uzs, 0) AS expense_uzs
+      FROM method_months mm
+      LEFT JOIN revenue r
+        ON r.payment_method_id = mm.payment_method_id AND r.month = mm.month
+      LEFT JOIN expense e
+        ON e.payment_method_id = mm.payment_method_id AND e.month = mm.month
+      ORDER BY mm.sort_order, mm.code, mm.month
+    `;
+
+    return rows.map((row) => ({
+      paymentMethodId: row.payment_method_id,
+      code: row.code,
+      name: row.name,
+      sortOrder: Number(row.sort_order),
+      month: Number(row.month),
+      revenue: toBigInt(row.revenue_uzs),
+      expense: toBigInt(row.expense_uzs),
+    }));
+  }
+
+  /**
+   * Revenue inside two date ranges, in one round trip.
+   *
+   * v_revenue_net_rows carries the business date, so a month still running can
+   * be compared against the same days of the month before it. The monthly
+   * aggregate views cannot answer this — they only know whole months.
+   */
+  private async revenueBetween(
+    spans: MonthlyGrowthSpans,
+    branchIds: string[],
+  ): Promise<{ current: bigint; previous: bigint }> {
+    if (branchIds.length === 0) return { current: 0n, previous: 0n };
+    const [row] = await this.prisma.db.$queryRaw<Array<{ current: unknown; previous: unknown }>>`
+      SELECT
+        coalesce(sum(amount_uzs) FILTER (
+          WHERE payment_business_date BETWEEN ${spans.current.from}::date AND ${spans.current.to}::date
+        ), 0) AS current,
+        coalesce(sum(amount_uzs) FILTER (
+          WHERE payment_business_date BETWEEN ${spans.previous.from}::date AND ${spans.previous.to}::date
+        ), 0) AS previous
+      FROM fincore.v_revenue_net_rows
+      WHERE branch_id = ANY(${branchIds}::uuid[])
+    `;
+    return { current: toBigInt(row?.current), previous: toBigInt(row?.previous) };
   }
 
   /** Excel «Xulosa» sheet: yearly split, fixed share and the peak month. */

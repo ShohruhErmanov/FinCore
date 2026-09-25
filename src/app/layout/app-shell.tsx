@@ -1,7 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BookOpenCheck,
   Bell,
+  HandCoins,
+  PieChart,
   Building2,
   CalendarPlus,
   ChevronDown,
@@ -13,6 +15,7 @@ import {
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
+  Plus,
   ReceiptText,
   Settings,
   ShieldCheck,
@@ -21,15 +24,26 @@ import {
   WalletCards,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, NavLink, Outlet, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/features/auth/auth-context';
+import { getApiErrorMessage } from '@/shared/api/client';
 import { referenceApi } from '@/shared/api/contracts';
 import { queryKeys } from '@/shared/api/query-keys';
-import { navigation, routes, type NavigationItem } from '@/shared/config/routes';
+import { isNavItemActive, navigation, routes, type NavigationItem } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/cn';
 import { monthNameUz } from '@/shared/lib/format';
-import { BrandMark, Button, Select, StatusBadge } from '@/shared/ui';
+import type { AccountingPeriod } from '@/shared/types/domain';
+import {
+  BrandMark,
+  Button,
+  FormField,
+  Input,
+  Modal,
+  Select,
+  StatusBadge,
+  useToast,
+} from '@/shared/ui';
 
 const iconByPath: Record<string, typeof LayoutDashboard> = {
   [routes.dashboard]: LayoutDashboard,
@@ -45,6 +59,9 @@ const iconByPath: Record<string, typeof LayoutDashboard> = {
   [routes.roles]: ShieldCheck,
   [routes.imports]: FileSpreadsheet,
   [routes.notifications]: Bell,
+  [routes.myInvestment]: PieChart,
+  [routes.payoutRequests]: HandCoins,
+  [routes.auditLogs]: ShieldCheck,
 };
 
 function NavigationLink({
@@ -57,13 +74,17 @@ function NavigationLink({
   onClick?: () => void;
 }) {
   const Icon = iconByPath[item.to] ?? BookOpenCheck;
+  const { pathname } = useLocation();
+  // Not NavLink's own isActive: it lights ancestors as well, which is what put
+  // two entries in the same highlighted state.
+  const isActive = isNavItemActive(item, pathname);
   return (
     <NavLink
       to={item.to}
-      {...(item.exact === undefined ? {} : { end: item.exact })}
       {...(onClick ? { onClick } : {})}
       {...(collapsed ? { title: item.label } : {})}
-      className={({ isActive }) =>
+      {...(isActive ? { 'aria-current': 'page' as const } : {})}
+      className={() =>
         cn(
           'group flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium text-slate-300 transition-all duration-200 hover:translate-x-0.5 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400',
           isActive &&
@@ -152,7 +173,10 @@ function Sidebar({
             <div className="space-y-1">
               {group.items.map((item) => (
                 <NavigationLink
-                  key={item.to}
+                  // Two entries may legitimately share a path — "Kassirlar" and
+                  // "Mening natijam" both open the cashier report for different
+                  // audiences — so the label is part of the key.
+                  key={`${item.to}:${item.label}`}
                   item={item}
                   collapsed={collapsed}
                   {...(mobile && onClose ? { onClick: onClose } : {})}
@@ -190,8 +214,13 @@ function Sidebar({
 
 function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
   const { user, logout, hasPermission } = useAuth();
+  const queryClient = useQueryClient();
+  const { notify } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [accountOpen, setAccountOpen] = useState(false);
+  const [yearModalOpen, setYearModalOpen] = useState(false);
+  const [newYear, setNewYear] = useState('');
+  const [yearError, setYearError] = useState<string>();
   const branchesQuery = useQuery({
     queryKey: queryKeys.branches,
     queryFn: ({ signal }) => referenceApi.branches(signal),
@@ -274,6 +303,58 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
     setSearchParams(next, { replace: true });
   }
 
+  const createYear = useMutation({
+    mutationFn: (year: number) => referenceApi.createAccountingYear(year),
+    onSuccess: (createdPeriods, year) => {
+      queryClient.setQueryData<AccountingPeriod[]>(queryKeys.periods, (current = []) =>
+        [...current.filter((period) => period.year !== year), ...createdPeriods].sort(
+          (a, b) => b.year - a.year || b.month - a.month,
+        ),
+      );
+      const preferredMonth = currentPeriod?.month ?? new Date().getMonth() + 1;
+      const next =
+        createdPeriods.find((period) => period.month === preferredMonth) ?? createdPeriods[0];
+      if (next) updateFilter('period', next.id);
+      setYearModalOpen(false);
+      setYearError(undefined);
+      notify({
+        tone: 'success',
+        title: `${year} yil qo‘shildi`,
+        message: '12 oy yaratildi va tanlangan oy yangi yilga o‘tkazildi.',
+      });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.periods });
+    },
+    onError: (error) => {
+      notify({
+        tone: 'danger',
+        title: 'Yil qo‘shilmadi',
+        message: getApiErrorMessage(error),
+      });
+    },
+  });
+
+  function openYearModal() {
+    const suggested = Math.min((years[0] ?? new Date().getFullYear()) + 1, 2100);
+    setNewYear(String(suggested));
+    setYearError(undefined);
+    setYearModalOpen(true);
+  }
+
+  function submitYear(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const year = Number(newYear);
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+      setYearError('2000–2100 oralig‘idagi to‘liq yilni kiriting.');
+      return;
+    }
+    if (years.includes(year)) {
+      setYearError(`${year} yil allaqachon mavjud.`);
+      return;
+    }
+    setYearError(undefined);
+    createYear.mutate(year);
+  }
+
   // The bar resolves its own defaults, but every page reads the filter back
   // out of the URL and falls back differently when it is missing — which is
   // how the bar could read "Avgust" while the page below it reported
@@ -293,122 +374,189 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
   }, [selectedPeriod, selectedBranch, searchParams, setSearchParams]);
 
   return (
-    <header className="fincore-topbar sticky top-0 z-30 flex min-h-[76px] flex-wrap items-center gap-3 border-b border-white/80 px-4 py-2 sm:flex-nowrap sm:px-6">
-      <div className="contents">
-        <button
-          type="button"
-          onClick={onOpenMenu}
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 lg:hidden"
-          aria-label="Menyuni ochish"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
-        <div className="order-3 grid w-full grid-cols-3 gap-2 sm:order-none sm:flex sm:w-auto sm:items-center">
-          <Select
-            aria-label="Hisobot yili"
-            value={selectedYear ?? ''}
-            onChange={(event) => selectYear(Number(event.target.value))}
-            className="w-full border-slate-200/70 bg-slate-100/80 font-semibold shadow-none sm:w-28"
+    <>
+      <header className="fincore-topbar sticky top-0 z-30 flex min-h-[76px] flex-wrap items-center gap-3 border-b border-white/80 px-4 py-2 sm:flex-nowrap sm:px-6">
+        <div className="contents">
+          <button
+            type="button"
+            onClick={onOpenMenu}
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 lg:hidden"
+            aria-label="Menyuni ochish"
           >
-            {years.map((year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
-            ))}
-          </Select>
-          <Select
-            aria-label="Hisobot oyi"
-            value={selectedPeriod}
-            onChange={(event) => updateFilter('period', event.target.value)}
-            className="w-full border-slate-200/70 bg-slate-100/80 font-semibold shadow-none sm:w-36"
-          >
-            {monthsOfYear.map((period) => (
-              <option key={period.id} value={period.id}>
-                {monthNameUz(period.month)}
-              </option>
-            ))}
-          </Select>
-          <Select
-            aria-label="Filial"
-            value={selectedBranch}
-            onChange={(event) => updateFilter('branch', event.target.value)}
-            className="w-full border-slate-200/70 bg-slate-100/80 font-semibold shadow-none sm:w-44"
-          >
-            {hasPermission('expense.view_all_branches') ? (
-              <option value="all">Barcha filiallar</option>
-            ) : null}
-            {accessibleBranches.map((branch) => (
-              <option key={branch.id} value={branch.id}>
-                {branch.name}
-              </option>
-            ))}
-          </Select>
-        </div>
-      </div>
-      <div className="order-4 flex w-full min-w-0 justify-center sm:order-none sm:w-auto sm:flex-1">
-        <p
-          className="max-w-full truncate rounded-full border border-slate-200/80 bg-white/70 px-3.5 py-2 text-xs font-bold text-slate-600 shadow-sm"
-          aria-label="Global hisobot konteksti"
-        >
-          {globalScopeLabel}
-        </p>
-      </div>
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => setAccountOpen((value) => !value)}
-          className="flex min-h-11 items-center gap-3 rounded-xl px-2 text-left transition hover:bg-white hover:shadow-sm"
-          // Mobil ekranda ism yashiriladi va faqat bosh harflar qoladi —
-          // tugmaning nomi baribir to‘liq bo‘lishi kerak.
-          aria-label={user ? `${user.fullName} — hisob menyusi` : 'Hisob menyusi'}
-          aria-expanded={accountOpen}
-          aria-haspopup="menu"
-        >
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-blue-100 to-sky-100 text-sm font-bold text-blue-700 ring-1 ring-blue-200/70">
-            {user?.fullName
-              .split(' ')
-              .map((part) => part[0])
-              .slice(0, 2)
-              .join('')}
-          </div>
-          <div className="hidden max-w-44 sm:block">
-            <p className="truncate text-sm font-semibold text-ink">{user?.fullName}</p>
-            <p className="truncate text-xs text-muted">
-              {user?.roles.map((role) => role.roleName).join(' · ')}
-            </p>
-          </div>
-          <ChevronDown className="hidden h-4 w-4 text-muted sm:block" />
-        </button>
-        {accountOpen ? (
-          <div
-            role="menu"
-            className="absolute right-0 top-14 w-64 rounded-card border border-border/90 bg-white/95 p-2 shadow-elevated backdrop-blur-xl"
-          >
-            <div className="border-b border-border px-3 py-2">
-              <p className="text-sm font-semibold text-ink">{user?.fullName}</p>
-              <p className="mt-0.5 text-xs text-muted">{user?.phone}</p>
-              <div className="mt-2">
-                <StatusBadge status="active" />
-              </div>
+            <Menu className="h-5 w-5" />
+          </button>
+          <div className="order-3 grid w-full grid-cols-3 gap-2 sm:order-none sm:flex sm:w-auto sm:items-center">
+            <div className="flex min-w-0 gap-1.5">
+              <Select
+                aria-label="Hisobot yili"
+                value={selectedYear ?? ''}
+                onChange={(event) => selectYear(Number(event.target.value))}
+                className="min-w-0 flex-1 border-slate-200/70 bg-slate-100/80 font-semibold shadow-none sm:w-28"
+              >
+                {years.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </Select>
+              {hasPermission('master_data.manage') ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-11 min-h-11 w-11 shrink-0 px-0"
+                  aria-label="Yangi yil qo‘shish"
+                  title="Yangi yil qo‘shish"
+                  onClick={openYearModal}
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              ) : null}
             </div>
+            <Select
+              aria-label="Hisobot oyi"
+              value={selectedPeriod}
+              onChange={(event) => updateFilter('period', event.target.value)}
+              className="w-full border-slate-200/70 bg-slate-100/80 font-semibold shadow-none sm:w-36"
+            >
+              {monthsOfYear.map((period) => (
+                <option key={period.id} value={period.id}>
+                  {monthNameUz(period.month)}
+                </option>
+              ))}
+            </Select>
+            <Select
+              aria-label="Filial"
+              value={selectedBranch}
+              onChange={(event) => updateFilter('branch', event.target.value)}
+              className="w-full border-slate-200/70 bg-slate-100/80 font-semibold shadow-none sm:w-44"
+            >
+              {hasPermission('expense.view_all_branches') ? (
+                <option value="all">Barcha filiallar</option>
+              ) : null}
+              {accessibleBranches.map((branch) => (
+                <option key={branch.id} value={branch.id}>
+                  {branch.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </div>
+        <div className="order-4 flex w-full min-w-0 justify-center sm:order-none sm:w-auto sm:flex-1">
+          <p
+            className="max-w-full truncate rounded-full border border-slate-200/80 bg-white/70 px-3.5 py-2 text-xs font-bold text-slate-600 shadow-sm"
+            aria-label="Global hisobot konteksti"
+          >
+            {globalScopeLabel}
+          </p>
+        </div>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setAccountOpen((value) => !value)}
+            className="flex min-h-11 items-center gap-3 rounded-xl px-2 text-left transition hover:bg-white hover:shadow-sm"
+            // Mobil ekranda ism yashiriladi va faqat bosh harflar qoladi —
+            // tugmaning nomi baribir to‘liq bo‘lishi kerak.
+            aria-label={user ? `${user.fullName} — hisob menyusi` : 'Hisob menyusi'}
+            aria-expanded={accountOpen}
+            aria-haspopup="menu"
+          >
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-blue-100 to-sky-100 text-sm font-bold text-blue-700 ring-1 ring-blue-200/70">
+              {user?.fullName
+                .split(' ')
+                .map((part) => part[0])
+                .slice(0, 2)
+                .join('')}
+            </div>
+            <div className="hidden max-w-44 sm:block">
+              <p className="truncate text-sm font-semibold text-ink">{user?.fullName}</p>
+              <p className="truncate text-xs text-muted">
+                {user?.roles.map((role) => role.roleName).join(' · ')}
+              </p>
+            </div>
+            <ChevronDown className="hidden h-4 w-4 text-muted sm:block" />
+          </button>
+          {accountOpen ? (
+            <div
+              role="menu"
+              className="absolute right-0 top-14 w-64 rounded-card border border-border/90 bg-white/95 p-2 shadow-elevated backdrop-blur-xl"
+            >
+              <div className="border-b border-border px-3 py-2">
+                <p className="text-sm font-semibold text-ink">{user?.fullName}</p>
+                <p className="mt-0.5 text-xs text-muted">{user?.phone}</p>
+                <div className="mt-2">
+                  <StatusBadge status="active" />
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                className="mt-1 w-full justify-start"
+                onClick={() => void logout()}
+              >
+                <LogOut className="h-4 w-4" />
+                Chiqish
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      </header>
+      <Modal
+        open={yearModalOpen}
+        onClose={() => {
+          if (!createYear.isPending) setYearModalOpen(false);
+        }}
+        title="Yangi hisobot yilini qo‘shish"
+        description="Tanlangan yil uchun yanvardan dekabrgacha 12 ta ochiq hisob davri yaratiladi."
+        footer={
+          <div className="flex justify-end gap-2">
             <Button
               type="button"
-              variant="ghost"
-              className="mt-1 w-full justify-start"
-              onClick={() => void logout()}
+              variant="secondary"
+              disabled={createYear.isPending}
+              onClick={() => setYearModalOpen(false)}
             >
-              <LogOut className="h-4 w-4" />
-              Chiqish
+              Bekor qilish
+            </Button>
+            <Button type="submit" form="accounting-year-form" loading={createYear.isPending}>
+              Yilni qo‘shish
             </Button>
           </div>
-        ) : null}
-      </div>
-    </header>
+        }
+      >
+        <form id="accounting-year-form" onSubmit={submitYear}>
+          <FormField
+            label="Hisobot yili"
+            htmlFor="accounting-year"
+            required
+            hint="Masalan: 2027"
+            error={yearError}
+          >
+            <Input
+              id="accounting-year"
+              type="number"
+              inputMode="numeric"
+              min={2000}
+              max={2100}
+              step={1}
+              autoFocus
+              value={newYear}
+              aria-invalid={Boolean(yearError)}
+              aria-describedby={yearError ? 'accounting-year-error' : undefined}
+              onChange={(event) => {
+                setNewYear(event.target.value);
+                setYearError(undefined);
+              }}
+            />
+          </FormField>
+        </form>
+      </Modal>
+    </>
   );
 }
 
 function MobileBottomNav() {
   const { hasPermission } = useAuth();
+  const { pathname } = useLocation();
   const items = [
     { ...navigation[0]!.items[0]!, icon: LayoutDashboard },
     {
@@ -440,13 +588,12 @@ function MobileBottomNav() {
     >
       {items.map(({ icon: Icon, ...item }) => (
         <NavLink
-          key={item.to}
+          key={`${item.to}:${item.label}`}
           to={item.to}
-          {...(item.exact === undefined ? {} : { end: item.exact })}
-          className={({ isActive }) =>
+          className={() =>
             cn(
               'flex min-h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium text-muted',
-              isActive && 'text-primary',
+              isNavItemActive(item, pathname) && 'text-primary',
             )
           }
         >

@@ -1,5 +1,6 @@
 import type {
   AccountingPeriod,
+  AuditLogPage,
   AuthenticatedUser,
   Branch,
   BudgetLine,
@@ -16,6 +17,16 @@ import type {
   CategoryBaselineBoard,
   CategoryBaselineInput,
   ImportSummary,
+  InvestorCreateInput,
+  InvestorDashboard,
+  InvestorEntitlementInput,
+  InvestorListItem,
+  InvestorPaymentInput,
+  InvestorRef,
+  PayoutListItem,
+  PayoutRequestInput,
+  PayoutRequestRow,
+  PayoutSummary,
   MasterItem,
   MonthlyReport,
   MonthlyReportPreview,
@@ -50,6 +61,7 @@ export const authApi = {
 export const referenceApi = {
   branches: (signal?: AbortSignal) => api.get<Branch[]>('/branches', undefined, signal),
   periods: (signal?: AbortSignal) => api.get<AccountingPeriod[]>('/periods', undefined, signal),
+  createAccountingYear: (year: number) => api.post<AccountingPeriod[]>('/periods/years', { year }),
   categories: (signal?: AbortSignal) =>
     api.get<ExpenseCategory[]>('/master/categories', undefined, signal),
   departments: (signal?: AbortSignal) =>
@@ -58,6 +70,11 @@ export const referenceApi = {
     api.get<MasterItem[]>('/master/payment-methods', undefined, signal),
   users: (signal?: AbortSignal) =>
     api.get<UserDirectoryItem[]>('/users/directory', undefined, signal),
+};
+
+export const auditApi = {
+  list: (query: { page: number; pageSize: number; action?: string }, signal?: AbortSignal) =>
+    api.get<AuditLogPage>('/audit-logs', query, signal),
 };
 
 export const dashboardApi = {
@@ -80,7 +97,7 @@ export const reportApi = {
     query: { year: string | number; month: string | number; branch: string },
     signal?: AbortSignal,
   ) => api.get<BranchComparisonReport>('/reports/branch-comparison', query, signal),
-  cashiers: (query: { period: string; branch: string }, signal?: AbortSignal) =>
+  cashiers: (query: { period: string; branch: string; scope?: 'own' }, signal?: AbortSignal) =>
     api.get<CashierReport>('/reports/cashiers', query, signal),
 };
 
@@ -180,4 +197,65 @@ export const adminApi = {
     api.get<CategoryBaselineBoard>('/master/category-baselines', undefined, signal),
   saveCategoryBaselines: (lines: CategoryBaselineInput[]) =>
     api.put<CategoryBaselineBoard>('/master/category-baselines', { lines }),
+};
+
+export const investorApi = {
+  /** Yillik jamlari bilan investorlar ro'yxati (investor.view_all). */
+  list: (year: number, signal?: AbortSignal) =>
+    api.get<InvestorListItem[]>('/investors', { year }, signal),
+
+  /** Joriy foydalanuvchining o'z investor profili. */
+  mine: (signal?: AbortSignal) => api.get<InvestorRef>('/investors/me', undefined, signal),
+
+  /** Yillik jami + 12 oy + to'lovlar tarixi. Backend avtorizatsiyani o'zi tekshiradi. */
+  dashboard: (id: string, year: number, signal?: AbortSignal) =>
+    api.get<InvestorDashboard>(`/investors/${id}`, { year }, signal),
+
+  create: (input: InvestorCreateInput) => api.post<InvestorRef>('/investors', input),
+  update: (id: string, input: Partial<InvestorCreateInput> & { isActive?: boolean }) =>
+    api.patch<InvestorRef>(`/investors/${id}`, input),
+
+  setEntitlement: (id: string, input: InvestorEntitlementInput) =>
+    api.put<InvestorDashboard>(`/investors/${id}/entitlements`, input),
+  recordPayment: (id: string, input: InvestorPaymentInput) =>
+    api.post<InvestorDashboard>(`/investors/${id}/payments`, input),
+  reversePayment: (id: string, paymentId: string, reason: string) =>
+    api.post<InvestorDashboard>(`/investors/${id}/payments/${paymentId}/reverse`, { reason }),
+};
+
+/**
+ * Investor ulushi (fakt tushum × ulush foizi) va to'lov so'rovi oqimi.
+ *
+ * Alohida bazaviy yo‘l: /investors ostida literal segment va :id parametri
+ * bir prefiksda turishi keyinchalik jimgina buziladigan tartib bog‘liqligi.
+ */
+export const payoutApi = {
+  /** Investorlar ro'yxati, fakt tushumdan hisoblangan yillik ulush bilan. */
+  list: (year: number, signal?: AbortSignal) =>
+    api.get<PayoutListItem[]>('/investor-payouts', { year }, signal),
+
+  /** Joriy investorning yillik ulushi (investor.view_own). */
+  mine: (year: number, signal?: AbortSignal) =>
+    api.get<PayoutSummary>('/investor-payouts/me', { year }, signal),
+
+  /** Bitta investorning ulushi — direktor uchun. */
+  summary: (investorId: string, year: number, signal?: AbortSignal) =>
+    api.get<PayoutSummary>(`/investor-payouts/investor/${investorId}`, { year }, signal),
+
+  /** Direktor navbati: qaror kutayotgan va tasdiqlangan so‘rovlar. */
+  queue: (signal?: AbortSignal) =>
+    api.get<PayoutRequestRow[]>('/investor-payouts/requests', undefined, signal),
+
+  /** Investor id yuborilmaydi — backend uni sessiyadan aniqlaydi. */
+  request: (input: PayoutRequestInput) =>
+    api.post<PayoutRequestRow>('/investor-payouts/requests', input),
+
+  decide: (id: string, decision: 'approved' | 'rejected', note?: string) =>
+    api.post<PayoutRequestRow>(`/investor-payouts/requests/${id}/decision`, { decision, note }),
+
+  markPaid: (id: string, paidOn: string, note?: string) =>
+    api.post<PayoutRequestRow>(`/investor-payouts/requests/${id}/payment`, { paidOn, note }),
+
+  cancel: (id: string, note?: string) =>
+    api.post<PayoutRequestRow>(`/investor-payouts/requests/${id}/cancel`, { note }),
 };

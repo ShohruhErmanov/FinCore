@@ -10,6 +10,8 @@ import { ToastProvider } from '@/shared/ui';
 const mocks = vi.hoisted(() => ({
   useAuth: vi.fn(),
   branches: vi.fn(),
+  periods: vi.fn(),
+  paymentMethods: vi.fn(),
   users: vi.fn(),
   createUser: vi.fn(),
   updateUserAccess: vi.fn(),
@@ -20,7 +22,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/features/auth/auth-context', () => ({ useAuth: mocks.useAuth }));
 vi.mock('@/shared/api/contracts', () => ({
-  referenceApi: { branches: mocks.branches },
+  referenceApi: {
+    branches: mocks.branches,
+    periods: mocks.periods,
+    paymentMethods: mocks.paymentMethods,
+  },
   adminApi: {
     users: mocks.users,
     createUser: mocks.createUser,
@@ -65,6 +71,8 @@ function renderUsersPage(actor: AuthenticatedUser, rows: AuthenticatedUser[]) {
     hasPermission: (permission: PermissionCode) => actor.permissions.includes(permission),
   });
   mocks.users.mockResolvedValue(rows);
+  mocks.periods.mockResolvedValue([]);
+  mocks.paymentMethods.mockResolvedValue([]);
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });

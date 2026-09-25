@@ -6,7 +6,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { getApiErrorMessage } from '@/shared/api/client';
 import { environment } from '@/shared/config/env';
-import { routes } from '@/shared/config/routes';
+import { landingRoute } from '@/shared/config/routes';
 import { Alert, BrandMark, Button, FormField, Input } from '@/shared/ui';
 import { useAuth } from './auth-context';
 
@@ -41,14 +41,17 @@ export function LoginPage() {
       ? { login: '+998901112233', password: 'demo123' }
       : { login: '', password: '' },
   });
-  if (auth.isAuthenticated) return <Navigate to={routes.dashboard} replace />;
-  const destination = (location.state as { from?: string } | null)?.from ?? routes.dashboard;
+  if (auth.isAuthenticated) return <Navigate to={landingRoute(auth.hasPermission)} replace />;
+  const requested = (location.state as { from?: string } | null)?.from ?? null;
 
   async function submit(values: LoginValues) {
     setServerError(null);
     try {
-      await auth.login(values);
-      navigate(destination, { replace: true });
+      // The landing depends on what the account may actually open, so it is
+      // resolved from the signed-in user rather than assumed to be /dashboard.
+      const signedIn = await auth.login(values);
+      const fallback = landingRoute((code) => signedIn.permissions.includes(code));
+      navigate(requested ?? fallback, { replace: true });
     } catch (error) {
       setServerError(getApiErrorMessage(error));
     }

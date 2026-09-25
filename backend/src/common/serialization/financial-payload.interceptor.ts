@@ -2,6 +2,21 @@ import { Injectable, Logger, type CallHandler, type ExecutionContext, type NestI
 import { map, type Observable } from 'rxjs';
 
 const MONEY = /^-?\d+$/;
+const SHARE = /^-?\d+\.\d{2}$/;
+/**
+ * Mirrors shareValueKeys in the frontend's src/shared/api/client.ts: these
+ * carry two decimals because they are a derived share of revenue, not a whole
+ * so'm ledger amount. Without this list every correct investor response was
+ * logged as a contract break, which is how a warning stops being read.
+ */
+const SHARE_KEYS = new Set([
+  'shareUzs',
+  'paidUzs',
+  'openUzs',
+  'remainingUzs',
+  'residualUzs',
+  'calculatedShareUzs',
+]);
 const OFFSET_DATE_TIME = /(Z|[+-]\d{2}:\d{2})$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const PERCENT_KEY = /(percent|percentage|pct)$/i;
@@ -15,8 +30,14 @@ function inspect(value: unknown, path: string, problems: string[]): void {
   for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
     const at = `${path}.${key}`;
     if (item !== null) {
-      if (key.endsWith('Uzs') && (typeof item !== 'string' || !MONEY.test(item)))
-        problems.push(`${at}: MoneyUzs integer-string emas`);
+      if (key.endsWith('Uzs')) {
+        const isShare = SHARE_KEYS.has(key);
+        const pattern = isShare ? SHARE : MONEY;
+        if (typeof item !== 'string' || !pattern.test(item))
+          problems.push(
+            `${at}: ${isShare ? 'ShareUzs two-decimal string' : 'MoneyUzs integer-string'} emas`,
+          );
+      }
       if (key.endsWith('At') && (typeof item !== 'string' || !OFFSET_DATE_TIME.test(item) || Number.isNaN(Date.parse(item))))
         problems.push(`${at}: RFC3339 offset timestamp emas`);
       if ((key === 'transactionDate' || key === 'paymentBusinessDate') && (typeof item !== 'string' || !ISO_DATE.test(item)))

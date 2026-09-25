@@ -90,7 +90,14 @@ function Tile({ label, value, helper }: { label: string; value: React.ReactNode;
   );
 }
 
-export function CashierReportPage() {
+/**
+ * Kassirlar hisoboti va "Mening natijam" — bitta sahifa, ikki ko‘rinish.
+ *
+ * ownScope so‘rovga scope=own qo‘shadi: barcha kassirlarni ko‘ra oladigan
+ * foydalanuvchiga ham faqat o‘z qatorini qaytaradi. Kengaytirmaydi — server
+ * "own" ichida nima borligini baribir o‘zi hal qiladi.
+ */
+export function CashierReportPage({ ownScope: ownScopeRoute = false }: { ownScope?: boolean } = {}) {
   const [searchParams] = useSearchParams();
   const periods = useQuery({
     queryKey: queryKeys.periods,
@@ -104,8 +111,12 @@ export function CashierReportPage() {
     '';
   const branch = searchParams.get('branch') ?? 'all';
   const report = useQuery({
-    queryKey: queryKeys.report('cashiers', `period=${period}&branch=${branch}`),
-    queryFn: ({ signal }) => reportApi.cashiers({ period, branch }, signal),
+    queryKey: queryKeys.report(
+      'cashiers',
+      `period=${period}&branch=${branch}${ownScopeRoute ? '&scope=own' : ''}`,
+    ),
+    queryFn: ({ signal }) =>
+      reportApi.cashiers({ period, branch, ...(ownScopeRoute ? { scope: 'own' as const } : {}) }, signal),
     enabled: Boolean(period),
   });
 

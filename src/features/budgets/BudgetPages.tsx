@@ -1,26 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Download, Save } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { Download, Save } from 'lucide-react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { authApi, budgetApi, referenceApi } from '@/shared/api/contracts';
-import { getApiErrorMessage } from '@/shared/api/client';
+import { authApi, budgetApi, referenceApi, reportApi } from '@/shared/api/contracts';
 import { invalidatePlanningAggregates } from '@/shared/api/invalidation';
 import { downloadCsv } from '@/shared/lib/csv';
 import { queryKeys } from '@/shared/api/query-keys';
-import { formatDateTime, formatPercent } from '@/shared/lib/format';
-import type {
-  BudgetHistory,
-  BudgetHistoryPeriod,
-  BudgetLine,
-  BudgetPlan,
-  ExpenseType,
-} from '@/shared/types/domain';
+import { formatDateTime, formatMoney, formatPercent } from '@/shared/lib/format';
+import type { BudgetLine, BudgetPlan } from '@/shared/types/domain';
 import {
   Alert,
   Breadcrumbs,
   Button,
   Card,
-  CurrencyInput,
   ErrorState,
   LoadingState,
   LockedNotice,
@@ -29,11 +21,14 @@ import {
   Textarea,
   VarianceText,
 } from '@/shared/ui';
+import { BudgetOverview, BudgetSkeleton, BudgetTrend } from './budget-overview';
+import './budget.css';
 
 type BudgetLineDraft = Pick<
   BudgetLine,
   'id' | 'branchId' | 'categoryId' | 'hasPlan' | 'plannedAmountUzs' | 'reason'
 >;
+const MAX_BUDGET_AMOUNT = 9223372036854775807n;
 
 function getLinePresentation(
   line: Pick<BudgetLine, 'hasPlan' | 'plannedAmountUzs' | 'actualAmountUzs' | 'varianceUzs'>,
@@ -63,7 +58,7 @@ function getLinePresentation(
   return { label: 'Tejash', className: 'bg-green-50 text-green-800', completion };
 }
 
-function BudgetLineRow({
+const BudgetBranchEditor = memo(function BudgetBranchEditor({
   line,
   draft,
   editable,
@@ -74,6 +69,8 @@ function BudgetLineRow({
   editable: boolean;
   onChange: (next: BudgetLineDraft) => void;
 }) {
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [amountError, setAmountError] = useState('');
   const previewPlan = draft.hasPlan ? (draft.plannedAmountUzs ?? '0') : null;
   const previewVariance =
     previewPlan === null
@@ -87,127 +84,150 @@ function BudgetLineRow({
   });
 
   return (
-    <tr className="border-b border-border align-top last:border-0">
-      <th scope="row" className="sticky left-0 z-10 min-w-56 bg-white px-4 py-3 text-left">
-        <p className="text-sm font-semibold text-ink">{line.categoryNameSnapshot}</p>
-        <p className="mt-1 text-xs text-muted">
-          {line.expenseTypeSnapshot === 'fixed' ? 'Doimiy' : 'O‘zgaruvchan'}
-        </p>
-      </th>
-      <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{line.branchName}</td>
-      <td className="min-w-48 px-4 py-3">
+    <div className="budget-branch-editor">
+      <div className="budget-branch-heading">
+        <span className="font-medium text-ink">{line.branchName}</span>
         {editable ? (
-          <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-700">
-            <input
-              type="checkbox"
-              checked={draft.hasPlan}
-              onChange={(event) =>
+          <div
+            role="group"
+            aria-label={`${line.branchName}, ${line.categoryNameSnapshot} reja mavjudligi`}
+            className="budget-plan-switch"
+          >
+            <button
+              type="button"
+              aria-pressed={!draft.hasPlan}
+              onClick={() => onChange({ ...draft, hasPlan: false, plannedAmountUzs: null })}
+            >
+              Reja yo‘q
+            </button>
+            <button
+              type="button"
+              aria-pressed={draft.hasPlan}
+              onClick={() =>
                 onChange({
                   ...draft,
-                  hasPlan: event.target.checked,
-                  plannedAmountUzs: event.target.checked ? (draft.plannedAmountUzs ?? '0') : null,
+                  hasPlan: true,
+                  plannedAmountUzs: draft.plannedAmountUzs ?? '0',
                 })
               }
-              className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
-            />
-            Reja qatori mavjud
-          </label>
-        ) : draft.hasPlan ? (
-          <span className="text-sm font-semibold text-success">Mavjud</span>
+            >
+              Reja mavjud
+            </button>
+          </div>
         ) : (
-          <span className="text-sm font-semibold text-muted">Mavjud emas</span>
+          <span className="text-sm text-muted">{draft.hasPlan ? 'Reja mavjud' : 'Reja yo‘q'}</span>
         )}
-      </td>
-      <td className="min-w-52 px-4 py-3 text-right">
-        {editable && draft.hasPlan ? (
-          <CurrencyInput
-            aria-label={`${line.branchName}, ${line.categoryNameSnapshot} reja summasi`}
-            value={draft.plannedAmountUzs ?? '0'}
-            onChange={(event) => {
-              if (/^\d*$/.test(event.target.value))
-                onChange({ ...draft, plannedAmountUzs: event.target.value || '0' });
-            }}
-          />
-        ) : (
-          <MoneyText
-            value={previewPlan}
-            className={draft.hasPlan ? 'font-semibold text-ink' : 'text-muted'}
-          />
-        )}
-        {draft.hasPlan && previewPlan === '0' ? (
-          <p className="mt-1 text-xs text-info">0 so‘m — valid nol reja</p>
-        ) : null}
-      </td>
-      <td className="min-w-64 px-4 py-3">
-        {editable && draft.hasPlan ? (
-          <Textarea
-            aria-label={`${line.branchName}, ${line.categoryNameSnapshot} izoh yoki sabab`}
-            value={draft.reason ?? ''}
-            maxLength={1000}
-            className="min-h-20"
-            placeholder="Izoh yoki reja sababi"
-            onChange={(event) => onChange({ ...draft, reason: event.target.value || null })}
-          />
-        ) : (
-          <span className="text-sm text-slate-700">{draft.reason || '—'}</span>
-        )}
-      </td>
-      <td className="whitespace-nowrap px-4 py-3 text-right">
-        <MoneyText value={line.actualAmountUzs} className="font-semibold" />
-      </td>
-      <td className="whitespace-nowrap px-4 py-3 text-right">
-        {previewVariance === null ? (
-          <span className="text-sm text-muted">—</span>
-        ) : (
-          <VarianceText value={previewVariance} />
-        )}
-      </td>
-      <td className="min-w-56 px-4 py-3">
+      </div>
+      {draft.hasPlan ? (
+        <div className="budget-branch-fields">
+          <div>
+            <label
+              className="mb-1.5 block text-xs font-medium text-muted"
+              htmlFor={`budget-amount-${line.id}`}
+            >
+              Reja summasi
+            </label>
+            {editable ? (
+              <div className="budget-amount-wrap">
+                <input
+                  id={`budget-amount-${line.id}`}
+                  data-budget-amount
+                  aria-label={`${line.branchName}, ${line.categoryNameSnapshot} reja summasi`}
+                  inputMode="numeric"
+                  autoComplete="off"
+                  aria-invalid={Boolean(amountError)}
+                  aria-describedby={amountError ? `budget-error-${line.id}` : undefined}
+                  value={formatMoney(previewPlan).replace(/ so‘m$/, '')}
+                  onChange={(event) => {
+                    const raw = event.target.value.replace(/[\s\u00a0]/g, '');
+                    if (!/^\d*$/.test(raw)) {
+                      setAmountError('Faqat musbat butun summa kiriting.');
+                      return;
+                    }
+                    if (BigInt(raw || '0') > MAX_BUDGET_AMOUNT) {
+                      setAmountError('Summa ruxsat etilgan chegaradan oshdi.');
+                      return;
+                    }
+                    setAmountError('');
+                    onChange({ ...draft, plannedAmountUzs: BigInt(raw || '0').toString() });
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') return;
+                    const inputs = [
+                      ...document.querySelectorAll<HTMLInputElement>('[data-budget-amount]'),
+                    ];
+                    const next = inputs[inputs.indexOf(event.currentTarget) + 1];
+                    if (next) {
+                      event.preventDefault();
+                      next.focus();
+                      next.select();
+                    }
+                  }}
+                />
+                <span>so‘m</span>
+              </div>
+            ) : (
+              <MoneyText value={previewPlan} className="font-semibold text-ink" />
+            )}
+            {amountError ? (
+              <p id={`budget-error-${line.id}`} role="alert" className="mt-1 text-xs text-danger">
+                {amountError}
+              </p>
+            ) : null}
+            {previewPlan === '0' ? (
+              <p className="mt-1 text-xs text-info">0 so‘m — haqiqiy nol reja</p>
+            ) : null}
+          </div>
+          <div className="budget-note-control">
+            {editable ? (
+              <button
+                type="button"
+                className="budget-note-button"
+                aria-expanded={noteOpen}
+                onClick={() => setNoteOpen((open) => !open)}
+              >
+                {draft.reason ? 'Izohni tahrirlash' : 'Izoh qo‘shish'}
+              </button>
+            ) : null}
+            {draft.reason && !noteOpen ? (
+              <p className="budget-note-preview" title={draft.reason}>
+                {draft.reason}
+              </p>
+            ) : null}
+            {editable && noteOpen ? (
+              <Textarea
+                aria-label={`${line.branchName}, ${line.categoryNameSnapshot} izoh yoki sabab`}
+                value={draft.reason ?? ''}
+                maxLength={1000}
+                className="mt-2 min-h-20"
+                placeholder="Izoh yoki reja sababi"
+                onChange={(event) => onChange({ ...draft, reason: event.target.value || null })}
+              />
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        <p className="budget-no-plan">Bu filial uchun reja kiritilmagan.</p>
+      )}
+      <div className="budget-branch-meta">
+        <span>
+          Fakt: <MoneyText value={line.actualAmountUzs} />
+        </span>
+        <span>
+          Farq: {previewVariance === null ? '—' : <VarianceText value={previewVariance} />}
+        </span>
         <span
           className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${presentation.className}`}
         >
           {presentation.label}
         </span>
-        <p className="mt-1 text-xs text-muted">
-          Bajarilish: {formatPercent(presentation.completion)}
-        </p>
-      </td>
-    </tr>
-  );
-}
-
-function SummaryBlock({
-  label,
-  type,
-  lines,
-}: {
-  label: string;
-  type?: ExpenseType;
-  lines: BudgetLine[];
-}) {
-  const selected = type ? lines.filter((line) => line.expenseTypeSnapshot === type) : lines;
-  const planned = selected.filter((line) => line.hasPlan).length;
-  const noPlan = selected.filter((line) => !line.hasPlan).length;
-  const zeroPlan = selected.filter((line) => line.hasPlan && line.plannedAmountUzs === '0').length;
-  return (
-    <div className="rounded-card border border-border bg-white p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
-      <div className="mt-3 grid grid-cols-2 gap-3 tabular-nums">
-        <div>
-          <p className="text-xs text-muted">Jami qator</p>
-          <p className="mt-1 text-xl font-bold text-ink">{selected.length}</p>
-        </div>
-        <div>
-          <p className="text-xs text-muted">Rejalangan</p>
-          <p className="mt-1 text-xl font-bold text-ink">{planned}</p>
-        </div>
+        {presentation.completion !== null ? (
+          <span>Bajarilish: {formatPercent(presentation.completion)}</span>
+        ) : null}
       </div>
-      <p className="mt-3 text-xs text-muted">
-        {noPlan} ta rejasiz · {zeroPlan} ta valid nol reja
-      </p>
     </div>
   );
-}
+});
 
 function exportBudgetPlan(plan: BudgetPlan) {
   downloadCsv(`budjet-${plan.periodLabel.replace(/\s+/g, '-').toLowerCase()}`, [
@@ -258,26 +278,22 @@ export function BudgetPage() {
     queryKey: queryKeys.budget(selectedPeriodId),
     queryFn: ({ signal }) => budgetApi.get(selectedPeriodId, signal),
     enabled: Boolean(selectedPeriodId),
+    refetchOnWindowFocus: false,
   });
   const historyQuery = useQuery({
     queryKey: queryKeys.budgetHistory(historyYear),
     queryFn: ({ signal }) => budgetApi.history(historyYear, signal),
     enabled: Boolean(selectedPeriod),
   });
-  const selectedMonthHistory = useMemo(
-    () =>
-      historyQuery.data && selectedPeriod
-        ? {
-            ...historyQuery.data,
-            periods: historyQuery.data.periods.filter(
-              (period) =>
-                period.year === selectedPeriod.year && period.month === selectedPeriod.month,
-            ),
-          }
-        : undefined,
-    [historyQuery.data, selectedPeriod],
-  );
-
+  const canReadReports = Boolean(meQuery.data?.permissions.includes('reports.view'));
+  const trendQuery = useQuery({
+    queryKey: queryKeys.report(
+      'monthly',
+      `year=${historyYear}&month=${selectedPeriod?.month}&branch=${branch}`,
+    ),
+    queryFn: ({ signal }) => reportApi.monthly({ year: historyYear!, branch }, signal),
+    enabled: Boolean(selectedPeriod) && canReadReports,
+  });
   useEffect(() => {
     if (!searchParams.get('period') && selectedPeriodId) {
       const next = new URLSearchParams(searchParams);
@@ -325,35 +341,107 @@ export function BudgetPage() {
 
   const hasEditPermission = Boolean(meQuery.data?.permissions.includes('budget.create_edit'));
   const canEdit = hasEditPermission && selectedPeriod?.status === 'open';
+  const visibleLines = useMemo(
+    () =>
+      (planQuery.data?.lines ?? []).filter((line) => branch === 'all' || line.branchId === branch),
+    [planQuery.data, branch],
+  );
+  const context = `${selectedPeriod?.label ?? 'Davr tanlanmagan'} · ${branch === 'all' ? 'Barcha filiallar' : (visibleLines[0]?.branchName ?? historyQuery.data?.branches.find((item) => item.id === branch)?.name ?? 'Tanlangan filial')}`;
+  const hasChanges = Boolean(
+    planQuery.data?.lines.some((line) => {
+      const draft = drafts[line.id];
+      return (
+        draft &&
+        (draft.hasPlan !== line.hasPlan ||
+          draft.plannedAmountUzs !== line.plannedAmountUzs ||
+          draft.reason !== line.reason)
+      );
+    }),
+  );
+  const changedCount =
+    planQuery.data?.lines.filter((line) => {
+      const draft = drafts[line.id];
+      return (
+        draft &&
+        (draft.hasPlan !== line.hasPlan ||
+          draft.plannedAmountUzs !== line.plannedAmountUzs ||
+          draft.reason !== line.reason)
+      );
+    }).length ?? 0;
+  useEffect(() => {
+    if (!hasChanges) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [hasChanges]);
+  const discardChanges = () => {
+    if (!planQuery.data) return;
+    setDrafts(
+      Object.fromEntries(
+        planQuery.data.lines.map((line) => [
+          line.id,
+          {
+            id: line.id,
+            branchId: line.branchId,
+            categoryId: line.categoryId,
+            hasPlan: line.hasPlan,
+            plannedAmountUzs: line.plannedAmountUzs,
+            reason: line.reason,
+          },
+        ]),
+      ),
+    );
+    saveMutation.reset();
+  };
+  const updateDraft = useCallback((next: BudgetLineDraft) => {
+    setDrafts((current) => ({ ...current, [next.id]: next }));
+  }, []);
 
   return (
-    <div>
+    <div className="budget-page min-w-0 space-y-6">
       <Breadcrumbs items={[{ label: 'Rejalashtirish' }, { label: 'Budjet', current: true }]} />
       <PageHeader
         title="Budjet"
-        description="Kategoriya × filial × davr bo‘yicha xarajat rejasi. Qiymatlar to‘g‘ridan-to‘g‘ri tahrirlanadi."
+        description={context}
         actions={
           <>
+            {canEdit ? (
+              <a
+                href="#budget-editor"
+                className="inline-flex min-h-11 items-center rounded-xl px-3 text-sm font-semibold text-blue-700 transition-colors duration-200 hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"
+              >
+                Reja kiritish
+              </a>
+            ) : null}
             <Button
               variant="secondary"
               disabled={!planQuery.data?.lines.length}
-              onClick={() => planQuery.data && exportBudgetPlan(planQuery.data)}
+              onClick={() =>
+                planQuery.data && exportBudgetPlan({ ...planQuery.data, lines: visibleLines })
+              }
             >
               <Download className="h-4 w-4" /> CSV yuklab olish
             </Button>
-            {canEdit ? (
-              <Button loading={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
-                <Save className="h-4 w-4" /> Saqlash
-              </Button>
-            ) : null}
           </>
         }
       />
 
-      {periodsQuery.isLoading ? <LoadingState label="Davr yuklanmoqda…" /> : null}
+      {hasChanges ? (
+        <p role="status" className="rounded-2xl bg-blue-50 px-5 py-3 text-sm text-blue-900">
+          Saqlanmagan o‘zgarishlar bor. Yuqoridagi ko‘rsatkichlar oxirgi saqlangan rejani aks
+          ettiradi.
+        </p>
+      ) : saveMutation.isSuccess ? (
+        <p role="status" className="text-sm text-green-800">
+          Budjet saqlandi.
+        </p>
+      ) : null}
       {periodsQuery.isError ? (
         <ErrorState
-          message={getApiErrorMessage(periodsQuery.error)}
+          message="Hisob davrlarini yuklab bo‘lmadi."
           onRetry={() => void periodsQuery.refetch()}
         />
       ) : null}
@@ -363,59 +451,92 @@ export function BudgetPage() {
       ) : null}
       {saveMutation.error ? (
         <Alert title="Saqlanmadi" tone="danger" className="mb-5">
-          {getApiErrorMessage(saveMutation.error)}
+          Budjetni saqlab bo‘lmadi. Kiritilgan qiymatlar saqlanib turibdi; ruxsat va davr holatini
+          tekshirib, qayta urinib ko‘ring.
         </Alert>
       ) : null}
 
-      {planQuery.isLoading ? <LoadingState label="Budjet matritsasi yuklanmoqda…" /> : null}
+      {periodsQuery.isLoading || (Boolean(selectedPeriodId) && planQuery.isLoading) ? (
+        <BudgetSkeleton />
+      ) : null}
+      {periodsQuery.isSuccess && !selectedPeriod ? (
+        <Alert title="Hisob davri topilmadi" tone="info">
+          Yuqoridagi paneldan mavjud yil va oyni tanlang.
+        </Alert>
+      ) : null}
       {planQuery.isError ? (
         <ErrorState
-          message={getApiErrorMessage(planQuery.error)}
+          message="Budjet ma’lumotlarini yuklab bo‘lmadi."
           onRetry={() => void planQuery.refetch()}
         />
       ) : null}
-      {planQuery.data ? (
+      {planQuery.data && selectedPeriod ? (
+        <BudgetOverview lines={visibleLines} context={context} />
+      ) : null}
+      {historyQuery.data && selectedPeriod ? (
+        <BudgetTrend
+          history={historyQuery.data}
+          branch={branch}
+          month={selectedPeriod.month}
+          report={trendQuery.data}
+        />
+      ) : null}
+      {historyQuery.isLoading ? <LoadingState label="Budjet dinamikasi yuklanmoqda…" /> : null}
+      {historyQuery.isError ? (
+        <ErrorState
+          message="Budjet dinamikasini yuklab bo‘lmadi."
+          onRetry={() => void historyQuery.refetch()}
+        />
+      ) : null}
+      {canReadReports && trendQuery.isLoading ? (
+        <LoadingState label="Oylik xarajatlar yuklanmoqda…" />
+      ) : null}
+      {trendQuery.isError ? (
+        <ErrorState
+          message="Oylik xarajatlar trendini yuklab bo‘lmadi."
+          onRetry={() => void trendQuery.refetch()}
+        />
+      ) : null}
+      {planQuery.data && selectedPeriod ? (
         <BudgetPageContent
           plan={planQuery.data}
           branch={branch}
           drafts={drafts}
-          editable={canEdit}
-          onChangeLine={(next) => setDrafts((current) => ({ ...current, [next.id]: next }))}
+          editable={canEdit && !saveMutation.isPending}
+          onChangeLine={updateDraft}
         />
       ) : null}
-
-      <Card
-        title="Budjet tarixi"
-        description="Navbar’da tanlangan hisob oyi: kategoriya turi, filial rejasi, jami va izoh bilan."
-        className="mt-6"
-      >
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-muted">
-            Tanlangan davr:{' '}
-            <strong className="font-semibold text-ink">{selectedPeriod?.label ?? '—'}</strong>
+      {canEdit && planQuery.data ? (
+        <div className="budget-save-bar" role="region" aria-label="Budjetni saqlash">
+          <p role="status" className="text-sm font-medium text-slate-700">
+            {saveMutation.isPending
+              ? 'Saqlanmoqda...'
+              : hasChanges
+                ? `${changedCount} ta o‘zgarish mavjud`
+                : saveMutation.isSuccess
+                  ? 'Saqlangan'
+                  : 'Barcha o‘zgarishlar saqlangan'}
           </p>
-          <Button
-            variant="secondary"
-            disabled={!selectedMonthHistory?.periods.length}
-            onClick={() =>
-              selectedMonthHistory && exportBudgetHistory(selectedMonthHistory, branch)
-            }
-          >
-            <Download className="h-4 w-4" /> Tanlangan oyni CSV yuklab olish
-          </Button>
+          <div className="flex items-center gap-2">
+            {hasChanges ? (
+              <Button
+                variant="secondary"
+                disabled={saveMutation.isPending}
+                onClick={discardChanges}
+              >
+                Bekor qilish
+              </Button>
+            ) : null}
+            <Button
+              disabled={!hasChanges || saveMutation.isPending}
+              loading={saveMutation.isPending}
+              onClick={() => saveMutation.mutate()}
+            >
+              <Save className="h-4 w-4" /> Saqlash
+            </Button>
+          </div>
         </div>
-
-        {historyQuery.isLoading ? <LoadingState label="Budjet tarixi yuklanmoqda…" /> : null}
-        {historyQuery.isError ? (
-          <ErrorState
-            message={getApiErrorMessage(historyQuery.error)}
-            onRetry={() => void historyQuery.refetch()}
-          />
-        ) : null}
-        {selectedMonthHistory ? (
-          <BudgetHistoryBlocks history={selectedMonthHistory} branch={branch} />
-        ) : null}
-      </Card>
+      ) : null}
     </div>
   );
 }
@@ -434,6 +555,8 @@ function BudgetPageContent({
   /** Top-bar branch, or "all". */
   branch: string;
 }) {
+  const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'fixed' | 'variable'>('all');
   // A display filter only: editing still saves every branch, so narrowing
   // the view to one branch can never drop the other one’s plan.
   const lines = useMemo(
@@ -444,273 +567,162 @@ function BudgetPageContent({
     () => `${plan.updatedByName} · ${formatDateTime(plan.updatedAt)}`,
     [plan.updatedByName, plan.updatedAt],
   );
+  const categories = useMemo(() => {
+    const grouped = new Map<string, BudgetLine[]>();
+    for (const line of lines) {
+      const current = grouped.get(line.categoryId) ?? [];
+      current.push(line);
+      grouped.set(line.categoryId, current);
+    }
+    return [...grouped.values()];
+  }, [lines]);
+  const filteredCategories = categories.filter((categoryLines) => {
+    const first = categoryLines[0];
+    return (
+      first &&
+      (typeFilter === 'all' || first.expenseTypeSnapshot === typeFilter) &&
+      first.categoryNameSnapshot.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())
+    );
+  });
+  const totals = useMemo(() => {
+    let fixed = 0n;
+    let variable = 0n;
+    const branches = new Map<string, { name: string; amount: bigint }>();
+    for (const line of lines) {
+      const draft = drafts[line.id] ?? line;
+      const amount = draft.hasPlan ? BigInt(draft.plannedAmountUzs ?? '0') : 0n;
+      if (line.expenseTypeSnapshot === 'fixed') fixed += amount;
+      else variable += amount;
+      const current = branches.get(line.branchId);
+      branches.set(line.branchId, {
+        name: line.branchName,
+        amount: (current?.amount ?? 0n) + amount,
+      });
+    }
+    return { fixed, variable, branches: [...branches.values()] };
+  }, [drafts, lines]);
   return (
     <>
-      <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryBlock label="Umumiy" lines={lines} />
-        <SummaryBlock label="Doimiy xarajat" type="fixed" lines={lines} />
-        <SummaryBlock label="O‘zgaruvchan xarajat" type="variable" lines={lines} />
-        <div className="rounded-card border border-border bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Oxirgi saqlash</p>
-          <p className="mt-3 text-sm text-slate-700">{updatedLabel}</p>
-        </div>
-      </div>
-
       <Card
-        title="Filial × kategoriya matritsasi"
+        title="Budjet rejasi"
         description={
           editable
-            ? 'Reja qatori mavjudligini alohida boshqaring. 0 va reja yo‘q bir xil emas.'
-            : 'Yopiq davr uchun matritsa read-only.'
+            ? 'Kategoriyalar va filiallar bo‘yicha reja kiriting, so‘ng saqlang.'
+            : 'Reja tafsilotlari · Faqat ko‘rish uchun'
         }
-        className="overflow-hidden"
+        className="budget-matrix-card"
       >
-        <div className="-m-5 overflow-x-auto">
-          <table className="w-full min-w-[1180px] text-left">
-            <caption className="sr-only">{plan.periodLabel} budjet matritsasi</caption>
-            <thead>
-              <tr className="border-b border-border bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
-                <th className="sticky left-0 z-20 bg-slate-50 px-4 py-3">Kategoriya</th>
-                <th className="px-4 py-3">Filial</th>
-                <th className="px-4 py-3">Reja mavjudligi</th>
-                <th className="px-4 py-3 text-right">Reja</th>
-                <th className="px-4 py-3">Izoh / sabab</th>
-                <th className="px-4 py-3 text-right">Fakt</th>
-                <th className="px-4 py-3 text-right">Farq</th>
-                <th className="px-4 py-3">Holat</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((line) => (
-                <BudgetLineRow
-                  key={line.id}
-                  line={line}
-                  draft={
-                    drafts[line.id] ?? {
-                      id: line.id,
-                      branchId: line.branchId,
-                      categoryId: line.categoryId,
-                      hasPlan: line.hasPlan,
-                      plannedAmountUzs: line.plannedAmountUzs,
-                      reason: line.reason,
-                    }
-                  }
-                  editable={editable}
-                  onChange={onChangeLine}
+        <div id="budget-editor" className="scroll-mt-48" />
+        <div role="region" aria-label="Budjet rejasini tahrirlash" className="budget-editor">
+          {lines.length ? (
+            <>
+              <div className="budget-entry-summary" aria-label="Kiritilgan reja xulosasi">
+                <div>
+                  <span>Doimiy</span>
+                  <strong>{formatMoney(totals.fixed.toString())}</strong>
+                </div>
+                <div>
+                  <span>O‘zgaruvchan</span>
+                  <strong>{formatMoney(totals.variable.toString())}</strong>
+                </div>
+                <div>
+                  <span>Umumiy reja</span>
+                  <strong>{formatMoney((totals.fixed + totals.variable).toString())}</strong>
+                </div>
+                <div className="budget-entry-branches">
+                  {totals.branches.map((item) => (
+                    <span key={item.name}>
+                      {item.name}: <b>{formatMoney(item.amount.toString())}</b>
+                    </span>
+                  ))}
+                </div>
+              </div>
+              {!lines.some((line) => (drafts[line.id] ?? line).hasPlan) ? (
+                <p className="budget-entry-empty" role="status">
+                  Budjet rejasi hali kiritilmagan. Quyidagi filial qatoridan “Reja mavjud”ni tanlab,
+                  summani kiriting.
+                </p>
+              ) : null}
+              <div className="budget-entry-tools">
+                <input
+                  type="search"
+                  aria-label="Kategoriya qidirish"
+                  placeholder="Kategoriya qidirish..."
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
                 />
-              ))}
-            </tbody>
-          </table>
+                <div role="group" aria-label="Kategoriya turi" className="budget-type-filter">
+                  {(
+                    [
+                      ['all', 'Barchasi'],
+                      ['fixed', 'Doimiy'],
+                      ['variable', 'O‘zgaruvchan'],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={typeFilter === value}
+                      onClick={() => setTypeFilter(value)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {filteredCategories.length ? (
+                <div className="budget-category-list">
+                  {filteredCategories.map((categoryLines) => {
+                    const first = categoryLines[0]!;
+                    const categoryTotal = categoryLines.reduce((sum, line) => {
+                      const draft = drafts[line.id] ?? line;
+                      return sum + (draft.hasPlan ? BigInt(draft.plannedAmountUzs ?? '0') : 0n);
+                    }, 0n);
+                    return (
+                      <article className="budget-category-card" key={first.categoryId}>
+                        <div className="budget-category-heading">
+                          <h3>{first.categoryNameSnapshot}</h3>
+                          <span className="budget-type-badge">
+                            {first.expenseTypeSnapshot === 'fixed' ? 'Doimiy' : 'O‘zgaruvchan'}
+                          </span>
+                        </div>
+                        <div className="budget-category-branches">
+                          {categoryLines.map((line) => (
+                            <BudgetBranchEditor
+                              key={line.id}
+                              line={line}
+                              draft={drafts[line.id] ?? line}
+                              editable={editable}
+                              onChange={onChangeLine}
+                            />
+                          ))}
+                        </div>
+                        <div className="budget-category-total">
+                          <span>Jami kategoriya</span>
+                          <strong>{formatMoney(categoryTotal.toString())}</strong>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="budget-entry-empty">
+                  Kategoriya topilmadi. Qidiruv yoki turni o‘zgartiring.
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="budget-entry-empty">
+              Budjet rejasi hali kiritilmagan. Kategoriya va filiallar mavjudligini tekshiring.
+            </p>
+          )}
         </div>
       </Card>
 
-      <div className="mt-5 grid gap-5 lg:grid-cols-2">
-        <Alert title="0 — haqiqiy qiymat" tone="info">
-          Reja qatori mavjud va summa 0 bo‘lsa, jadval <strong>0 so‘m</strong>ni ko‘rsatadi. Fakt
-          musbat bo‘lsa holat <strong>Rejadan tashqari / Unplanned</strong>.
-        </Alert>
-        <Alert title="Reja mavjud emas" tone="warning">
-          Kategoriya uchun plan line bo‘lmasa, foiz va farq hisoblanmaydi. Bu holat 0 so‘mlik
-          rejadan alohida saqlanadi.
-        </Alert>
+      <div className="flex flex-wrap justify-between gap-3 text-xs leading-5 text-muted">
+        <p>0 so‘m — kiritilgan nol reja. Belgilanmagan qator — reja mavjud emas.</p>
+        {plan.updatedByName ? <p>Oxirgi saqlash: {updatedLabel}</p> : null}
       </div>
-      {plan.lines.some((line) => !line.hasPlan) ? (
-        <p className="mt-4 inline-flex items-center gap-2 text-xs text-muted">
-          <AlertTriangle className="h-4 w-4 text-warning" /> Matritsada kamida bitta rejasiz
-          kategoriya bor; u hisobotda yashirilmaydi.
-        </p>
-      ) : null}
     </>
-  );
-}
-
-function exportBudgetHistory(history: BudgetHistory, branchFilter: string) {
-  const visibleBranches = history.branches.filter(
-    (branch) => branchFilter === 'all' || branch.id === branchFilter,
-  );
-  downloadCsv(`budjet-tarixi-${history.year ?? 'barcha-yillar'}`, [
-    [
-      'Yil',
-      'Oy',
-      'Oy nomi',
-      'Xarajat kategoriyasi',
-      'Turi',
-      ...visibleBranches.map((branch) => `${branch.name} reja`),
-      'Jami reja',
-      'Izoh / sabab',
-      'Versiya',
-      'Holat',
-    ],
-    ...history.periods.flatMap((period) =>
-      period.rows.map((row) => {
-        const visiblePlans = row.branches.filter(
-          (plan) => branchFilter === 'all' || plan.branchId === branchFilter,
-        );
-        const planned = visiblePlans.filter((plan) => plan.hasPlan);
-        const total =
-          planned.length === 0
-            ? null
-            : planned
-                .reduce((sum, plan) => sum + BigInt(plan.plannedAmountUzs ?? '0'), 0n)
-                .toString();
-        return [
-          period.year,
-          period.month,
-          period.periodLabel.replace(String(period.year), '').trim(),
-          row.categoryNameSnapshot,
-          row.expenseTypeSnapshot === 'fixed' ? 'Doimiy' : 'O‘zgaruvchan',
-          ...visiblePlans.map((plan) => plan.plannedAmountUzs),
-          total,
-          getVisibleHistoryReason(row.branches, branchFilter, row.reason),
-          period.revisionNo,
-          period.versionStatus,
-        ];
-      }),
-    ),
-  ]);
-}
-
-function getVisibleHistoryReason(
-  plans: BudgetHistoryPeriod['rows'][number]['branches'],
-  branchFilter: string,
-  combinedReason: string | null,
-) {
-  if (branchFilter === 'all') return combinedReason;
-  return plans.find((plan) => plan.branchId === branchFilter)?.reason ?? null;
-}
-
-function BudgetHistoryBlocks({ history, branch }: { history: BudgetHistory; branch: string }) {
-  const visibleBranches = history.branches.filter((item) => branch === 'all' || item.id === branch);
-  if (history.periods.length === 0)
-    return (
-      <Alert title="Tarix mavjud emas" tone="info">
-        Navbar’da tanlangan oy uchun budjet tarixi topilmadi.
-      </Alert>
-    );
-
-  return (
-    <div className="space-y-6">
-      {history.periods.map((period) => (
-        <BudgetHistoryMonth key={period.periodId} period={period} branch={branch} />
-      ))}
-      {visibleBranches.length === 0 ? (
-        <Alert title="Filial topilmadi" tone="warning">
-          Navbar orqali tanlangan filial budjet tarixida mavjud emas.
-        </Alert>
-      ) : null}
-    </div>
-  );
-}
-
-function BudgetHistoryMonth({ period, branch }: { period: BudgetHistoryPeriod; branch: string }) {
-  const visibleBranches = period.totalsByBranch.filter(
-    (item) => branch === 'all' || item.branchId === branch,
-  );
-  const plannedTotals = visibleBranches.filter((item) => item.hasPlan);
-  const visibleTotal =
-    plannedTotals.length === 0
-      ? null
-      : plannedTotals
-          .reduce((sum, item) => sum + BigInt(item.plannedAmountUzs ?? '0'), 0n)
-          .toString();
-  const metadata = [
-    period.revisionNo === null ? 'Versiya mavjud emas' : `Reviziya ${period.revisionNo}`,
-    period.versionStatus ?? 'rejasiz',
-    period.updatedAt
-      ? `${period.updatedByName || 'Noma’lum xodim'} · ${formatDateTime(period.updatedAt)}`
-      : null,
-  ].filter(Boolean);
-
-  return (
-    <section className="overflow-hidden rounded-card border border-border bg-white">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-4">
-        <div>
-          <h3 className="text-base font-bold text-ink">{period.periodLabel}</h3>
-          <p className="mt-1 text-xs text-muted">{metadata.join(' · ')}</p>
-          {period.versionReason ? (
-            <p className="mt-2 text-sm text-slate-700">Versiya sababi: {period.versionReason}</p>
-          ) : null}
-        </div>
-        <div className="text-right">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Oy jami</p>
-          <MoneyText value={visibleTotal} className="mt-1 text-lg font-bold text-ink" />
-        </div>
-      </div>
-      <div className="overflow-x-auto">
-        <table
-          className="w-full min-w-[980px] text-left"
-          aria-label={`${period.periodLabel} budjet tarixi`}
-        >
-          <thead>
-            <tr className="border-b border-border bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
-              <th className="px-4 py-3">Xarajat kategoriyasi</th>
-              <th className="px-4 py-3">Turi</th>
-              {visibleBranches.map((item) => (
-                <th key={item.branchId} className="px-4 py-3 text-right">
-                  {item.branchName} reja
-                </th>
-              ))}
-              <th className="px-4 py-3 text-right">Jami reja</th>
-              <th className="px-4 py-3">Izoh / sabab</th>
-            </tr>
-          </thead>
-          <tbody>
-            {period.rows.map((row) => {
-              const visiblePlans = row.branches.filter(
-                (plan) => branch === 'all' || plan.branchId === branch,
-              );
-              const planned = visiblePlans.filter((plan) => plan.hasPlan);
-              const total =
-                planned.length === 0
-                  ? null
-                  : planned
-                      .reduce((sum, plan) => sum + BigInt(plan.plannedAmountUzs ?? '0'), 0n)
-                      .toString();
-              return (
-                <tr key={row.categoryId} className="border-b border-border last:border-0">
-                  <th scope="row" className="min-w-64 px-4 py-3 text-sm font-semibold text-ink">
-                    {row.categoryNameSnapshot}
-                  </th>
-                  <td className="whitespace-nowrap px-4 py-3 text-sm text-muted">
-                    {row.expenseTypeSnapshot === 'fixed' ? 'Doimiy' : 'O‘zgaruvchan'}
-                  </td>
-                  {visiblePlans.map((plan) => (
-                    <td key={plan.branchId} className="whitespace-nowrap px-4 py-3 text-right">
-                      {plan.hasPlan ? (
-                        <MoneyText value={plan.plannedAmountUzs} />
-                      ) : (
-                        <span className="text-sm text-muted">Reja mavjud emas</span>
-                      )}
-                    </td>
-                  ))}
-                  <td className="whitespace-nowrap px-4 py-3 text-right font-semibold">
-                    <MoneyText value={total} />
-                  </td>
-                  <td className="min-w-64 px-4 py-3 text-sm text-slate-700">
-                    {getVisibleHistoryReason(row.branches, branch, row.reason) || '—'}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-          <tfoot>
-            <tr className="bg-slate-900 text-sm font-bold text-white">
-              <th colSpan={2} className="px-4 py-3">
-                OY JAMI
-              </th>
-              {visibleBranches.map((item) => (
-                <td key={item.branchId} className="px-4 py-3 text-right">
-                  <MoneyText value={item.plannedAmountUzs} />
-                </td>
-              ))}
-              <td className="px-4 py-3 text-right">
-                <MoneyText value={visibleTotal} />
-              </td>
-              <td className="px-4 py-3">{period.versionReason || '—'}</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-    </section>
   );
 }

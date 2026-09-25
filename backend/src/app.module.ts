@@ -17,6 +17,8 @@ import { ImportsModule } from './imports/imports.module';
 import { TelegramModule } from './telegram/telegram.module';
 import { NotificationEventsModule } from './notification-events/notification-events.module';
 import { DailyRevenuesModule } from './daily-revenues/daily-revenues.module';
+import { InvestorsModule } from './investors/investors.module';
+import { AuditModule } from './audit/audit.module';
 
 @Module({
   imports: [
@@ -46,6 +48,8 @@ import { DailyRevenuesModule } from './daily-revenues/daily-revenues.module';
     NotificationEventsModule,
     ImportsModule,
     DailyRevenuesModule,
+    InvestorsModule,
+    AuditModule,
   ],
   providers: [
     // Order matters: reject cross-site cookie mutations before authentication,

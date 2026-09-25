@@ -27,6 +27,28 @@ export interface MonthlyReportMatrixSummary {
   fixedShareAnnual: number | null;
 }
 
+export interface MonthlyCategoryResult {
+  id: string;
+  name: string;
+  type: ExpenseType;
+  planActual: PlanActual;
+  transactionCount: number;
+  sharePct: number | null;
+}
+
+export interface MonthlyExecutiveSummary {
+  month: number;
+  monthLabel: string;
+  fixed: PlanActual;
+  variable: PlanActual;
+  overall: PlanActual;
+  fixedSharePct: number | null;
+  variableSharePct: number | null;
+  fixedCategoryCount: number;
+  variableCategoryCount: number;
+  categories: MonthlyCategoryResult[];
+}
+
 const MONTH_COUNT = 12n;
 
 function summarizeRows(rows: MonthlyReportRow[], monthIndex?: number): MonthlyMoneySummary {
@@ -81,6 +103,33 @@ function buildSection(
   };
 }
 
+/** Oylik subtotalni UI uchun mavjud PlanActual contractiga aniqlikni yo‘qotmasdan o‘giradi. */
+export function monthlySummaryPlanActual(value: MonthlyMoneySummary): PlanActual {
+  const actual = BigInt(value.actualAmountUzs);
+  const planned = value.plannedAmountUzs === null ? null : BigInt(value.plannedAmountUzs);
+  const completionPercent =
+    planned === null || planned === 0n
+      ? null
+      : Number((actual * 10_000n + planned / 2n) / planned) / 100;
+  return {
+    hasPlan: planned !== null,
+    plannedAmountUzs: value.plannedAmountUzs,
+    actualAmountUzs: value.actualAmountUzs,
+    varianceUzs: value.varianceUzs,
+    completionPercent,
+    status:
+      planned === null
+        ? actual > 0n
+          ? 'unplanned'
+          : 'no_plan'
+        : actual > planned
+          ? 'over_plan'
+          : actual < planned
+            ? 'under_plan'
+            : 'on_plan',
+  };
+}
+
 /**
  * Excel matritsasidagi subtotal, umumiy jami va doimiy xarajat ulushini
  * backend qaytargan kategoriya kesimidan hosil qiladi. Pul hisoblari Number
@@ -99,5 +148,68 @@ export function buildMonthlyReportMatrix(report: MonthlyReport): MonthlyReportMa
       percentOfTotal(month.actualAmountUzs, overall.months[index]!.actualAmountUzs),
     ),
     fixedShareAnnual: percentOfTotal(fixed.annual.actualAmountUzs, overall.annual.actualAmountUzs),
+  };
+}
+
+/** Tanlangan oy uchun executive UI ishlatadigan, server qatorlaridan olingan yagona view-model. */
+export function buildMonthlyExecutiveSummary(
+  report: MonthlyReport,
+  requestedMonth: number,
+): MonthlyExecutiveSummary {
+  const monthNames = [
+    'Yanvar',
+    'Fevral',
+    'Mart',
+    'Aprel',
+    'May',
+    'Iyun',
+    'Iyul',
+    'Avgust',
+    'Sentabr',
+    'Oktabr',
+    'Noyabr',
+    'Dekabr',
+  ];
+  const month = Math.max(1, Math.min(requestedMonth, 12));
+  const monthIndex = month - 1;
+  const matrix = buildMonthlyReportMatrix(report);
+  const overall = monthlySummaryPlanActual(matrix.overall.months[monthIndex]!);
+  const fixed = monthlySummaryPlanActual(matrix.fixed.months[monthIndex]!);
+  const variable = monthlySummaryPlanActual(matrix.variable.months[monthIndex]!);
+  const categories = report.rows
+    .map((row) => {
+      const cell = row.months.find((item) => item.month === month);
+      if (!cell) return null;
+      return {
+        id: row.category.id,
+        name: row.category.name,
+        type: row.category.expenseTypeSnapshot,
+        planActual: cell.planActual,
+        transactionCount: cell.transactionCount,
+        sharePct: percentOfTotal(cell.planActual.actualAmountUzs, overall.actualAmountUzs),
+      } satisfies MonthlyCategoryResult;
+    })
+    .filter((item): item is MonthlyCategoryResult => item !== null)
+    .sort((a, b) => {
+      const left = BigInt(a.planActual.actualAmountUzs);
+      const right = BigInt(b.planActual.actualAmountUzs);
+      return left === right ? a.name.localeCompare(b.name) : left > right ? -1 : 1;
+    });
+  const activeCategories = categories.filter(
+    (item) =>
+      BigInt(item.planActual.actualAmountUzs) !== 0n || item.planActual.plannedAmountUzs !== null,
+  );
+
+  return {
+    month,
+    monthLabel: monthNames[monthIndex] ?? String(month),
+    fixed,
+    variable,
+    overall,
+    fixedSharePct: percentOfTotal(fixed.actualAmountUzs, overall.actualAmountUzs),
+    variableSharePct: percentOfTotal(variable.actualAmountUzs, overall.actualAmountUzs),
+    fixedCategoryCount: activeCategories.filter((item) => item.type === 'fixed').length,
+    variableCategoryCount: activeCategories.filter((item) => item.type === 'variable').length,
+    categories,
   };
 }

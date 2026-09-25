@@ -3,6 +3,22 @@ import { ApiException, hasCompanyWideWrite, type AuthenticatedUser } from '@/com
 import { ActorContextService, PrismaService, type PrismaTransaction } from '@/database';
 import type { MasterCreateDto, MasterUpdateDto } from '@/admin/dto/admin.dto';
 import type { ExpenseCategoryDto, MasterItemDto } from './master-data.service';
+import type { AccountingPeriodDto } from './master-data.service';
+
+const MONTHS_UZ = [
+  'Yanvar',
+  'Fevral',
+  'Mart',
+  'Aprel',
+  'May',
+  'Iyun',
+  'Iyul',
+  'Avgust',
+  'Sentabr',
+  'Oktabr',
+  'Noyabr',
+  'Dekabr',
+] as const;
 
 /** The three resources the settings screens manage; anything else is a 404. */
 export type MasterKind = 'categories' | 'departments' | 'payment-methods' | 'branches';
@@ -15,6 +31,89 @@ export class MasterWriteService {
     private readonly prisma: PrismaService,
     private readonly actor: ActorContextService,
   ) {}
+
+  /**
+   * Adds a selectable reporting year as twelve genuine period rows. Creating
+   * only labels in the browser would leave budget/revenue/report APIs without
+   * the UUID they require, so the whole year is committed atomically here.
+   *
+   * A transaction trigger may already have created one month of a future year;
+   * in that valid partial case we fill the other months. A complete year is a
+   * conflict, which keeps a double click from looking like a fresh write.
+   */
+  async createAccountingYear(
+    user: AuthenticatedUser,
+    year: number,
+  ): Promise<AccountingPeriodDto[]> {
+    return this.prisma
+      .withActor(this.actor.mint(user.id), async (tx) => {
+        const existing = await tx.accounting_periods.count({ where: { year } });
+        if (existing === 12)
+          throw new ApiException(
+            409,
+            'ACCOUNTING_YEAR_EXISTS',
+            `${year} yil hisob davrlari allaqachon mavjud.`,
+          );
+
+        const created = await tx.accounting_periods.createMany({
+          data: Array.from({ length: 12 }, (_, index) => ({
+            year,
+            month: index + 1,
+            status: 'open' as const,
+          })),
+          skipDuplicates: true,
+        });
+
+        // accounting_periods has no generic audit trigger. Record one safe,
+        // compact event and resolve its actor from the signed DB context.
+        await tx.$executeRaw`
+          INSERT INTO fincore.audit_logs (
+            actor_user_id, action, entity_type, entity_id, result, before_payload, after_payload
+          ) VALUES (
+            fincore.fn_current_actor_id(),
+            'accounting_year.create',
+            'accounting_periods',
+            ${String(year)},
+            'success',
+            NULL,
+            jsonb_build_object('year', ${year}, 'months_created', ${created.count})
+          )
+        `;
+
+        const rows = await tx.accounting_periods.findMany({
+          where: { year },
+          select: { id: true, year: true, month: true, status: true },
+          orderBy: { month: 'asc' },
+        });
+        if (rows.length !== 12)
+          throw new ApiException(
+            500,
+            'ACCOUNTING_YEAR_INCOMPLETE',
+            'Yilning barcha hisob davrlarini yaratib bo‘lmadi.',
+          );
+
+        return rows.map((row) => ({
+          id: row.id,
+          year: row.year,
+          month: row.month,
+          label: `${MONTHS_UZ[row.month - 1]} ${row.year}`,
+          status: row.status,
+          closedAt: null,
+          closedByName: null,
+        }));
+      })
+      .catch((error: unknown) => {
+        if (error instanceof ApiException) throw error;
+        const message = error instanceof Error ? error.message : String(error);
+        if (/Unique constraint|duplicate key/i.test(message))
+          throw new ApiException(
+            409,
+            'ACCOUNTING_YEAR_EXISTS',
+            `${year} yil hisob davrlari allaqachon mavjud.`,
+          );
+        throw error;
+      });
+  }
 
   async create(
     user: AuthenticatedUser,
@@ -241,7 +340,11 @@ export class MasterWriteService {
       return new ApiException(409, 'DUPLICATE_REFERENCE', 'Bu master-data kodi allaqachon mavjud.');
     if (/Record to update not found|No record was found/i.test(message)) return this.notFound();
     if (/actor context|signing key/i.test(message))
-      return new ApiException(500, 'ACTOR_CONTEXT_INVALID', 'Server identifikatsiya konteksti noto‘g‘ri.');
+      return new ApiException(
+        500,
+        'ACTOR_CONTEXT_INVALID',
+        'Server identifikatsiya konteksti noto‘g‘ri.',
+      );
     return error;
   }
 }

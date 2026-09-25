@@ -49,6 +49,22 @@ function setup(annualRows: unknown[]) {
     expenseByType: () => Promise<{ fixed: bigint; variable: bigint }>;
     perBranchTotals: () => Promise<Map<string, unknown>>;
     buildTrends: () => Promise<{ expense: []; revenue: [] }>;
+    revenueBetween: () => Promise<{ current: bigint; previous: bigint }>;
+    monthlyRevenue: () => Promise<{
+      byMonth: Map<number, { actual: bigint; planned: bigint }>;
+      previousYearTotal: bigint;
+    }>;
+    annualNetProfitByPaymentMethod: () => Promise<
+      Array<{
+        paymentMethodId: string;
+        code: string;
+        name: string;
+        sortOrder: number;
+        month: number;
+        revenue: bigint;
+        expense: bigint;
+      }>
+    >;
   };
 
   vi.spyOn(internal, 'expenseTotals').mockResolvedValue({ planned: 0n, actual: 0n });
@@ -56,6 +72,25 @@ function setup(annualRows: unknown[]) {
   vi.spyOn(internal, 'expenseByType').mockResolvedValue({ fixed: 0n, variable: 0n });
   vi.spyOn(internal, 'perBranchTotals').mockResolvedValue(new Map());
   vi.spyOn(internal, 'buildTrends').mockResolvedValue({ expense: [], revenue: [] });
+  vi.spyOn(internal, 'revenueBetween').mockResolvedValue({ current: 0n, previous: 0n });
+  vi.spyOn(internal, 'monthlyRevenue').mockResolvedValue({
+    byMonth: new Map(),
+    previousYearTotal: 0n,
+  });
+  vi.spyOn(internal, 'annualNetProfitByPaymentMethod').mockResolvedValue(
+    annualRows.map((row) => {
+      const value = row as { month: number; actual_uzs: bigint };
+      return {
+        paymentMethodId: '00000000-0000-4000-8000-000000000030',
+        code: 'CASH',
+        name: 'Naqd pul',
+        sortOrder: 1,
+        month: value.month,
+        revenue: 0n,
+        expense: value.actual_uzs,
+      };
+    }),
+  );
 
   return service;
 }
@@ -76,6 +111,14 @@ describe('DashboardService annual Excel Xulosa metrics', () => {
       averagePlannedMonthlyUzs: '300',
       averagePlanMonthsCount: 2,
     });
+    expect(result.annualNetProfit.paymentMethods[0]).toMatchObject({
+      code: 'CASH',
+      revenueUzs: '0',
+      expenseUzs: '160',
+      netProfitUzs: '-160',
+      sharePct: 100,
+    });
+    expect(result.annualNetProfit.paymentMethodMonths).toHaveLength(12);
   });
 
   it('reja kiritilgan oy bo‘lmasa nol va zero denominator qaytaradi', async () => {
@@ -89,6 +132,43 @@ describe('DashboardService annual Excel Xulosa metrics', () => {
       averagePlannedMonthlyUzs: '0',
       averagePlanMonthsCount: 0,
     });
+  });
+});
+
+describe('DashboardService annual payment-method source', () => {
+  it('loads the full year in one aggregate query and keeps BigInt values exact', async () => {
+    const queryRaw = vi.fn().mockResolvedValue([
+      {
+        payment_method_id: '00000000-0000-4000-8000-000000000030',
+        code: 'CASH',
+        name: 'Naqd pul',
+        sort_order: 1,
+        month: 8,
+        revenue_uzs: 9_007_199_254_740_993n,
+        expense_uzs: 1n,
+      },
+    ]);
+    const prisma = { db: { $queryRaw: queryRaw } } as unknown as PrismaService;
+    const service = new DashboardService(prisma, {} as ReportsService);
+
+    const result = await (
+      service as unknown as {
+        annualNetProfitByPaymentMethod: (
+          year: number,
+          branchIds: string[],
+        ) => Promise<Array<{ month: number; revenue: bigint; expense: bigint; code: string }>>;
+      }
+    ).annualNetProfitByPaymentMethod(2026, [BRANCH_ID]);
+
+    expect(queryRaw).toHaveBeenCalledOnce();
+    expect(result).toEqual([
+      expect.objectContaining({
+        month: 8,
+        code: 'CASH',
+        revenue: 9_007_199_254_740_993n,
+        expense: 1n,
+      }),
+    ]);
   });
 });
 

@@ -10,6 +10,24 @@ const apiErrorSchema = z.object({
 });
 
 const moneyValueSchema = z.string().regex(/^-?\d+$/);
+const shareValueSchema = z.string().regex(/^-?\d+\.\d{2}$/);
+/**
+ * Money fields that carry two decimals rather than whole so'm: a derived share
+ * of revenue, and what is still owed of it. Everything else ending in "Uzs" is
+ * an integer so'm string.
+ *
+ * Adding a decimal field to an API response means adding it here AND to the
+ * backend's mirror of this list in financial-payload.interceptor.ts. Forget
+ * either and the value is checked as an integer, which fails.
+ */
+const shareValueKeys = new Set([
+  'shareUzs',
+  'paidUzs',
+  'openUzs',
+  'remainingUzs',
+  'residualUzs',
+  'calculatedShareUzs',
+]);
 const offsetDateTimeSchema = z
   .string()
   .refine(
@@ -37,8 +55,13 @@ function assertFinancialPayload(value: unknown, path = 'response'): void {
   const currentIsDataQualityRow = 'issueType' in value;
   for (const [key, item] of Object.entries(value)) {
     const itemPath = `${path}.${key}`;
-    if (key.endsWith('Uzs') && item !== null && !moneyValueSchema.safeParse(item).success)
-      throw new Error(`${itemPath}: MoneyUzs integer-string emas`);
+    if (key.endsWith('Uzs') && item !== null) {
+      const schema = shareValueKeys.has(key) ? shareValueSchema : moneyValueSchema;
+      if (!schema.safeParse(item).success)
+        throw new Error(
+          `${itemPath}: ${shareValueKeys.has(key) ? 'ShareUzs two-decimal string' : 'MoneyUzs integer-string'} emas`,
+        );
+    }
     if (/(?:At)$/.test(key) && item !== null && !offsetDateTimeSchema.safeParse(item).success)
       throw new Error(`${itemPath}: RFC3339 offset timestamp emas`);
     if (
@@ -69,6 +92,20 @@ export class ApiError extends Error {
     this.code = body.code;
     this.details = body.details;
   }
+}
+
+const sessionExpiredListeners = new Set<() => void>();
+
+/**
+ * Feature requests can discover an expired server session before the cached
+ * `/me` query does. Subscribers clear that stale authenticated UI immediately
+ * instead of rendering an unrelated "Server xatosi" panel.
+ */
+export function onSessionExpired(listener: () => void): () => void {
+  sessionExpiredListeners.add(listener);
+  return () => {
+    sessionExpiredListeners.delete(listener);
+  };
 }
 
 export interface RequestOptions extends Omit<RequestInit, 'body'> {
@@ -121,6 +158,12 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
             code: 'API_UNAVAILABLE',
             message: `Server API javob bermayapti (${response.status}). Demo rejimi uchun VITE_ENABLE_MOCKS=true qo‘ying yoki backendni ulang.`,
           };
+    // `/me` is the authentication source of truth itself. Mutating that same
+    // query from its own rejection callback can leave React Query in a pending
+    // state. AuthProvider handles `/me`'s 401 normally; only feature requests
+    // need to notify it that a previously cached session has expired.
+    if (response.status === 401 && path !== '/auth/login' && path !== '/me')
+      sessionExpiredListeners.forEach((listener) => listener());
     throw new ApiError(response.status, errorBody);
   }
 

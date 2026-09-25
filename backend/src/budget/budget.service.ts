@@ -296,6 +296,22 @@ export class BudgetService {
 
     await this.prisma
       .withActor(this.actor.mint(user.id), async (tx) => {
+        // A saved draft is the operative plan in the current no-approval UI.
+        // Keep the applicable marker in the same transaction as its lines so
+        // dashboards never observe a saved Budget page that reports as zero.
+        await tx.budget_versions.updateMany({
+          where: {
+            period_id: periodId,
+            is_applicable: true,
+            id: { not: version.id },
+          },
+          data: { is_applicable: false },
+        });
+        await tx.budget_versions.update({
+          where: { id: version.id },
+          data: { is_applicable: true },
+        });
+
         for (const line of lines) {
           if (line.plannedAmountUzs === null) {
             // Clearing a cell removes the plan entirely — that is what
@@ -386,11 +402,10 @@ export class BudgetService {
           period_id: periodId,
           revision_no: (last?.revision_no ?? 0) + 1,
           created_by: user.id,
-          // Applicable AND draft: the frontend has no approval step, so a saved
-          // plan is immediately the operative one, while `draft` keeps it
-          // editable (trg_budget_lines_guard). This is what makes the plan
-          // visible to v_applicable_budget_line and therefore to the reports.
-          is_applicable: true,
+          // Promotion happens atomically with the lines in saveLines. Creating
+          // this as non-applicable avoids colliding with an older applicable
+          // revision before that transaction can demote it.
+          is_applicable: false,
         },
         select: { id: true },
       }),

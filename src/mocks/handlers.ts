@@ -2,11 +2,18 @@ import { delay, http, HttpResponse, type JsonBodyType } from 'msw';
 import type {
   AccountingPeriod,
   AnnualExpenseSummary,
+  AnnualNetProfit,
+  AnnualRevenue,
+  DashboardResponse,
+  RevenueGrowth,
   AuthenticatedUser,
   BudgetHistory,
   BudgetPlan,
   DailyRevenue,
   DailyRevenueInput,
+  InvestorPaymentRow,
+  InvestorRef,
+  Settlement,
   Expense,
   ExpenseAnalytics,
   ExpenseCreateInput,
@@ -41,6 +48,7 @@ import {
   findMissingRevenueBranches,
 } from '@/features/notifications/telegram';
 import { buildCashierReport } from '@/features/reports/cashier-report';
+import { MONTH_NAMES_UZ } from '@/shared/lib/format';
 
 const API = '*/api';
 const LATENCY_MS = 180;
@@ -76,6 +84,20 @@ const rolePermissionRows: Record<
   cashier: structuredClone(users[2]!.permissions),
   finance_manager: structuredClone(users[1]!.permissions),
   director: structuredClone(users[0]!.permissions),
+  // The investor role holds exactly one capability and inherits nothing else.
+  investor: ['investor.view_own'],
+  // Strategic owner: company-wide read surfaces only. No mutation capability.
+  business_owner: [
+    'dashboard.view',
+    'expense.view_own_branch',
+    'expense.view_all_branches',
+    'budget.view',
+    'revenue.view_own_branch',
+    'revenue.view_all_branches',
+    'reports.view',
+    'investor.view_all',
+    'audit.view',
+  ],
 };
 const expenseIdempotency = new Map<string, Expense>();
 const revenueIdempotency = new Map<string, DailyRevenue>();
@@ -116,7 +138,7 @@ function buildBaselineBoard() {
   for (const branch of live) byBranch[branch.id] = 0n;
   let grand = 0n;
 
-  const rows = [...categories]
+  const rows = [...categoryRows]
     .sort((a, b) => a.expenseType.localeCompare(b.expenseType) || a.name.localeCompare(b.name))
     .map((category) => {
       const amounts: Record<string, string> = {};
@@ -699,6 +721,165 @@ function monthlyExpenseByType(
 }
 
 /** Excel «Xulosa» varag‘i: yillik kesim + oylik dinamika jadvali. */
+/**
+ * Net profit per month, derived from the same mock revenue and expense the rest
+ * of the dashboard fixture uses — so the mock tells the same story the server
+ * does rather than inventing a second one.
+ */
+/**
+ * Monthly and annual revenue growth, kept as two figures like the server does.
+ *
+ * The mock seeds whole months only, so the month-to-date comparison has nothing
+ * finer to work with — it reports whole months (throughDay: null) rather than
+ * inventing daily rows the fixture does not have.
+ */
+function buildRevenueGrowth(year: number, month: number, branchIds: Set<string>): RevenueGrowth {
+  const revenue = buildAnnualRevenue(year, branchIds);
+  const current = revenue.months.find((row) => row.month === month);
+  const previousMonth = month === 1 ? 12 : month - 1;
+  const previous =
+    month === 1 ? undefined : revenue.months.find((row) => row.month === previousMonth);
+
+  const currentUzs = current?.actualUzs ?? '0';
+  const previousUzs = previous?.actualUzs ?? '0';
+
+  return {
+    monthly: {
+      month,
+      monthLabel: monthShortNames[month - 1] ?? String(month),
+      previousMonth,
+      previousMonthLabel: monthShortNames[previousMonth - 1] ?? String(previousMonth),
+      currentUzs,
+      previousUzs,
+      changePct:
+        previousUzs === '0'
+          ? null
+          : percentageValue((BigInt(currentUzs) - BigInt(previousUzs)).toString(), previousUzs),
+      throughDay: null,
+    },
+    annual: {
+      year,
+      previousYear: year - 1,
+      currentUzs: revenue.totalActualUzs,
+      previousUzs: '0',
+      // One seeded year, so there is nothing to compare against.
+      changePct: null,
+    },
+  };
+}
+
+/** The revenue half of the annual summary, from the same seeded months. */
+function buildAnnualRevenue(year: number, branchIds: Set<string>): AnnualRevenue {
+  const share = branchSharePercent(branchIds, 'revenue');
+  const months = Array.from({ length: 12 }, (_, index) => {
+    const month = index + 1;
+    const seed = historicalMonthly.find((row) => row.month === month);
+    const actual = seed ? (BigInt(seed.revenueActualUzs) * share) / 100n : 0n;
+    const planned = seed ? (BigInt(seed.revenuePlanUzs) * share) / 100n : 0n;
+    return {
+      month,
+      label: monthShortNames[index] ?? String(month),
+      actualUzs: actual.toString(),
+      planUzs: planned.toString(),
+      completionPct: percentageValue(actual.toString(), planned.toString()),
+    };
+  });
+
+  const total = months.reduce((sum, row) => sum + BigInt(row.actualUzs), 0n);
+  const plan = months.reduce((sum, row) => sum + BigInt(row.planUzs), 0n);
+  const earning = months.filter((row) => BigInt(row.actualUzs) > 0n);
+  const peak = earning.reduce<(typeof months)[number] | null>(
+    (best, row) => (best === null || BigInt(row.actualUzs) > BigInt(best.actualUzs) ? row : best),
+    null,
+  );
+
+  return {
+    year,
+    totalActualUzs: total.toString(),
+    totalPlanUzs: plan.toString(),
+    completionPct: percentageValue(total.toString(), plan.toString()),
+    averageMonthlyUzs: (earning.length ? total / BigInt(earning.length) : 0n).toString(),
+    averageMonthsCount: earning.length,
+    peakMonth: peak ? { month: peak.month, label: peak.label, actualUzs: peak.actualUzs } : null,
+    // The mock seeds one year only, so there is nothing to compare against.
+    growthPct: null,
+    previousYear: year - 1,
+    previousYearUzs: '0',
+    months,
+  };
+}
+
+function buildAnnualNetProfit(year: number, branchIds: Set<string>): AnnualNetProfit {
+  const annual = buildAnnualSummary(year, branchIds);
+  const revenueShare = branchSharePercent(branchIds, 'revenue');
+
+  let previous: { net: bigint; label: string } | null = null;
+  const months = annual.months.map((row, index) => {
+    const seed = historicalMonthly.find((item) => item.month === row.month);
+    const revenue = seed ? (BigInt(seed.revenueActualUzs ?? '0') * revenueShare) / 100n : 0n;
+    const expense = BigInt(row.actualUzs);
+    const net = revenue - expense;
+    const hasData = revenue !== 0n || expense !== 0n;
+    const against = hasData && previous !== null && previous.net !== 0n ? previous : null;
+    const changePct = against
+      ? percentageValue(
+          (net - against.net).toString(),
+          (against.net < 0n ? -against.net : against.net).toString(),
+        )
+      : null;
+    const label = monthShortNames[index] ?? String(row.month);
+    if (hasData) previous = { net, label };
+
+    return {
+      month: row.month,
+      label,
+      revenueUzs: revenue.toString(),
+      expenseUzs: expense.toString(),
+      netProfitUzs: net.toString(),
+      changePct,
+      comparedToLabel: against?.label ?? null,
+      hasData,
+    };
+  });
+
+  const withData = months.filter((row) => row.hasData);
+  const pick = (better: (a: bigint, b: bigint) => boolean) => {
+    const found = withData.reduce<(typeof months)[number] | null>(
+      (best, row) =>
+        best === null || better(BigInt(row.netProfitUzs), BigInt(best.netProfitUzs)) ? row : best,
+      null,
+    );
+    return found
+      ? { month: found.month, label: found.label, netProfitUzs: found.netProfitUzs }
+      : null;
+  };
+
+  const totalNetProfitUzs = months
+    .reduce((sum, row) => sum + BigInt(row.netProfitUzs), 0n)
+    .toString();
+  const totalRevenueUzs = months.reduce((sum, row) => sum + BigInt(row.revenueUzs), 0n);
+
+  return {
+    year,
+    totalNetProfitUzs,
+    netMarginPct:
+      totalRevenueUzs === 0n
+        ? null
+        : percentageValue(totalNetProfitUzs, totalRevenueUzs.toString()),
+    bestMonth: pick((a, b) => a > b),
+    worstMonth: pick((a, b) => a < b),
+    monthsWithData: withData.length,
+    months,
+    paymentMethods: [],
+    paymentMethodMonths: months.map((month) => ({
+      month: month.month,
+      label: month.label,
+      totalNetProfitUzs: month.netProfitUzs,
+      paymentMethods: [],
+    })),
+  };
+}
+
 function buildAnnualSummary(year: number, branchIds: Set<string>): AnnualExpenseSummary {
   const expenseShare = branchSharePercent(branchIds, 'expense');
   const months = Array.from({ length: 12 }, (_, index) => {
@@ -763,7 +944,11 @@ function buildAnnualSummary(year: number, branchIds: Set<string>): AnnualExpense
   };
 }
 
-function buildDashboard(branchId: string | null, periodId: string, granularity: TrendGranularity) {
+function buildDashboard(
+  branchId: string | null,
+  periodId: string,
+  granularity: TrendGranularity,
+): DashboardResponse {
   const selectedBranches = branches.filter((branch) => !branchId || branch.id === branchId);
   const selectedBranchIds = new Set(selectedBranches.map((branch) => branch.id));
   const period = periodRows.find((row) => row.id === periodId)!;
@@ -836,6 +1021,9 @@ function buildDashboard(branchId: string | null, periodId: string, granularity: 
     revenueCompletionPct: percentageValue(revenueActualUzs, revenuePlanUzs),
     revenueTrend: trends.revenue,
     annual: buildAnnualSummary(period.year, selectedBranchIds),
+    annualRevenue: buildAnnualRevenue(period.year, selectedBranchIds),
+    revenueGrowth: buildRevenueGrowth(period.year, period.month, selectedBranchIds),
+    annualNetProfit: buildAnnualNetProfit(period.year, selectedBranchIds),
     branches: branchMetrics,
   };
 }
@@ -1019,6 +1207,257 @@ function buildExpenseAnalytics(
         paymentMethodName: expense.paymentMethodName,
       })),
   };
+}
+
+// --------------------------------------------------------------- investors
+//
+// Entitlement is a RECORDED figure per month, mirroring the backend. The mock
+// deliberately does not derive it from revenue, because the backend does not.
+const INVESTOR_A = '44444444-0000-0000-0000-000000000001';
+const INVESTOR_B = '44444444-0000-0000-0000-000000000002';
+
+const investorProfiles: InvestorRef[] = [
+  {
+    id: INVESTOR_A,
+    userId: userRows[0]?.id ?? '',
+    fullName: userRows[0]?.fullName ?? 'Ali Valiyev',
+    phone: userRows[0]?.phone ?? '+998901112233',
+    ownershipPercent: 2,
+    branch: null,
+    isActive: true,
+  },
+  {
+    id: INVESTOR_B,
+    userId: userRows[1]?.id ?? '',
+    fullName: userRows[1]?.fullName ?? 'Vali Aliyev',
+    phone: userRows[1]?.phone ?? '+998907778899',
+    ownershipPercent: 5,
+    branch: branches[1]
+      ? { id: branches[1].id, code: branches[1].code, name: branches[1].name }
+      : null,
+    isActive: true,
+  },
+];
+
+/** investorId -> "YYYY-MM" -> entitled so‘m. */
+const investorEntitlementRows: Record<string, Record<string, string>> = {
+  [INVESTOR_A]: { '2026-08': '10000000', '2026-07': '5000000' },
+  [INVESTOR_B]: { '2026-08': '4000000' },
+};
+
+type MockInvestorPayment = InvestorPaymentRow & { investorId: string };
+
+const investorPaymentRows: MockInvestorPayment[] = [
+  {
+    investorId: INVESTOR_A,
+    id: '44444444-0000-0000-0000-0000000000f1',
+    paidOn: '2026-08-20',
+    amountUzs: '8000000',
+    status: 'posted',
+    note: 'Avgust ulushi',
+    reversalReason: null,
+    createdAt: '2026-08-20T10:00:00.000Z',
+  },
+  {
+    investorId: INVESTOR_A,
+    id: '44444444-0000-0000-0000-0000000000f2',
+    paidOn: '2026-07-18',
+    amountUzs: '5000000',
+    status: 'posted',
+    note: 'Iyul ulushi',
+    reversalReason: null,
+    createdAt: '2026-07-18T10:00:00.000Z',
+  },
+];
+
+// --- profit share ---------------------------------------------------------
+//
+// Unlike entitlement above, the share IS derived: actual revenue times the
+// ownership percentage, exactly as fincore.v_investor_period_share does it.
+// August carries the worked example — 302 841 471 so‘m — so the mock and the
+// real database answer the same 6 056 829,42 for a 2% stake.
+const mockFactRevenue: Record<string, string> = {
+  '2026-08': '302841471',
+  '2026-09': '11000000',
+};
+
+/** Half-up to two decimals in bigint hundredths — never a float. */
+function mockShare(factUzs: string, ownershipPercent: number): string {
+  const percentHundredths = BigInt(Math.round(ownershipPercent * 100));
+  const numerator = BigInt(factUzs) * percentHundredths;
+  const quotient = numerator / 100n;
+  const hundredths = numerator % 100n >= 50n ? quotient + 1n : quotient;
+  return `${hundredths / 100n}.${String(hundredths % 100n).padStart(2, '0')}`;
+}
+
+function toHundredths(decimal: string): bigint {
+  const [whole = '0', fraction = ''] = decimal.split('.');
+  return BigInt(whole) * 100n + BigInt(`${fraction}00`.slice(0, 2));
+}
+
+function fromHundredths(value: bigint): string {
+  const negative = value < 0n;
+  const magnitude = negative ? -value : value;
+  return `${negative ? '-' : ''}${magnitude / 100n}.${String(magnitude % 100n).padStart(2, '0')}`;
+}
+
+interface MockPayoutRequest {
+  id: string;
+  investorId: string;
+  investorName: string;
+  periodId: string;
+  year: number;
+  month: number;
+  monthLabel: string;
+  requestedAmountUzs: string;
+  calculatedShareUzs: string;
+  factRevenueUzs: string;
+  ownershipPercent: number;
+  status: 'pending' | 'approved' | 'rejected' | 'paid' | 'cancelled';
+  investorNote: string | null;
+  decisionNote: string | null;
+  decidedAt: string | null;
+  decidedByName: string | null;
+  paidOn: string | null;
+  createdAt: string;
+}
+
+const payoutRequestRows: MockPayoutRequest[] = [];
+
+function payoutMonths(investorId: string, year: number) {
+  const profile = investorProfiles.find((row) => row.id === investorId);
+  const percent = profile?.ownershipPercent ?? 0;
+  return Array.from({ length: 12 }, (_, index) => {
+    const month = index + 1;
+    const key = `${year}-${String(month).padStart(2, '0')}`;
+    const periodId =
+      periodRows.find((period) => period.year === year && period.month === month)?.id ?? key;
+    const fact = mockFactRevenue[key] ?? '0';
+    const share = toHundredths(mockShare(fact, percent));
+
+    const paid = investorPaymentRows
+      .filter(
+        (row) =>
+          row.investorId === investorId && row.status === 'posted' && row.paidOn.startsWith(key),
+      )
+      .reduce((acc, row) => acc + BigInt(row.amountUzs) * 100n, 0n);
+    const open = payoutRequestRows
+      .filter(
+        (row) =>
+          row.investorId === investorId &&
+          row.periodId === periodId &&
+          (row.status === 'pending' || row.status === 'approved'),
+      )
+      .reduce((acc, row) => acc + BigInt(row.requestedAmountUzs) * 100n, 0n);
+
+    const remaining = share - paid - open;
+    const payable = remaining <= 0n ? 0n : remaining / 100n;
+    return {
+      month,
+      label: MONTH_NAMES_UZ[index] ?? String(month),
+      periodId,
+      factRevenueUzs: fact,
+      ownershipPercent: percent,
+      shareUzs: fromHundredths(share),
+      paidUzs: fromHundredths(paid),
+      openUzs: fromHundredths(open),
+      remainingUzs: fromHundredths(remaining),
+      payableUzs: String(payable),
+      isSettled: payable === 0n,
+      requests: payoutRequestRows.filter(
+        (row) => row.investorId === investorId && row.periodId === periodId,
+      ),
+    };
+  });
+}
+
+function payoutSummary(investorId: string, year: number) {
+  const profile = investorProfiles.find((row) => row.id === investorId)!;
+  const months = payoutMonths(investorId, year);
+  const total = (pick: (row: (typeof months)[number]) => string) =>
+    months.reduce((acc, row) => acc + toHundredths(pick(row)), 0n);
+
+  const share = total((row) => row.shareUzs);
+  const paid = total((row) => row.paidUzs);
+  const open = total((row) => row.openUzs);
+  const remaining = share - paid - open;
+  const payable = remaining <= 0n ? 0n : remaining / 100n;
+
+  return {
+    investor: profile,
+    year,
+    annual: {
+      factRevenueUzs: String(months.reduce((acc, row) => acc + BigInt(row.factRevenueUzs), 0n)),
+      shareUzs: fromHundredths(share),
+      paidUzs: fromHundredths(paid),
+      openUzs: fromHundredths(open),
+      remainingUzs: fromHundredths(remaining),
+      payableUzs: String(payable),
+      isSettled: payable === 0n,
+    },
+    months,
+  };
+}
+
+/** The single place the mock computes a settlement, so every endpoint agrees. */
+function settleMock(entitled: bigint, paid: bigint): Settlement {
+  const remaining = entitled > paid ? entitled - paid : 0n;
+  const overpaid = paid > entitled ? paid - entitled : 0n;
+  const pct = (part: bigint) =>
+    entitled === 0n ? 0 : Math.round(Number((part * 10000n) / entitled)) / 100;
+  const paidPercent = pct(paid);
+  const status: Settlement['status'] =
+    entitled === 0n
+      ? paid > 0n
+        ? 'overpaid'
+        : 'no_entitlement'
+      : overpaid > 0n
+        ? 'overpaid'
+        : paid === 0n
+          ? 'unpaid'
+          : remaining === 0n
+            ? 'settled'
+            : 'partially_paid';
+  return {
+    entitledAmountUzs: entitled.toString(),
+    paidAmountUzs: paid.toString(),
+    remainingAmountUzs: remaining.toString(),
+    overpaidAmountUzs: overpaid.toString(),
+    paidPercent,
+    remainingPercent: pct(remaining),
+    settledPercent: Math.min(paidPercent, 100),
+    status,
+  };
+}
+
+function monthlySettlements(investorId: string, year: number) {
+  return Array.from({ length: 12 }, (_, index) => {
+    const month = index + 1;
+    const key = `${year}-${String(month).padStart(2, '0')}`;
+    const entitled = BigInt(investorEntitlementRows[investorId]?.[key] ?? '0');
+    const paid = investorPaymentRows
+      .filter(
+        (row) =>
+          row.investorId === investorId && row.status === 'posted' && row.paidOn.startsWith(key),
+      )
+      .reduce((acc, row) => acc + BigInt(row.amountUzs), 0n);
+    return {
+      month,
+      label: MONTH_NAMES_UZ[index] ?? String(month),
+      periodId:
+        periods.find((period) => period.year === year && period.month === month)?.id ?? null,
+      settlement: settleMock(entitled, paid),
+      paymentCount: 0,
+    };
+  });
+}
+
+/** The year is the sum of its months — never a separately stored total. */
+function annualSettlement(investorId: string, year: number): Settlement {
+  const months = monthlySettlements(investorId, year);
+  const entitled = months.reduce((acc, row) => acc + BigInt(row.settlement.entitledAmountUzs), 0n);
+  const paid = months.reduce((acc, row) => acc + BigInt(row.settlement.paidAmountUzs), 0n);
+  return settleMock(entitled, paid);
 }
 
 export const handlers = [
@@ -2020,14 +2459,18 @@ export const handlers = [
     if (user instanceof HttpResponse) return user;
     if (!hasPermission(user, 'reports.view'))
       return problem(403, 'PERMISSION_DENIED', 'Filiallar hisobotini ko‘rish huquqi yo‘q.');
-    const branchSummary = (branchId: string, plannedExpense: string, actualExpense: string) => {
+    const branchSummary = (
+      branchId: string,
+      plannedExpense: string | null,
+      actualExpense: string,
+    ) => {
       const branch = branches.find((item) => item.id === branchId)!;
       return {
         branch: { id: branch.id, code: branch.code, name: branch.name, snapshotName: branch.name },
         expense: planActual(plannedExpense, actualExpense),
       };
     };
-    const totalSummary = (plannedExpense: string, actualExpense: string) => ({
+    const totalSummary = (plannedExpense: string | null, actualExpense: string) => ({
       branch: { id: 'all', code: 'ALL', name: 'Markaz jami', snapshotName: 'Markaz jami' },
       expense: planActual(plannedExpense, actualExpense),
     });
@@ -2064,65 +2507,127 @@ export const handlers = [
         months: [],
         annual: { branches: [], total: totalSummary('0', '0') },
       });
-    const months = Array.from({ length: 12 }, (_, index) => {
-      const active = index <= 7;
-      const sayxun = branchSummary(
-        ids.sayxun,
-        '80000000',
-        active ? String(52_000_000 + index * 2_500_000) : '0',
-      );
-      const xalqlar = branchSummary(
-        ids.xalqlar,
-        '45000000',
-        active ? String(28_000_000 + index * 1_700_000) : '0',
-      );
-      const visible = [sayxun, xalqlar].filter((item) => isVisibleBranch(item.branch.id));
-      const totalExpensePlan = sumMoney(
-        visible.map((item) => item.expense.plannedAmountUzs ?? '0'),
-      );
-      const totalExpenseActual = sumMoney(visible.map((item) => item.expense.actualAmountUzs));
+    const visibleBranches = branches.filter((branch) => isVisibleBranch(branch.id));
+    const categoryIds = new Set([
+      ...categoryRows.map((category) => category.id),
+      ...budgetPlanRows.flatMap((plan) => plan.lines.map((line) => line.categoryId)),
+      ...expenseRows.map((expense) => expense.categoryId),
+    ]);
+    const reportCategories = [...categoryIds].map((id) => {
+      const category = categoryRows.find((row) => row.id === id);
+      const line = budgetPlanRows
+        .flatMap((plan) => plan.lines)
+        .find((row) => row.categoryId === id);
+      const expense = expenseRows.find((row) => row.categoryId === id);
+      if (!category && !line && !expense) throw new Error('Kategoriya manbasi topilmadi.');
       return {
-        month: index + 1,
-        branches: visible,
-        total: totalSummary(totalExpensePlan, active ? totalExpenseActual : '0'),
+        id,
+        code: category?.code ?? line?.categoryCodeSnapshot ?? expense!.categoryCodeSnapshot,
+        name: category?.name ?? line?.categoryNameSnapshot ?? expense!.categoryNameSnapshot,
+        expenseTypeSnapshot:
+          category?.expenseType ?? line?.expenseTypeSnapshot ?? expense!.expenseTypeSnapshot,
       };
     });
-    const annualBranches = [
-      branchSummary(ids.sayxun, '640000000', '560000000'),
-      branchSummary(ids.xalqlar, '360000000', '320000000'),
-    ].filter((item) => isVisibleBranch(item.branch.id));
-    const annualExpensePlan = sumMoney(
-      annualBranches.map((item) => item.expense.plannedAmountUzs ?? '0'),
+    const monthData = Array.from({ length: 12 }, (_, index) => {
+      const period = periodRows.find(
+        (candidate) => candidate.year === requestedYear && candidate.month === index + 1,
+      );
+      const planLines = period ? buildBudgetPlan(period.id).lines : [];
+      const actualRows = period ? expenseRows.filter((row) => row.periodId === period.id) : [];
+      const monthBranches = visibleBranches.map((branch) => {
+        const matchingPlan = planLines.filter(
+          (line) => line.branchId === branch.id && line.plannedAmountUzs !== null,
+        );
+        return branchSummary(
+          branch.id,
+          matchingPlan.length
+            ? sumMoney(matchingPlan.map((line) => line.plannedAmountUzs ?? '0'))
+            : null,
+          sumMoney(
+            actualRows.filter((row) => row.branchId === branch.id).map((row) => row.amountUzs),
+          ),
+        );
+      });
+      const plans = monthBranches.flatMap((item) =>
+        item.expense.plannedAmountUzs === null ? [] : [item.expense.plannedAmountUzs],
+      );
+      return {
+        month: index + 1,
+        period,
+        planLines,
+        actualRows,
+        branches: monthBranches,
+        total: totalSummary(
+          plans.length ? sumMoney(plans) : null,
+          sumMoney(monthBranches.map((item) => item.expense.actualAmountUzs)),
+        ),
+      };
+    });
+    const months = monthData.map(({ month, branches: monthBranches, total }) => ({
+      month,
+      branches: monthBranches,
+      total,
+    }));
+    const annualBranches = visibleBranches.map((branch) => {
+      const items = monthData.flatMap((item) =>
+        item.branches.filter((row) => row.branch.id === branch.id),
+      );
+      const plans = items.flatMap((item) =>
+        item.expense.plannedAmountUzs === null ? [] : [item.expense.plannedAmountUzs],
+      );
+      return branchSummary(
+        branch.id,
+        plans.length ? sumMoney(plans) : null,
+        sumMoney(items.map((item) => item.expense.actualAmountUzs)),
+      );
+    });
+    const annualPlans = annualBranches.flatMap((item) =>
+      item.expense.plannedAmountUzs === null ? [] : [item.expense.plannedAmountUzs],
     );
+    const annualExpensePlan = annualPlans.length ? sumMoney(annualPlans) : null;
     const annualExpenseActual = sumMoney(
       annualBranches.map((item) => item.expense.actualAmountUzs),
     );
     const selectedSummary = months[requestedMonth - 1];
-    const activeCategories = categoryRows.filter((category) => category.isActive);
-    const allocate = (amount: string, index: number) => {
-      const total = BigInt(amount);
-      const count = BigInt(activeCategories.length || 1);
-      return (total / count + (BigInt(index) < total % count ? 1n : 0n)).toString();
-    };
-    const selectedRows = activeCategories.map((category, index) => {
-      const categoryBranches = (selectedSummary?.branches ?? []).map((item) => ({
-        branch: item.branch,
-        expense: planActual(
-          allocate(item.expense.plannedAmountUzs ?? '0', index),
-          allocate(item.expense.actualAmountUzs, index),
-        ),
-      }));
+    const selectedData = monthData[requestedMonth - 1];
+    const selectedRows = reportCategories.map((category) => {
+      const categoryBranches = visibleBranches.map((branch) => {
+        const lines = (selectedData?.planLines ?? []).filter(
+          (line) =>
+            line.categoryId === category.id &&
+            line.branchId === branch.id &&
+            line.plannedAmountUzs !== null,
+        );
+        const actual = (selectedData?.actualRows ?? []).filter(
+          (row) => row.categoryId === category.id && row.branchId === branch.id,
+        );
+        return {
+          branch: {
+            id: branch.id,
+            code: branch.code,
+            name: branch.name,
+            snapshotName: branch.name,
+          },
+          expense: planActual(
+            lines.length ? sumMoney(lines.map((line) => line.plannedAmountUzs ?? '0')) : null,
+            sumMoney(actual.map((row) => row.amountUzs)),
+          ),
+        };
+      });
+      const plans = categoryBranches.flatMap((item) =>
+        item.expense.plannedAmountUzs === null ? [] : [item.expense.plannedAmountUzs],
+      );
       return {
         category: {
           id: category.id,
           code: category.code,
           name: category.name,
           snapshotName: category.name,
-          expenseTypeSnapshot: category.expenseType,
+          expenseTypeSnapshot: category.expenseTypeSnapshot,
         },
         branches: categoryBranches,
         total: totalSummary(
-          sumMoney(categoryBranches.map((item) => item.expense.plannedAmountUzs ?? '0')),
+          plans.length ? sumMoney(plans) : null,
           sumMoney(categoryBranches.map((item) => item.expense.actualAmountUzs)),
         ),
       };
@@ -2274,9 +2779,26 @@ export const handlers = [
       role?: AuthenticatedUser['roles'][number]['role'];
       branchId?: string | null;
       cashierBranchId?: string | null;
+      ownershipPercent?: number;
+      entitledAmountUzs?: string;
+      password?: string;
+      confirmPassword?: string;
     };
     if (!body.fullName?.trim() || !body.phone?.trim() || !body.role)
       return problem(422, 'VALIDATION_ERROR', 'Ism, telefon va rol majburiy.');
+    if ((body.password ?? '').length < 12)
+      return problem(422, 'VALIDATION_ERROR', 'Parol kamida 12 belgidan iborat bo\u2018lsin.');
+    if (body.password !== body.confirmPassword)
+      return problem(422, 'PASSWORD_MISMATCH', 'Parol va tasdiqlash mos emas.');
+    if (body.role === 'investor') {
+      const percent = body.ownershipPercent;
+      if (typeof percent !== 'number' || !Number.isFinite(percent) || percent < 0 || percent > 100)
+        return problem(
+          422,
+          'OWNERSHIP_PERCENT_INVALID',
+          'Ulush 0 va 100 foiz orasida bo\u2018lishi kerak.',
+        );
+    }
     if (body.role === 'director' && !hasRole(actor, 'director'))
       return problem(
         403,
@@ -2302,7 +2824,9 @@ export const handlers = [
             ? 'Kassir'
             : body.role === 'director'
               ? 'Direktor'
-              : 'Moliya rahbari',
+              : body.role === 'investor'
+                ? 'Investor'
+                : 'Moliya rahbari',
         branchId: body.role === 'cashier' ? (branch?.id ?? null) : null,
         branchName: body.role === 'cashier' ? (branch?.name ?? null) : null,
       },
@@ -2325,13 +2849,34 @@ export const handlers = [
         ...new Set(assignedRoles.flatMap((assignment) => rolePermissionRows[assignment.role])),
       ],
       branchScopes:
-        body.role === 'cashier' && branch ? [branch.id] : branches.map((item) => item.id),
+        body.role === 'investor'
+          ? []
+          : body.role === 'cashier' && branch
+            ? [branch.id]
+            : branches.map((item) => item.id),
       writeBranchScopes:
         body.role === 'director' ? branches.map((item) => item.id) : branch ? [branch.id] : [],
       fixedSalaryUzs: '0',
       lastLoginAt: null,
     };
     userRows = [...userRows, created];
+    if (body.role === 'investor') {
+      const investorId = `investor-${Date.now()}`;
+      investorProfiles.push({
+        id: investorId,
+        userId: created.id,
+        fullName: created.fullName,
+        phone: created.phone,
+        ownershipPercent: body.ownershipPercent ?? 0,
+        branch: body.branchId ? (branches.find((item) => item.id === body.branchId) ?? null) : null,
+        isActive: true,
+      });
+      if (body.entitledAmountUzs)
+        investorEntitlementRows[investorId] = {
+          [`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`]:
+            body.entitledAmountUzs,
+        };
+    }
     return ok(created, 201);
   }),
   http.put(`${API}/users/:id/access`, async ({ params, request }) => {
@@ -2514,6 +3059,12 @@ export const handlers = [
     if (!body.permissions) return problem(422, 'VALIDATION_ERROR', 'Ruxsatlar ro‘yxati majburiy.');
     const role = String(params.role) as AuthenticatedUser['roles'][number]['role'];
     if (!(role in rolePermissionRows)) return problem(404, 'ROLE_NOT_FOUND', 'Rol topilmadi.');
+    if (role === 'business_owner')
+      return problem(
+        403,
+        'BUSINESS_OWNER_ROLE_IMMUTABLE',
+        'Biznes egasi ruxsatlari strategik read-only siyosat bilan himoyalangan.',
+      );
     if (
       role !== 'director' &&
       body.permissions.some(
@@ -2536,5 +3087,264 @@ export const handlers = [
       if (refreshed) signedInUser = structuredClone(refreshed);
     }
     return ok({ role, permissions: rolePermissionRows[role] });
+  }),
+
+  http.get(`${API}/investors`, async ({ request }) => {
+    await delay(LATENCY_MS);
+    const user = requireUser();
+    if (user instanceof HttpResponse) return user;
+    if (!hasPermission(user, 'investor.view_all'))
+      return problem(403, 'FORBIDDEN', 'Ruxsat yo‘q.', {
+        missingPermissions: ['investor.view_all'],
+      });
+    const year = Number(new URL(request.url).searchParams.get('year')) || 2026;
+    return ok(
+      investorProfiles
+        .filter((profile) => !profile.branch || user.branchScopes.includes(profile.branch.id))
+        .map((profile) => ({ ...profile, annual: annualSettlement(profile.id, year) })),
+    );
+  }),
+
+  http.get(`${API}/investors/me`, async () => {
+    await delay(LATENCY_MS);
+    const user = requireUser();
+    if (user instanceof HttpResponse) return user;
+    const profile = investorProfiles.find((row) => row.userId === user.id);
+    if (!profile) return problem(404, 'INVESTOR_NOT_FOUND', 'Investor profili yo‘q.');
+    return ok(profile);
+  }),
+
+  // Authorization lives here, not in the route guard: an investor may open
+  // exactly one id — their own — and the server decides which one that is.
+  http.get(`${API}/investors/:id`, async ({ params, request }) => {
+    await delay(LATENCY_MS);
+    const user = requireUser();
+    if (user instanceof HttpResponse) return user;
+    const profile = investorProfiles.find((row) => row.id === params.id);
+    if (!profile) return problem(404, 'INVESTOR_NOT_FOUND', 'Investor topilmadi.');
+
+    const isSelf = profile.userId === user.id;
+    if (
+      !(isSelf && hasPermission(user, 'investor.view_own')) &&
+      !hasPermission(user, 'investor.view_all')
+    )
+      return problem(403, 'FORBIDDEN', 'Ruxsat yo‘q.', {
+        missingPermissions: ['investor.view_all'],
+      });
+    if (!isSelf && profile.branch && !user.branchScopes.includes(profile.branch.id))
+      return problem(403, 'BRANCH_SCOPE_DENIED', 'Bu filial investorini ko‘rish huquqi yo‘q.');
+
+    const year = Number(new URL(request.url).searchParams.get('year')) || 2026;
+    return ok({
+      investor: profile,
+      year,
+      annual: annualSettlement(profile.id, year),
+      months: monthlySettlements(profile.id, year),
+      payments: investorPaymentRows.filter(
+        (row) => row.investorId === profile.id && row.paidOn.startsWith(String(year)),
+      ),
+    });
+  }),
+
+  // ------------------------------------------------------- investor payouts
+
+  http.get(`${API}/investor-payouts/me`, async ({ request }) => {
+    await delay(LATENCY_MS);
+    const user = requireUser();
+    if (user instanceof HttpResponse) return user;
+    if (!hasPermission(user, 'investor.view_own'))
+      return problem(403, 'FORBIDDEN', 'Ruxsat yo‘q.', {
+        missingPermissions: ['investor.view_own'],
+      });
+    const profile = investorProfiles.find((row) => row.userId === user.id);
+    if (!profile) return problem(404, 'INVESTOR_NOT_FOUND', 'Investor profili yo‘q.');
+    const year = Number(new URL(request.url).searchParams.get('year')) || 2026;
+    return ok(payoutSummary(profile.id, year));
+  }),
+
+  http.get(`${API}/investor-payouts`, async ({ request }) => {
+    await delay(LATENCY_MS);
+    const user = requireUser();
+    if (user instanceof HttpResponse) return user;
+    if (!hasPermission(user, 'investor.view_all'))
+      return problem(403, 'FORBIDDEN', 'Ruxsat yo‘q.', {
+        missingPermissions: ['investor.view_all'],
+      });
+    const year = Number(new URL(request.url).searchParams.get('year')) || 2026;
+    return ok(
+      investorProfiles
+        .filter((row) => !row.branch || user.branchScopes.includes(row.branch.id))
+        .map((row) => {
+          const summary = payoutSummary(row.id, year);
+          return { ...row, annual: summary.annual };
+        }),
+    );
+  }),
+
+  http.get(`${API}/investor-payouts/requests`, async () => {
+    await delay(LATENCY_MS);
+    const user = requireUser();
+    if (user instanceof HttpResponse) return user;
+    if (!hasPermission(user, 'investor.settlement.approve'))
+      return problem(403, 'FORBIDDEN', 'Ruxsat yo‘q.', {
+        missingPermissions: ['investor.settlement.approve'],
+      });
+    return ok(
+      payoutRequestRows.filter((row) => row.status === 'pending' || row.status === 'approved'),
+    );
+  }),
+
+  // No investorId in the body: the profile comes from the session, the same
+  // way the real service resolves it.
+  http.post(`${API}/investor-payouts/requests`, async ({ request }) => {
+    await delay(LATENCY_MS);
+    const user = requireUser();
+    if (user instanceof HttpResponse) return user;
+    if (!hasPermission(user, 'investor.settlement.request'))
+      return problem(403, 'FORBIDDEN', 'Ruxsat yo‘q.', {
+        missingPermissions: ['investor.settlement.request'],
+      });
+    const profile = investorProfiles.find((row) => row.userId === user.id);
+    if (!profile) return problem(404, 'INVESTOR_NOT_FOUND', 'Investor profili yo‘q.');
+
+    const body = (await request.json()) as { periodId: string; amountUzs: string; note?: string };
+    const period = periodRows.find((row) => row.id === body.periodId);
+    if (!period) return problem(404, 'PERIOD_NOT_FOUND', 'Hisob davri topilmadi.');
+
+    const month = payoutMonths(profile.id, period.year).find((row) => row.periodId === period.id);
+    if (!month) return problem(404, 'PERIOD_NOT_FOUND', 'Davr uchun ulush topilmadi.');
+
+    const amount = BigInt(body.amountUzs || '0');
+    if (amount <= 0n) return problem(422, 'AMOUNT_INVALID', 'Summa noldan katta bo‘lishi kerak.');
+    if (BigInt(month.payableUzs) === 0n)
+      return problem(409, 'PAYOUT_NOTHING_AVAILABLE', 'So‘raladigan summa qolmagan.');
+    if (amount > BigInt(month.payableUzs))
+      return problem(422, 'PAYOUT_EXCEEDS_AVAILABLE', 'So‘ralgan summa qolgan summadan ko‘p.');
+    if (month.requests.some((row) => row.status === 'pending' || row.status === 'approved'))
+      return problem(409, 'PAYOUT_ALREADY_REQUESTED', 'Bu davr uchun ochiq so‘rov bor.');
+
+    const row: MockPayoutRequest = {
+      id: `payout-${payoutRequestRows.length + 1}`,
+      investorId: profile.id,
+      investorName: profile.fullName,
+      periodId: period.id,
+      year: period.year,
+      month: period.month,
+      monthLabel: month.label,
+      requestedAmountUzs: String(amount),
+      calculatedShareUzs: month.shareUzs,
+      factRevenueUzs: month.factRevenueUzs,
+      ownershipPercent: profile.ownershipPercent,
+      status: 'pending',
+      investorNote: body.note ?? null,
+      decisionNote: null,
+      decidedAt: null,
+      decidedByName: null,
+      paidOn: null,
+      createdAt: new Date().toISOString(),
+    };
+    payoutRequestRows.unshift(row);
+    return ok(row, 201);
+  }),
+
+  http.post(`${API}/investor-payouts/requests/:id/decision`, async ({ params, request }) => {
+    await delay(LATENCY_MS);
+    const user = requireUser();
+    if (user instanceof HttpResponse) return user;
+    if (!hasPermission(user, 'investor.settlement.approve'))
+      return problem(403, 'FORBIDDEN', 'Ruxsat yo‘q.', {
+        missingPermissions: ['investor.settlement.approve'],
+      });
+    const row = payoutRequestRows.find((item) => item.id === params.id);
+    if (!row) return problem(404, 'PAYOUT_REQUEST_NOT_FOUND', 'So‘rov topilmadi.');
+    if (row.status !== 'pending')
+      return problem(409, 'PAYOUT_NOT_PENDING', 'Qaror allaqachon qabul qilingan.');
+
+    const body = (await request.json()) as { decision: 'approved' | 'rejected'; note?: string };
+    if (body.decision === 'rejected' && !body.note?.trim())
+      return problem(422, 'PAYOUT_REASON_REQUIRED', 'Rad etish sababini yozing.');
+
+    row.status = body.decision;
+    row.decisionNote = body.note?.trim() ?? null;
+    row.decidedAt = new Date().toISOString();
+    row.decidedByName = user.fullName;
+    return ok(row);
+  }),
+
+  http.post(`${API}/investor-payouts/requests/:id/payment`, async ({ params, request }) => {
+    await delay(LATENCY_MS);
+    const user = requireUser();
+    if (user instanceof HttpResponse) return user;
+    if (!hasPermission(user, 'investor.settlement.pay'))
+      return problem(403, 'FORBIDDEN', 'Ruxsat yo‘q.', {
+        missingPermissions: ['investor.settlement.pay'],
+      });
+    const row = payoutRequestRows.find((item) => item.id === params.id);
+    if (!row) return problem(404, 'PAYOUT_REQUEST_NOT_FOUND', 'So‘rov topilmadi.');
+    if (row.status !== 'approved')
+      return problem(409, 'PAYOUT_NOT_APPROVED', 'Avval tasdiqlash kerak.');
+
+    const body = (await request.json()) as { paidOn: string; note?: string };
+    const key = `${row.year}-${String(row.month).padStart(2, '0')}`;
+    if (!body.paidOn?.startsWith(key))
+      return problem(422, 'PAYOUT_DATE_OUTSIDE_PERIOD', 'Sana so‘rov davri ichida bo‘lishi kerak.');
+
+    // The payment lands in the same ledger the entitlement view reads, because
+    // the money only left the company once.
+    investorPaymentRows.unshift({
+      investorId: row.investorId,
+      id: `payment-${investorPaymentRows.length + 1}`,
+      paidOn: body.paidOn,
+      amountUzs: row.requestedAmountUzs,
+      status: 'posted',
+      note: body.note ?? null,
+      reversalReason: null,
+      createdAt: new Date().toISOString(),
+    });
+    row.status = 'paid';
+    row.paidOn = body.paidOn;
+    return ok(row);
+  }),
+
+  http.post(`${API}/investor-payouts/requests/:id/cancel`, async ({ params, request }) => {
+    await delay(LATENCY_MS);
+    const user = requireUser();
+    if (user instanceof HttpResponse) return user;
+    const row = payoutRequestRows.find((item) => item.id === params.id);
+    if (!row) return problem(404, 'PAYOUT_REQUEST_NOT_FOUND', 'So‘rov topilmadi.');
+
+    const profile = investorProfiles.find((item) => item.userId === user.id);
+    if (profile?.id !== row.investorId || !hasPermission(user, 'investor.settlement.request'))
+      return problem(403, 'FORBIDDEN', 'Faqat o‘z so‘rovingizni qaytarib olasiz.', {
+        missingPermissions: ['investor.settlement.request'],
+      });
+    if (row.status !== 'pending' && row.status !== 'approved')
+      return problem(409, 'PAYOUT_NOT_CANCELLABLE', 'Bu so‘rovni bekor qilib bo‘lmaydi.');
+
+    const body = (await request.json().catch(() => ({}))) as { note?: string };
+    row.status = 'cancelled';
+    row.decisionNote = body.note?.trim() ?? null;
+    row.decidedAt = new Date().toISOString();
+    return ok(row);
+  }),
+
+  http.get(`${API}/investor-payouts/investor/:id`, async ({ params, request }) => {
+    await delay(LATENCY_MS);
+    const user = requireUser();
+    if (user instanceof HttpResponse) return user;
+    const profile = investorProfiles.find((row) => row.id === params.id);
+    if (!profile) return problem(404, 'INVESTOR_NOT_FOUND', 'Investor topilmadi.');
+
+    const isSelf = profile.userId === user.id;
+    if (
+      !(isSelf && hasPermission(user, 'investor.view_own')) &&
+      !hasPermission(user, 'investor.view_all')
+    )
+      return problem(403, 'FORBIDDEN', 'Ruxsat yo‘q.', {
+        missingPermissions: ['investor.view_all'],
+      });
+
+    const year = Number(new URL(request.url).searchParams.get('year')) || 2026;
+    return ok(payoutSummary(profile.id, year));
   }),
 ];

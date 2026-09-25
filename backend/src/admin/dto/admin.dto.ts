@@ -3,18 +3,22 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   IsIn,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
   Matches,
+  Max,
   MaxLength,
+  Min,
   MinLength,
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
 
-const ROLE_CODES = ['cashier', 'finance_manager', 'director'] as const;
+const ROLE_CODES = ['cashier', 'finance_manager', 'director', 'investor'] as const;
 type RoleCode = (typeof ROLE_CODES)[number];
+const INVESTOR_CAPITAL_PAYMENT_METHODS = ['CASH', 'CARD', 'BANK_TRANSFER'] as const;
 
 export class UserCreateDto {
   @ApiProperty({ example: 'Ergashev Abdulla' })
@@ -39,7 +43,9 @@ export class UserCreateDto {
   branchId?: string | null;
 
   @ApiPropertyOptional({ nullable: true, description: 'Moliya rahbariga qo‘shimcha kassir scope' })
-  @ValidateIf((dto: UserCreateDto) => dto.cashierBranchId !== null && dto.cashierBranchId !== undefined)
+  @ValidateIf(
+    (dto: UserCreateDto) => dto.cashierBranchId !== null && dto.cashierBranchId !== undefined,
+  )
   @IsUUID()
   cashierBranchId?: string | null;
 
@@ -57,6 +63,53 @@ export class UserCreateDto {
   @ApiProperty({ writeOnly: true, description: 'Parol bilan bir xil bo‘lishi shart' })
   @IsString()
   confirmPassword!: string;
+
+  /**
+   * Investor uchun majburiy: kompaniyadagi ulush foizi. Bu — olingan summa
+   * foizi EMAS; ikkovi butunlay boshqa ko‘rsatkich.
+   */
+  @ApiPropertyOptional({ example: 2, minimum: 0, maximum: 100 })
+  @ValidateIf((dto: UserCreateDto) => dto.role === 'investor')
+  @Type(() => Number)
+  @IsNumber(
+    { maxDecimalPlaces: 2 },
+    { message: 'ownershipPercent 0–100 oralig‘ida son bo‘lishi kerak' },
+  )
+  @Min(0)
+  @Max(100)
+  ownershipPercent?: number;
+
+  @ApiPropertyOptional({
+    example: '100000000',
+    description: 'Investor kompaniyaga kiritgan boshlang‘ich kapital, butun so‘m',
+  })
+  @ValidateIf((dto: UserCreateDto) => dto.role === 'investor')
+  @Matches(/^[1-9]\d*$/, { message: 'Mablag‘ 0 dan katta butun so‘m bo‘lishi kerak' })
+  capitalAmountUzs?: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'Foyda ulushi boshlanadigan hisob davri' })
+  @ValidateIf((dto: UserCreateDto) => dto.role === 'investor')
+  @IsUUID()
+  startPeriodId?: string;
+
+  @ApiPropertyOptional({ enum: INVESTOR_CAPITAL_PAYMENT_METHODS })
+  @ValidateIf((dto: UserCreateDto) => dto.role === 'investor')
+  @IsIn(INVESTOR_CAPITAL_PAYMENT_METHODS, {
+    message: 'To‘lov shakli CASH, CARD yoki BANK_TRANSFER bo‘lishi kerak',
+  })
+  capitalPaymentMethodCode?: (typeof INVESTOR_CAPITAL_PAYMENT_METHODS)[number];
+
+  /**
+   * Ixtiyoriy: joriy ochiq davr uchun tegishli summa. Entitlement har davr
+   * uchun alohida yoziladi, shuning uchun bu faqat birinchi davrni to‘ldiradi —
+   * qolgan oylar investor sahifasidan kiritiladi.
+   */
+  @ApiPropertyOptional({ example: '10000000', description: 'Joriy davr uchun tegishli summa' })
+  @IsOptional()
+  @Matches(/^\d+$/, {
+    message: 'entitledAmountUzs manfiy bo‘lmagan butun son-string bo‘lishi kerak',
+  })
+  entitledAmountUzs?: string;
 }
 
 export class RoleAssignmentDto {
@@ -184,4 +237,14 @@ export class MasterUpdateDto {
   @IsOptional()
   @IsIn(['fixed', 'variable'])
   expenseType?: 'fixed' | 'variable';
+}
+
+/** Creates the twelve real accounting periods that make a year selectable app-wide. */
+export class AccountingYearCreateDto {
+  @ApiProperty({ example: 2027, minimum: 2000, maximum: 2100 })
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 0 }, { message: 'Yil butun son bo‘lishi kerak' })
+  @Min(2000, { message: 'Yil 2000 dan kichik bo‘lishi mumkin emas' })
+  @Max(2100, { message: 'Yil 2100 dan katta bo‘lishi mumkin emas' })
+  year!: number;
 }

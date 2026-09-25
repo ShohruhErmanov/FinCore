@@ -42,6 +42,16 @@ export class CashiersQueryDto {
   @IsOptional()
   @IsString()
   branch?: string;
+
+  // Only ever narrows: it asks a reader who may see everyone to be shown their
+  // own row instead. There is deliberately no value that widens the answer.
+  @ApiPropertyOptional({
+    enum: ['own'],
+    description: '"own" — barcha kassirlarni ko‘ra oladigan foydalanuvchiga faqat o‘z qatorini qaytaradi',
+  })
+  @IsOptional()
+  @IsIn(['own'])
+  scope?: 'own';
 }
 
 export class DashboardQueryDto {

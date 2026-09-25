@@ -79,6 +79,28 @@ const RENDERERS: Record<NotificationEventType, Renderer> = {
     ['⏰ Kunlik tushum kiritilmagan', `Sana: ${uzDate(p.businessDate)}`, 'Iltimos, tushumni kiriting.'].join('\n'),
 
   'monthly_report.ready': () => '📅 Oylik hisobot tayyor.',
+
+  // No investor name and no ownership percentage: the payload does not carry
+  // them, and a chat transcript is the wrong place for either. The recipient
+  // opens FinCore to see whose request this is.
+  'investor_payout.requested': (p) =>
+    [
+      '📨 Investor to‘lov so‘rovi',
+      `Summa: ${telegramMoney(text(p.requestedAmountUzs, '0'))}`,
+      'Tasdiqlash uchun FinCore’ni oching.',
+    ].join('\n'),
+
+  'investor_payout.decided': (p) =>
+    p.decision === 'approved'
+      ? '✅ To‘lov so‘rovingiz tasdiqlandi.'
+      : '❌ To‘lov so‘rovingiz rad etildi. Sababini FinCore’dan ko‘ring.',
+
+  'investor_payout.paid': (p) =>
+    [
+      '💸 Ulush to‘landi',
+      `Sana: ${uzDate(p.paidOn)}`,
+      `Summa: ${telegramMoney(text(p.paidAmountUzs, '0'))}`,
+    ].join('\n'),
 };
 
 /**

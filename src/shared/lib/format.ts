@@ -32,6 +32,54 @@ export function formatMoney(value: MoneyUzs | null | undefined, _compact = false
   return `${sign}${groupDigits(absolute.toString())} so‘m`;
 }
 
+/**
+ * Ixcham pul formati: "24,9 mln", "1,2 mlrd".
+ *
+ * Bir ekranda 12 ta ko'rsatkich turganda to'liq raqam ("24 850 000 so'm")
+ * o'qishni qiyinlashtiradi. formatMoney o'rnini bosmaydi — u aniqlik kerak
+ * bo'lgan joyda qoladi, bu esa faqat qisqa ko'rinish uchun.
+ *
+ * Butun sonli arifmetika: kasr qismi ham bigint bo'linma orqali olinadi,
+ * shuning uchun katta summalarda ham aniqlik yo'qolmaydi.
+ */
+export function formatMoneyCompact(value: MoneyUzs | null | undefined): string {
+  if (value === null || value === undefined) return '—';
+  const amount = BigInt(value);
+  const negative = amount < 0n;
+  const absolute = negative ? -amount : amount;
+  const sign = negative ? '−' : '';
+
+  const unit = (divisor: bigint, suffix: string) => {
+    const whole = absolute / divisor;
+    // Bitta kasr raqami, pastga yaxlitlangan — ko'rsatkich bor summadan
+    // kattaroq ko'rinmasligi uchun.
+    const tenth = ((absolute % divisor) * 10n) / divisor;
+    const fraction = tenth === 0n ? '' : `,${tenth}`;
+    return `${sign}${groupDigits(whole.toString())}${fraction} ${suffix}`;
+  };
+
+  if (absolute >= 1_000_000_000n) return unit(1_000_000_000n, 'mlrd');
+  if (absolute >= 1_000_000n) return unit(1_000_000n, 'mln');
+  if (absolute >= 1_000n) return unit(1_000n, 'ming');
+  return `${sign}${groupDigits(absolute.toString())} so‘m`;
+}
+
+/**
+ * Hisoblangan ulush — NUMERIC(20,2), ikki kasrli string.
+ *
+ * formatMoney'dan alohida, chunki u BigInt() ishlatadi va kasrli qiymatda
+ * xato beradi. Ikkisini aralashtirmaslik ataylab: butun so'm — haqiqatan
+ * to'lanadigan pul, kasrli qiymat esa hisoblangan nisbat.
+ */
+export function formatShare(value: string | null | undefined): string {
+  if (value === null || value === undefined || !/^-?\d+(\.\d+)?$/.test(value.trim())) return '—';
+  const text = value.trim();
+  const negative = text.startsWith('-');
+  const [whole = '0', fraction = ''] = (negative ? text.slice(1) : text).split('.');
+  const cents = `${fraction}00`.slice(0, 2);
+  return `${negative ? '−' : ''}${groupDigits(whole)},${cents} so‘m`;
+}
+
 /** Kasr qismi vergul bilan: 93,75% — o‘zbek/CIS yozuvi. */
 export function formatPercent(value: number | null | undefined, digits = 2): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';

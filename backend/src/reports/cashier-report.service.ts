@@ -87,6 +87,7 @@ export class CashierReportService {
     user: AuthenticatedUser,
     periodId: string,
     requestedBranch: string | undefined,
+    requestedScope?: 'own',
   ): Promise<CashierReportDto> {
     // reports.view_cashiers sees everyone; reports.view_own_performance sees
     // only their own row, so nobody else's salary leaks. The guard can only
@@ -118,7 +119,10 @@ export class CashierReportService {
     const branchIds =
       branchFilter === 'all' ? user.branchScopes : user.branchScopes.filter((id) => id === branchFilter);
 
-    const viewerId = seesEveryone ? undefined : user.id;
+    // "Mening natijam" asks for the own row even from a reader who may see
+    // everyone. Narrowing only — a reader who may see nobody else can never use
+    // this to widen the answer.
+    const viewerId = seesEveryone && requestedScope !== 'own' ? undefined : user.id;
     const periodLabel = `${MONTHS_UZ[period.month - 1] ?? period.month} ${period.year}`;
 
     if (branchIds.length === 0)

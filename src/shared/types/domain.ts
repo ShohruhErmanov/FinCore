@@ -25,9 +25,16 @@ export type PermissionCode =
   | 'user.manage'
   | 'user.deactivate'
   | 'user.delete'
-  | 'role.manage';
+  | 'role.manage'
+  | 'audit.view'
+  | 'investor.view_own'
+  | 'investor.view_all'
+  | 'investor.manage'
+  | 'investor.settlement.request'
+  | 'investor.settlement.approve'
+  | 'investor.settlement.pay';
 
-export type RoleCode = 'cashier' | 'finance_manager' | 'director';
+export type RoleCode = 'cashier' | 'finance_manager' | 'director' | 'investor' | 'business_owner';
 export type UserStatus = 'active' | 'inactive' | 'blocked';
 export type ExpenseType = 'fixed' | 'variable';
 export type PeriodStatus = 'open' | 'closed';
@@ -76,6 +83,16 @@ export interface UserCreateInput {
   /** Kamida 12 belgi. Server bcrypt bilan xeshlaydi; javobda hech qachon qaytmaydi. */
   password: string;
   confirmPassword: string;
+  /** Faqat role='investor' uchun: kompaniyadagi ulush foizi (olingan summa foizi EMAS). */
+  ownershipPercent?: number;
+  /** Faqat investor: kompaniyaga amalda kiritilgan boshlang‘ich kapital. */
+  capitalAmountUzs?: MoneyUzs;
+  /** Faqat investor: foyda ulushi hisoblanadigan birinchi oy. */
+  startPeriodId?: UUID;
+  /** Kapital qanday shaklda kiritilgani; payout usuli emas. */
+  capitalPaymentMethodCode?: InvestorCapitalPaymentMethodCode;
+  /** Ixtiyoriy: joriy davr uchun tegishli summa. Qolgan oylar alohida kiritiladi. */
+  entitledAmountUzs?: MoneyUzs;
 }
 
 export interface UserAccessUpdateInput {
@@ -89,6 +106,22 @@ export interface UserDirectoryItem {
   fullName: string;
   status: UserStatus;
   roles: RoleAssignment[];
+}
+
+export interface AuditLogRow {
+  id: string;
+  actorName: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  result: 'success' | 'failure' | 'denied';
+  branchName: string | null;
+  occurredAt: IsoDateTime;
+}
+
+export interface AuditLogPage {
+  data: AuditLogRow[];
+  meta: { page: number; pageSize: number; total: number; totalPages: number };
 }
 
 export interface AccountingPeriod {
@@ -396,6 +429,105 @@ export interface TrendPoint {
 }
 
 /** Excel «Xulosa» varag‘i: yillik kesim, doimiy ulushi va oylik dinamika. */
+/** Oylik tushum o‘sishi: tanlangan kalendar oy jami oldingi to‘liq oy bilan solishtiriladi. */
+export interface MonthlyRevenueGrowth {
+  month: number;
+  monthLabel: string;
+  previousMonth: number;
+  previousMonthLabel: string;
+  currentUzs: MoneyUzs;
+  previousUzs: MoneyUzs;
+  changePct: number | null;
+  /** API mosligi uchun saqlangan; to‘liq kalendar oy taqqoslashida null. */
+  throughDay: number | null;
+}
+
+export interface AnnualRevenueGrowth {
+  year: number;
+  previousYear: number;
+  currentUzs: MoneyUzs;
+  previousUzs: MoneyUzs;
+  changePct: number | null;
+}
+
+/** Oylik va yillik o'sish — ataylab ikkita alohida ko'rsatkich. */
+export interface RevenueGrowth {
+  monthly: MonthlyRevenueGrowth;
+  annual: AnnualRevenueGrowth;
+}
+
+/** Yillik tushum xulosasi — xarajat xulosasining tushum tomoni. */
+export interface RevenueMonth {
+  month: number;
+  label: string;
+  actualUzs: MoneyUzs;
+  planUzs: MoneyUzs;
+  completionPct: number | null;
+}
+
+export interface AnnualRevenue {
+  year: number;
+  totalActualUzs: MoneyUzs;
+  totalPlanUzs: MoneyUzs;
+  completionPct: number | null;
+  /** Faqat tushum bo'lgan oylar bo'yicha o'rtacha. */
+  averageMonthlyUzs: MoneyUzs;
+  averageMonthsCount: number;
+  peakMonth: { month: number; label: string; actualUzs: MoneyUzs } | null;
+  /** O'tgan yilga nisbatan o'sish; o'tgan yil bo'sh bo'lsa null. */
+  growthPct: number | null;
+  previousYear: number;
+  previousYearUzs: MoneyUzs;
+  months: RevenueMonth[];
+}
+
+/** Bir oyning sof foydasi: fakt tushum minus fakt xarajat. */
+export interface NetProfitMonth {
+  month: number;
+  label: string;
+  revenueUzs: MoneyUzs;
+  expenseUzs: MoneyUzs;
+  netProfitUzs: MoneyUzs;
+  /** Oldingi ma'lumotli oyga nisbatan o'zgarish; taqqoslash bo'lmasa null. */
+  changePct: number | null;
+  /** changePct qaysi oyga nisbatan o'lchangani; o'zgarish bo'lmasa null. */
+  comparedToLabel: string | null;
+  /** Oyda na tushum, na xarajat yozilgan bo'lsa false. */
+  hasData: boolean;
+}
+
+export interface AnnualNetProfit {
+  year: number;
+  totalNetProfitUzs: MoneyUzs;
+  /** (sof foyda / tushum) x 100; tushum nol bo'lsa null. */
+  netMarginPct: number | null;
+  /** Faqat ma'lumotli oylar orasidan; bo'sh oy "eng past" bo'la olmaydi. */
+  bestMonth: { month: number; label: string; netProfitUzs: MoneyUzs } | null;
+  worstMonth: { month: number; label: string; netProfitUzs: MoneyUzs } | null;
+  monthsWithData: number;
+  months: NetProfitMonth[];
+  paymentMethods: Array<{
+    paymentMethodId: UUID;
+    code: string;
+    name: string;
+    revenueUzs: MoneyUzs;
+    expenseUzs: MoneyUzs;
+    netProfitUzs: MoneyUzs;
+    sharePct: number;
+  }>;
+  paymentMethodMonths: Array<{
+    month: number;
+    label: string;
+    totalNetProfitUzs: MoneyUzs;
+    paymentMethods: Array<{
+      paymentMethodId: UUID;
+      code: string;
+      name: string;
+      netProfitUzs: MoneyUzs;
+    }>;
+  }>;
+}
+
 export interface AnnualExpenseSummary {
   year: number;
   totalActualUzs: MoneyUzs;
@@ -439,6 +571,9 @@ export interface DashboardResponse {
   revenueCompletionPct: number | null;
   revenueTrend: TrendPoint[];
   annual: AnnualExpenseSummary;
+  annualRevenue: AnnualRevenue;
+  revenueGrowth: RevenueGrowth;
+  annualNetProfit: AnnualNetProfit;
   branches: Array<{
     branchId: UUID;
     name: string;
@@ -607,4 +742,169 @@ export interface ApiErrorBody {
   code: string;
   message: string;
   details?: Record<string, unknown> | undefined;
+}
+
+// ---------------------------------------------------------------------------
+// PHASE 45 — Investor ulushi va hisob-kitobi
+//
+// ownershipPercent kompaniyadagi ulush (masalan 2%), paidPercent esa tegishli
+// summaning necha foizi olinganligi (masalan 80%). Bular hech qachon bitta
+// maydonda birlashtirilmaydi.
+// ---------------------------------------------------------------------------
+
+export type SettlementStatus =
+  | 'no_entitlement'
+  | 'unpaid'
+  | 'partially_paid'
+  | 'settled'
+  | 'overpaid';
+
+export interface Settlement {
+  entitledAmountUzs: MoneyUzs;
+  paidAmountUzs: MoneyUzs;
+  /** Hech qachon manfiy emas — ortiqcha to'lov alohida maydonda. */
+  remainingAmountUzs: MoneyUzs;
+  overpaidAmountUzs: MoneyUzs;
+  paidPercent: number;
+  remainingPercent: number;
+  /** paidPercent 100 bilan cheklangan — progress bar uchun. */
+  settledPercent: number;
+  status: SettlementStatus;
+}
+
+export interface InvestorRef {
+  id: UUID;
+  userId: UUID;
+  fullName: string;
+  phone: string | null;
+  ownershipPercent: number;
+  branch: { id: UUID; code: string; name: string } | null;
+  isActive: boolean;
+  capitalContribution?: InvestorCapitalContribution | null;
+}
+
+export type InvestorCapitalPaymentMethodCode = 'CASH' | 'CARD' | 'BANK_TRANSFER';
+
+export interface InvestorCapitalContribution {
+  amountUzs: MoneyUzs;
+  startPeriod: { id: UUID; year: number; month: number; label: string };
+  paymentMethod: { id: UUID; code: InvestorCapitalPaymentMethodCode; name: string };
+}
+
+export type InvestorListItem = InvestorRef & { annual: Settlement };
+
+export interface InvestorMonthRow {
+  month: number;
+  label: string;
+  periodId: UUID | null;
+  settlement: Settlement;
+  paymentCount: number;
+}
+
+export interface InvestorPaymentRow {
+  id: UUID;
+  paidOn: string;
+  amountUzs: MoneyUzs;
+  status: 'posted' | 'reversed';
+  note: string | null;
+  reversalReason: string | null;
+  createdAt: string;
+}
+
+export interface InvestorDashboard {
+  investor: InvestorRef;
+  year: number;
+  /** Oylik qatorlarning haqiqiy yig'indisi, alohida saqlangan raqam emas. */
+  annual: Settlement;
+  months: InvestorMonthRow[];
+  payments: InvestorPaymentRow[];
+}
+
+/**
+ * NUMERIC(20,2) so'm, ikki kasrli string sifatida. MoneyUzs (butun so'm) dan
+ * ataylab ajratilgan: ulush — hisoblangan nisbat, to'lov esa haqiqiy pul.
+ */
+export type ShareUzs = string;
+
+export type PayoutStatus = 'pending' | 'approved' | 'rejected' | 'paid' | 'cancelled';
+
+export interface PayoutRequestRow {
+  id: UUID;
+  investorId: UUID;
+  investorName: string;
+  periodId: UUID;
+  year: number;
+  month: number;
+  monthLabel: string;
+  /** So'ralgan summa — butun so'm, chunki to'lov shunday amalga oshadi. */
+  requestedAmountUzs: MoneyUzs;
+  /** So'rov yuborilgan paytdagi ulush — hozirgisi emas. */
+  calculatedShareUzs: ShareUzs;
+  factRevenueUzs: MoneyUzs;
+  ownershipPercent: number;
+  status: PayoutStatus;
+  investorNote: string | null;
+  decisionNote: string | null;
+  decidedAt: string | null;
+  decidedByName: string | null;
+  paidOn: string | null;
+  createdAt: string;
+}
+
+export interface PayoutAvailability {
+  shareUzs: ShareUzs;
+  paidUzs: ShareUzs;
+  openUzs: ShareUzs;
+  remainingUzs: ShareUzs;
+  /** So'ralishi mumkin bo'lgan eng katta butun so'm. */
+  payableUzs: MoneyUzs;
+  /** Qolgan summaning bir so'mdan kichik qismi — hech qachon to'lanmaydi. */
+  residualUzs: ShareUzs;
+  isSettled: boolean;
+}
+
+export interface PayoutPeriodRow extends PayoutAvailability {
+  month: number;
+  label: string;
+  periodId: UUID;
+  factRevenueUzs: MoneyUzs;
+  ownershipPercent: number;
+  requests: PayoutRequestRow[];
+}
+
+export interface PayoutSummary {
+  investor: InvestorRef;
+  year: number;
+  annual: PayoutAvailability & { factRevenueUzs: MoneyUzs };
+  months: PayoutPeriodRow[];
+}
+
+/** Direktor ro'yxati uchun: investor + uning yillik ulushi. */
+export interface PayoutListItem extends InvestorRef {
+  annual: PayoutAvailability & { factRevenueUzs: MoneyUzs };
+}
+
+export interface PayoutRequestInput {
+  periodId: UUID;
+  amountUzs: MoneyUzs;
+  note?: string;
+}
+
+export interface InvestorCreateInput {
+  userId: UUID;
+  ownershipPercent: number;
+  branchId?: UUID;
+  note?: string;
+}
+
+export interface InvestorEntitlementInput {
+  periodId: UUID;
+  entitledAmountUzs: MoneyUzs;
+  note?: string;
+}
+
+export interface InvestorPaymentInput {
+  paidOn: string;
+  amountUzs: MoneyUzs;
+  note?: string;
 }

@@ -3,7 +3,8 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from '@/app/layout/app-shell';
 import { PermissionRoute, ProtectedRoute } from '@/features/auth/auth-guards';
 import { LoginPage } from '@/features/auth/login-page';
-import { routes } from '@/shared/config/routes';
+import { useAuth } from '@/features/auth/auth-context';
+import { landingRoute, routes } from '@/shared/config/routes';
 import { EmptyState, LoadingState } from '@/shared/ui';
 
 const DashboardPage = lazy(async () => ({
@@ -64,6 +65,28 @@ const PaymentMethodsPage = lazy(async () => ({
 const BranchesPage = lazy(async () => ({ default: (await loadAdminPages()).BranchesPage }));
 const UsersPage = lazy(async () => ({ default: (await loadAdminPages()).UsersPage }));
 const RolesPage = lazy(async () => ({ default: (await loadAdminPages()).RolesPage }));
+const AuditLogsPage = lazy(async () => ({
+  default: (await import('@/features/audit/audit-logs-page')).AuditLogsPage,
+}));
+
+const loadInvestorPages = () => import('@/features/investors/InvestorPages');
+const InvestorListPage = lazy(async () => ({
+  default: (await loadInvestorPages()).InvestorListPage,
+}));
+const InvestorDetailPage = lazy(async () => ({
+  default: (await loadInvestorPages()).InvestorDetailPage,
+}));
+const loadPayoutPages = () => import('@/features/investors/PayoutPages');
+const MySharePage = lazy(async () => ({ default: (await loadPayoutPages()).MySharePage }));
+const PayoutRequestsPage = lazy(async () => ({
+  default: (await loadPayoutPages()).PayoutRequestsPage,
+}));
+
+/** Sends each role to a page it may actually open. */
+function LandingRedirect() {
+  const { hasPermission } = useAuth();
+  return <Navigate to={landingRoute(hasPermission)} replace />;
+}
 
 function NotFoundPage() {
   return (
@@ -83,7 +106,7 @@ export function AppRouter() {
         <Route path={routes.login} element={<LoginPage />} />
         <Route element={<ProtectedRoute />}>
           <Route element={<AppShell />}>
-            <Route index element={<Navigate to={routes.dashboard} replace />} />
+            <Route index element={<LandingRedirect />} />
             <Route element={<PermissionRoute permission="dashboard.view" />}>
               <Route path={routes.dashboard} element={<DashboardPage />} />
               <Route path={routes.expensePlanAnalytics} element={<ExpensePlanAnalyticsPage />} />
@@ -127,6 +150,9 @@ export function AppRouter() {
               }
             >
               <Route path={routes.cashierReport} element={<CashierReportPage />} />
+              {/* Same page, asked for the reader's own row. The server still
+                  decides what "own" may contain. */}
+              <Route path={routes.myPerformance} element={<CashierReportPage ownScope />} />
             </Route>
 
             <Route element={<PermissionRoute permission="master_data.manage" />}>
@@ -147,6 +173,25 @@ export function AppRouter() {
             <Route element={<PermissionRoute permission="role.manage" />}>
               <Route path={routes.roles} element={<RolesPage />} />
             </Route>
+            <Route element={<PermissionRoute permission="audit.view" />}>
+              <Route path={routes.auditLogs} element={<AuditLogsPage />} />
+            </Route>
+            {/* The list needs investor.view_all; the detail route does not gate
+                here because an investor may open their own id and the backend
+                is the only authority on which id that is. */}
+            <Route element={<PermissionRoute permission="investor.view_all" />}>
+              <Route path={routes.investors} element={<InvestorListPage />} />
+            </Route>
+            <Route element={<PermissionRoute permission="investor.view_own" />}>
+              <Route path={routes.myInvestment} element={<MySharePage />} />
+            </Route>
+            {/* Declared as its own static path; React Router ranks it above
+                /investors/:id, so a payout screen is never mistaken for an
+                investor id. */}
+            <Route element={<PermissionRoute permission="investor.view_all" />}>
+              <Route path={routes.payoutRequests} element={<PayoutRequestsPage />} />
+            </Route>
+            <Route path="/investors/:id" element={<InvestorDetailPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Route>

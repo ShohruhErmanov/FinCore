@@ -47,6 +47,16 @@ export class AdminRolesService {
         'Rol ruxsatlarini faqat amaldagi direktor o‘zgartirishi mumkin.',
       );
 
+    // Migration 020 defines this elevated strategic role as a fixed,
+    // read-only contract. Letting the ordinary matrix editor add a mutation
+    // permission would silently turn it into the superuser the model forbids.
+    if (roleCode === 'business_owner')
+      throw new ApiException(
+        403,
+        'BUSINESS_OWNER_ROLE_IMMUTABLE',
+        'Biznes egasi ruxsatlari strategik read-only siyosat bilan himoyalangan.',
+      );
+
     const role = await this.prisma.db.roles.findUnique({
       where: { code: roleCode },
       select: { id: true, code: true },

@@ -69,11 +69,53 @@ export class AdminUsersService {
   }
 
   async create(actor: AuthenticatedUser, input: UserCreateDto): Promise<AuthenticatedUser> {
+    // Business Owner is a bootstrap/provisioning-only strategic role. It must
+    // never be created or assigned through the ordinary user-management API.
+    if ((input.role as string) === 'business_owner')
+      throw new ApiException(
+        403,
+        'BUSINESS_OWNER_CREATION_DENIED',
+        'Biznes egasi roli faqat ishonchli tizim provisioning jarayonida yaratiladi.',
+      );
+
     if (input.role === 'director' && !this.hasRole(actor, 'director'))
       throw new ApiException(
         403,
         'PRIVILEGE_ESCALATION_DENIED',
         'Direktor rolini faqat amaldagi direktor biriktirishi mumkin.',
+      );
+
+    if (input.role === 'investor' && !this.hasRole(actor, 'director'))
+      throw new ApiException(
+        403,
+        'INVESTOR_CREATION_DENIED',
+        'Investor hisobini faqat Direktor yaratishi mumkin.',
+      );
+
+    if (
+      input.role === 'investor' &&
+      (input.ownershipPercent === undefined ||
+        !Number.isFinite(input.ownershipPercent) ||
+        input.ownershipPercent < 0 ||
+        input.ownershipPercent > 100)
+    )
+      throw new ApiException(
+        422,
+        'OWNERSHIP_PERCENT_INVALID',
+        'Ulush 0 va 100 foiz orasida bo‘lishi kerak.',
+      );
+
+    const hasInvestorOnlyFields =
+      input.ownershipPercent !== undefined ||
+      input.capitalAmountUzs !== undefined ||
+      input.startPeriodId !== undefined ||
+      input.capitalPaymentMethodCode !== undefined ||
+      input.entitledAmountUzs !== undefined;
+    if (input.role !== 'investor' && hasInvestorOnlyFields)
+      throw new ApiException(
+        422,
+        'INVESTOR_FIELDS_NOT_ALLOWED',
+        'Investor moliyaviy ma’lumotlari faqat Investor roli uchun yuboriladi.',
       );
 
     // Checked server-side too: the browser can be bypassed, and a mismatch here
@@ -94,7 +136,15 @@ export class AdminUsersService {
 
     // A cashier is meaningless without a branch; other roles may carry one as a
     // secondary cashier scope (the "Madina" pattern from the requirements).
-    const scopeBranchId = input.role === 'cashier' ? input.branchId : input.cashierBranchId;
+    //
+    // An investor is a third shape: they read no branch ledger at all, so their
+    // branch is optional. Since migration 015 the investor role carries
+    // allows_branchless_scope, which lets the grant be NULL — that is the
+    // company-wide investor. A branch may still be named to scope one.
+    const scopeBranchId =
+      input.role === 'cashier' || input.role === 'investor'
+        ? input.branchId
+        : input.cashierBranchId;
     const branch = scopeBranchId
       ? await this.prisma.db.branches.findFirst({
           where: { id: scopeBranchId, is_active: true },
@@ -107,12 +157,89 @@ export class AdminUsersService {
       throw new ApiException(422, 'BRANCH_INVALID', 'Kassir filial scope’i topilmadi.');
 
     const grants: Array<{ role: string; branchId: string | null }> = [
-      { role: input.role, branchId: input.role === 'cashier' ? branch!.id : null },
+      {
+        role: input.role,
+        branchId:
+          input.role === 'cashier'
+            ? branch!.id
+            : // NULL here means "no branch dimension" for an investor, and the
+              // ordinary all-branch grant for everyone else.
+              input.role === 'investor'
+              ? (branch?.id ?? null)
+              : null,
+      },
     ];
     if (input.role === 'finance_manager' && branch)
       grants.push({ role: 'cashier', branchId: branch.id });
 
     const roleIds = await this.resolveRoleIds(grants.map((grant) => grant.role));
+
+    let capitalAmount: bigint | null = null;
+    let capitalStartPeriodId: string | null = null;
+    let capitalPaymentMethodId: string | null = null;
+    if (input.role === 'investor') {
+      if (
+        input.capitalAmountUzs === undefined ||
+        input.startPeriodId === undefined ||
+        input.capitalPaymentMethodCode === undefined
+      )
+        throw new ApiException(
+          422,
+          'INVESTOR_CAPITAL_REQUIRED',
+          'Kiritilgan mablag‘, qo‘shilish oyi va to‘lov shakli majburiy.',
+        );
+
+      if (!/^[1-9]\d*$/.test(input.capitalAmountUzs))
+        throw new ApiException(
+          422,
+          'CAPITAL_AMOUNT_INVALID',
+          'Mablag‘ 0 dan katta bo‘lishi kerak.',
+        );
+      capitalAmount = BigInt(input.capitalAmountUzs);
+      if (capitalAmount > MAX_UZS)
+        throw new ApiException(
+          422,
+          'CAPITAL_AMOUNT_INVALID',
+          'Mablag‘ ruxsat etilgan chegaradan katta.',
+        );
+
+      const [period, paymentMethod] = await Promise.all([
+        this.prisma.db.accounting_periods.findUnique({
+          where: { id: input.startPeriodId },
+          select: { id: true },
+        }),
+        this.prisma.db.payment_methods.findUnique({
+          where: { code: input.capitalPaymentMethodCode },
+          select: { id: true, is_active: true },
+        }),
+      ]);
+      if (!period) throw new ApiException(422, 'START_PERIOD_INVALID', 'Qo‘shilish oyi topilmadi.');
+      if (!paymentMethod?.is_active)
+        throw new ApiException(422, 'CAPITAL_PAYMENT_METHOD_INVALID', 'To‘lov shakli faol emas.');
+      capitalStartPeriodId = period.id;
+      capitalPaymentMethodId = paymentMethod.id;
+    }
+
+    // Resolved before the transaction so a missing period fails the request
+    // rather than the write. Today's period first, then any open one.
+    const now = new Date();
+    const openPeriodId =
+      input.role === 'investor' && input.entitledAmountUzs !== undefined
+        ? ((
+            await this.prisma.db.accounting_periods.findFirst({
+              where: { year: now.getUTCFullYear(), month: now.getUTCMonth() + 1 },
+              select: { id: true },
+            })
+          )?.id ??
+          (
+            await this.prisma.db.accounting_periods.findFirst({
+              where: { status: 'open' },
+              orderBy: [{ year: 'desc' }, { month: 'desc' }],
+              select: { id: true },
+            })
+          )?.id ??
+          null)
+        : null;
     // Same helper the login path verifies against, so a freshly created account
     // can sign in immediately with phone + password.
     const password_hash = await hashPassword(input.password);
@@ -140,6 +267,40 @@ export class AdminUsersService {
             },
             select: { id: true },
           });
+
+        // An investor account without its ownership record would be a login
+        // that can see nothing, so both are written in one transaction: either
+        // the investor exists completely or not at all.
+        if (input.role === 'investor') {
+          await tx.$executeRaw`
+            INSERT INTO fincore.investor_profiles (user_id, ownership_percent, branch_id, created_by)
+            VALUES (
+              ${user.id}::uuid,
+              ${input.ownershipPercent ?? 0},
+              ${input.branchId ?? null}::uuid,
+              ${actor.id}::uuid
+            )
+          `;
+          await tx.$executeRaw`
+            INSERT INTO fincore.investor_capital_contributions
+              (investor_id, amount_uzs, start_period_id, payment_method_id, created_by)
+            SELECT p.id, ${capitalAmount!}, ${capitalStartPeriodId!}::uuid,
+                   ${capitalPaymentMethodId!}::uuid, ${actor.id}::uuid
+            FROM fincore.investor_profiles p
+            WHERE p.user_id = ${user.id}::uuid
+          `;
+          // Entitlement is recorded per period, so this only seeds the current
+          // one; later months are entered on the investor's own page.
+          if (input.entitledAmountUzs !== undefined && openPeriodId)
+            await tx.$executeRaw`
+              INSERT INTO fincore.investor_entitlements
+                (investor_id, accounting_period_id, entitled_amount_uzs, created_by, updated_by)
+              SELECT p.id, ${openPeriodId}::uuid, ${BigInt(input.entitledAmountUzs)},
+                     ${actor.id}::uuid, ${actor.id}::uuid
+              FROM fincore.investor_profiles p
+              WHERE p.user_id = ${user.id}::uuid
+            `;
+        }
         return user.id;
       })
       .catch((error: unknown) => {
@@ -158,6 +319,9 @@ export class AdminUsersService {
     const targetIsDirector = target.roles.some(
       (role) => role.code === 'director' && role.is_active,
     );
+    const targetIsBusinessOwner = target.roles.some(
+      (role) => role.code === 'business_owner' && role.is_active,
+    );
     if (targetIsDirector && !this.hasRole(actor, 'director'))
       throw new ApiException(
         403,
@@ -166,12 +330,22 @@ export class AdminUsersService {
       );
 
     const roleCodes = input.roles.map((assignment) => assignment.role);
+    if (roleCodes.some((role) => (role as string) === 'business_owner'))
+      throw new ApiException(
+        403,
+        'BUSINESS_OWNER_ASSIGNMENT_DENIED',
+        'Biznes egasi rolini foydalanuvchi boshqaruvi orqali biriktirib bo‘lmaydi.',
+      );
     if (roleCodes.length === 0)
       throw new ApiException(422, 'ROLE_REQUIRED', 'Kamida bitta rol biriktirilishi kerak.');
     if (new Set(roleCodes).size !== roleCodes.length)
       throw new ApiException(409, 'DUPLICATE_ROLE', 'Bitta rol takroran biriktirilmaydi.');
     if (roleCodes.includes('director') && roleCodes.length > 1)
-      throw new ApiException(422, 'ROLE_COMBINATION_INVALID', 'Direktor roli alohida access modeli.');
+      throw new ApiException(
+        422,
+        'ROLE_COMBINATION_INVALID',
+        'Direktor roli alohida access modeli.',
+      );
     if (roleCodes.includes('director') && !this.hasRole(actor, 'director'))
       throw new ApiException(
         403,
@@ -199,6 +373,8 @@ export class AdminUsersService {
       .withActor(this.actor.mint(actor.id), async (tx) => {
         if (targetIsDirector && !roleCodes.includes('director') && target.status === 'active')
           await this.assertNotLastActiveDirector(tx, userId);
+        if (targetIsBusinessOwner && target.status === 'active')
+          await this.assertNotLastActiveBusinessOwner(tx, userId);
 
         // Grants are revoked, never deleted: user_roles is an audit trail.
         await tx.user_roles.updateMany({
@@ -238,6 +414,9 @@ export class AdminUsersService {
     const targetIsDirector = target.roles.some(
       (role) => role.code === 'director' && role.is_active,
     );
+    const targetIsBusinessOwner = target.roles.some(
+      (role) => role.code === 'business_owner' && role.is_active,
+    );
     if (targetIsDirector && !this.hasRole(actor, 'director'))
       throw new ApiException(
         403,
@@ -248,6 +427,8 @@ export class AdminUsersService {
       .withActor(this.actor.mint(actor.id), async (tx) => {
         if (targetIsDirector && target.status === 'active' && input.status !== 'active')
           await this.assertNotLastActiveDirector(tx, userId);
+        if (targetIsBusinessOwner && target.status === 'active' && input.status !== 'active')
+          await this.assertNotLastActiveBusinessOwner(tx, userId);
 
         return tx.users.update({ where: { id: userId }, data: { status: input.status } });
       })
@@ -280,8 +461,14 @@ export class AdminUsersService {
         // serialized transaction. The row lock also prevents status/is_system
         // from changing between authorization and physical deletion.
         await this.lockDirectorLifecycle(tx);
+        await this.lockBusinessOwnerLifecycle(tx);
         const targets = await tx.$queryRaw<
-          Array<{ status: string; is_system: boolean; is_director: boolean }>
+          Array<{
+            status: string;
+            is_system: boolean;
+            is_director: boolean;
+            is_business_owner: boolean;
+          }>
         >`
           SELECT
             u.status::text AS status,
@@ -296,13 +483,22 @@ export class AdminUsersService {
                 AND r.code = 'director'
                 AND r.is_active
             ) AS is_director
+            , EXISTS (
+              SELECT 1
+              FROM fincore.user_roles ur
+              JOIN fincore.roles r ON r.id = ur.role_id
+              WHERE ur.user_id = u.id
+                AND ur.is_active
+                AND ur.revoked_at IS NULL
+                AND r.code = 'business_owner'
+                AND r.is_active
+            ) AS is_business_owner
           FROM fincore.users u
           WHERE u.id = ${userId}::uuid
           FOR UPDATE OF u
         `;
         const target = targets[0];
-        if (!target)
-          throw new ApiException(404, 'USER_NOT_FOUND', 'Foydalanuvchi topilmadi.');
+        if (!target) throw new ApiException(404, 'USER_NOT_FOUND', 'Foydalanuvchi topilmadi.');
         if (target.is_system)
           throw new ApiException(
             409,
@@ -311,6 +507,8 @@ export class AdminUsersService {
           );
         if (target.is_director && target.status === 'active')
           await this.assertNotLastActiveDirector(tx, userId, true);
+        if (target.is_business_owner && target.status === 'active')
+          await this.assertNotLastActiveBusinessOwner(tx, userId, true);
 
         // PHASE 36 migration 009 keeps every historical actor UUID in the
         // durable user_identities table. Only user_roles is disposable and its
@@ -455,6 +653,37 @@ export class AdminUsersService {
     `;
   }
 
+  private async assertNotLastActiveBusinessOwner(
+    tx: PrismaTransaction,
+    userId: string,
+    lifecycleLockHeld = false,
+  ): Promise<void> {
+    if (!lifecycleLockHeld) await this.lockBusinessOwnerLifecycle(tx);
+    const others = await tx.users.count({
+      where: {
+        id: { not: userId },
+        status: 'active',
+        user_roles: {
+          some: { ...ACTIVE, role: { code: 'business_owner', is_active: true } },
+        },
+      },
+    });
+    if (others === 0)
+      throw new ApiException(
+        409,
+        'LAST_BUSINESS_OWNER_REQUIRED',
+        'Oxirgi faol Biznes egasi bloklanmaydi, nofaol qilinmaydi yoki o‘chirilmaydi.',
+      );
+  }
+
+  private async lockBusinessOwnerLifecycle(tx: PrismaTransaction): Promise<void> {
+    await tx.$executeRaw`
+      SELECT pg_advisory_xact_lock(
+        hashtextextended('admin:active-business-owner-lifecycle', 0)
+      )
+    `;
+  }
+
   private userDeleteNotAllowed(dependencyCategories: string[]): ApiException {
     return new ApiException(
       409,
@@ -475,7 +704,8 @@ export class AdminUsersService {
     });
     const map = new Map(roles.map((role) => [role.code, role.id] as const));
     for (const code of codes)
-      if (!map.has(code)) throw new ApiException(404, 'ROLE_NOT_FOUND', `'${code}' roli topilmadi.`);
+      if (!map.has(code))
+        throw new ApiException(404, 'ROLE_NOT_FOUND', `'${code}' roli topilmadi.`);
     return map;
   }
 
@@ -487,7 +717,11 @@ export class AdminUsersService {
     if (/Unique constraint|duplicate key/i.test(message))
       return new ApiException(409, 'DUPLICATE_REFERENCE', 'Bu qiymat allaqachon mavjud.');
     if (/actor context|signing key/i.test(message))
-      return new ApiException(500, 'ACTOR_CONTEXT_INVALID', 'Server identifikatsiya konteksti noto‘g‘ri.');
+      return new ApiException(
+        500,
+        'ACTOR_CONTEXT_INVALID',
+        'Server identifikatsiya konteksti noto‘g‘ri.',
+      );
     if (/bigint.*range|out of range/i.test(message))
       return new ApiException(422, 'AMOUNT_INVALID', 'Oylik ruxsat etilgan chegaradan oshdi.');
     return error;

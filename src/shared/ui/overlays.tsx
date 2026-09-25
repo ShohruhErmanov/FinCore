@@ -7,6 +7,14 @@ import { ToastContext, type ToastMessage } from './toast-context';
 
 function useDialogFocus(open: boolean, onClose: () => void) {
   const panelRef = useRef<HTMLDivElement>(null);
+  // Every caller passes an inline arrow, so onClose is a new function on each
+  // render. Depending on it re-ran this whole effect on every keystroke, which
+  // moved focus back to the header's close button — typing into a dialog field
+  // was impossible past the first character. The ref keeps the latest callback
+  // without making the effect re-run.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     if (!open) return;
     const previouslyFocused = document.activeElement as HTMLElement | null;
@@ -18,7 +26,7 @@ function useDialogFocus(open: boolean, onClose: () => void) {
     const keydown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== 'Tab' || !panel) return;
@@ -46,7 +54,7 @@ function useDialogFocus(open: boolean, onClose: () => void) {
       document.body.style.overflow = originalOverflow;
       previouslyFocused?.focus();
     };
-  }, [onClose, open]);
+  }, [open]);
   return panelRef;
 }
 

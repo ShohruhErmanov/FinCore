@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Activity, ArrowRight, CalendarPlus, Download, ReceiptText, Sparkles } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   Cell,
@@ -10,19 +12,34 @@ import {
   Pie,
   PieChart,
   ResponsiveContainer,
+  Line,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
 import { useAuth } from '@/features/auth/auth-context';
+import {
+  AnnualFinancialOverview,
+  AnnualGroupHeading,
+  AnnualNetProfitTiles,
+  AnnualRevenueTiles,
+} from './annual-financials';
+import { MonthlyNetProfit } from './monthly-net-profit';
 import { dashboardApi, referenceApi } from '@/shared/api/contracts';
 import { queryKeys } from '@/shared/api/query-keys';
 import { routes } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/cn';
 import { downloadCsv } from '@/shared/lib/csv';
-import { formatMoney, formatPercent, toChartNumber } from '@/shared/lib/format';
+import { formatMoney, formatMoneyCompact, formatPercent, toChartNumber } from '@/shared/lib/format';
 import { drilldownUrl } from '@/shared/lib/url';
-import type { AnnualExpenseSummary, TrendGranularity, TrendPoint } from '@/shared/types/domain';
+import type {
+  AnnualExpenseSummary,
+  AnnualNetProfit,
+  AnnualRevenue,
+  RevenueGrowth,
+  TrendGranularity,
+  TrendPoint,
+} from '@/shared/types/domain';
 import {
   Button,
   Card,
@@ -61,48 +78,168 @@ function TrendChart({
   description,
   points,
   ariaLabel,
-  actualColor,
+  tone,
 }: {
   title: string;
   description: string;
   points: TrendPoint[];
   ariaLabel: string;
-  actualColor: string;
+  tone: 'revenue' | 'expense';
 }) {
   const data = points.map((point) => ({
     label: point.label,
     plan: toChartNumber(point.planUzs),
     actual: toChartNumber(point.actualUzs),
   }));
+  const totalPlan = points.reduce((sum, point) => sum + BigInt(point.planUzs), 0n);
+  const totalActual = points.reduce((sum, point) => sum + BigInt(point.actualUzs), 0n);
+  const completion = percentOf(totalActual.toString(), totalPlan.toString());
+  const hasData = totalPlan !== 0n || totalActual !== 0n;
+  const actualColor = tone === 'revenue' ? '#55e6f7' : '#60a5fa';
+  const gradientId = `actual-${tone}-gradient`;
+
   return (
     <Card title={title} description={description}>
-      <div className="h-[300px] w-full" aria-label={ariaLabel}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 10, right: 10, left: 2, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-            <XAxis
-              dataKey="label"
-              tickLine={false}
-              axisLine={false}
-              fontSize={11}
-              interval="preserveStartEnd"
-            />
-            <YAxis
-              tickFormatter={axisMoney}
-              tickLine={false}
-              axisLine={false}
-              fontSize={11}
-              width={130}
-            />
-            <Tooltip
-              formatter={(value: number) => formatMoney(String(value))}
-              cursor={{ fill: '#eff6ff' }}
-            />
-            <Legend />
-            <Bar dataKey="plan" name="Reja" fill="#94a3b8" radius={[5, 5, 0, 0]} />
-            <Bar dataKey="actual" name="Amalda" fill={actualColor} radius={[5, 5, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+      <div role="region" aria-label={ariaLabel}>
+        <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <div className="rounded-xl border border-slate-200/80 bg-slate-50/80 px-3.5 py-3">
+            <dt className="flex items-center gap-2 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-slate-500">
+              <span className="h-2 w-2 rounded-full bg-slate-400" aria-hidden="true" />
+              Reja jami
+            </dt>
+            <dd
+              className="mt-1.5 whitespace-nowrap text-base font-semibold tabular-nums text-slate-800"
+              title={formatMoney(totalPlan.toString())}
+            >
+              {formatMoneyCompact(totalPlan.toString())}
+            </dd>
+          </div>
+
+          <div
+            className={cn(
+              'rounded-xl border px-3.5 py-3',
+              tone === 'revenue'
+                ? 'border-cyan-100 bg-cyan-50/60'
+                : 'border-blue-100 bg-blue-50/60',
+            )}
+          >
+            <dt className="flex items-center gap-2 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-slate-500">
+              <span
+                className={cn(
+                  'h-2 w-2 rounded-full',
+                  tone === 'revenue' ? 'bg-cyan-500' : 'bg-blue-500',
+                )}
+                aria-hidden="true"
+              />
+              Amalda jami
+            </dt>
+            <dd
+              className={cn(
+                'mt-1.5 whitespace-nowrap text-base font-semibold tabular-nums',
+                tone === 'revenue' ? 'text-cyan-700' : 'text-blue-700',
+              )}
+              title={formatMoney(totalActual.toString())}
+            >
+              {formatMoneyCompact(totalActual.toString())}
+            </dd>
+          </div>
+
+          <div className="col-span-2 rounded-xl border border-slate-200/80 bg-white px-3.5 py-3 sm:col-span-1">
+            <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-slate-500">
+              Reja bajarilishi
+            </dt>
+            <dd className="mt-1.5 text-base font-semibold tabular-nums text-slate-800">
+              {totalPlan === 0n ? 'Reja yo‘q' : formatPercent(completion)}
+            </dd>
+          </div>
+        </dl>
+
+        {hasData ? (
+          <div className="mt-5 h-[280px] w-full overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#0b2349_0%,#173f79_55%,#1f58a8_100%)] px-2 pb-1 pt-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] sm:h-[320px] sm:px-4">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={actualColor} stopOpacity={0.34} />
+                    <stop offset="72%" stopColor={actualColor} stopOpacity={0.08} />
+                    <stop offset="100%" stopColor={actualColor} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid
+                  strokeDasharray="0"
+                  vertical={false}
+                  stroke="rgba(203, 213, 225, 0.16)"
+                />
+                <XAxis
+                  dataKey="label"
+                  tickLine={false}
+                  axisLine={{ stroke: 'rgba(203, 213, 225, 0.2)' }}
+                  fontSize={11}
+                  tick={{ fill: '#cbd5e1' }}
+                  interval="preserveStartEnd"
+                  tickMargin={10}
+                />
+                <YAxis
+                  tickFormatter={(value: number) =>
+                    formatMoneyCompact(String(Math.trunc(value))).replace(' so‘m', '')
+                  }
+                  tickLine={false}
+                  axisLine={false}
+                  fontSize={10}
+                  tick={{ fill: '#a5b4cc' }}
+                  width={66}
+                  tickMargin={6}
+                />
+                <Tooltip
+                  formatter={(value: number, name: string) => [
+                    formatMoney(String(Math.trunc(value))),
+                    name,
+                  ]}
+                  labelStyle={{ color: '#f8fafc', fontWeight: 700, marginBottom: 6 }}
+                  itemStyle={{ paddingTop: 2, paddingBottom: 2 }}
+                  contentStyle={{
+                    background: 'rgba(8, 28, 61, 0.96)',
+                    color: '#e2e8f0',
+                    borderRadius: 14,
+                    border: '1px solid rgba(148, 163, 184, 0.28)',
+                    boxShadow: '0 18px 42px -22px rgba(2, 6, 23, 0.8)',
+                    padding: '10px 12px',
+                  }}
+                  cursor={{ stroke: 'rgba(226, 232, 240, 0.32)', strokeWidth: 1 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="plan"
+                  name="Reja"
+                  stroke="#cbd5e1"
+                  strokeWidth={2}
+                  strokeDasharray="7 6"
+                  dot={false}
+                  activeDot={{ r: 4, fill: '#e2e8f0', stroke: '#173f79', strokeWidth: 2 }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="actual"
+                  name="Amalda"
+                  stroke={actualColor}
+                  strokeWidth={3}
+                  fill={`url(#${gradientId})`}
+                  dot={{ r: 2.7, fill: actualColor, stroke: '#173f79', strokeWidth: 1.5 }}
+                  activeDot={{ r: 5, fill: actualColor, stroke: '#f8fafc', strokeWidth: 2 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="mt-5 grid min-h-64 place-items-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-6 text-center">
+            <div>
+              <p className="font-semibold text-slate-700">Bu kesim uchun ma’lumot mavjud emas</p>
+              <p className="mt-1 text-sm text-muted">
+                Reja yoki amaldagi summa kiritilganda diagramma paydo bo‘ladi.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </Card>
   );
@@ -246,15 +383,30 @@ function AnnualCompositionCharts({ data }: { data: AnnualExpenseSummary }) {
 }
 
 /** Excel «Xulosa» varag‘ining veb ko‘rinishi. */
-function AnnualSummary({ data }: { data: AnnualExpenseSummary }) {
+function AnnualSummary({
+  data,
+  revenue,
+  netProfit,
+  growth,
+}: {
+  data: AnnualExpenseSummary;
+  revenue: AnnualRevenue;
+  netProfit: AnnualNetProfit;
+  growth: RevenueGrowth;
+}) {
   return (
     <section aria-label="Yillik xulosa" className="mt-8">
       <h2 className="text-lg font-bold text-ink">{data.year} yil xulosasi</h2>
       <p className="mt-0.5 text-sm text-muted">
-        Yillik xarajat kesimi va oylik dinamika — tanlangan filial bo‘yicha.
+        Yillik tushum, xarajat va sof foyda dinamikasi — tanlangan filial bo‘yicha.
       </p>
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <AnnualGroupHeading title="Tushumlar" kind="revenue" />
+      <AnnualRevenueTiles data={revenue} growth={growth} />
+
+      <AnnualGroupHeading title="Xarajatlar" kind="expense" />
+
+      <div className="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryTile
           label="Yillik umumiy xarajat"
           value={<MoneyText value={data.totalActualUzs} compact />}
@@ -310,6 +462,11 @@ function AnnualSummary({ data }: { data: AnnualExpenseSummary }) {
           helper="Musbat qiymat — budjetdan qolgan summa"
         />
       </div>
+
+      <AnnualGroupHeading title="Sof foyda" kind="profit" />
+      <AnnualNetProfitTiles data={netProfit} />
+
+      <AnnualFinancialOverview revenue={revenue} expense={data} netProfit={netProfit} />
 
       <Card
         title="Oylik dinamika"
@@ -423,6 +580,20 @@ export function DashboardPage() {
     searchParams.get('period') ??
     periodsQuery.data?.find((item) => item.status === 'open')?.id ??
     '';
+  const periodsByYear = periodsQuery.data ?? [];
+  const availableYears = [...new Set(periodsByYear.map((item) => item.year))].sort((a, b) => b - a);
+  const selectYear = (year: number) => {
+    // The first month of that year that exists, so the app bar's month select
+    // lands on something real rather than on an id that is not in its list.
+    const target = periodsByYear
+      .filter((item) => item.year === year)
+      .sort((a, b) => a.month - b.month)[0];
+    if (!target) return;
+    const next = new URLSearchParams(searchParams);
+    next.set('period', target.id);
+    setSearchParams(next, { replace: true });
+  };
+
   const requestedGranularity = searchParams.get('granularity');
   const granularity: TrendGranularity =
     requestedGranularity === 'daily' || requestedGranularity === 'weekly'
@@ -545,6 +716,12 @@ export function DashboardPage() {
         </div>
       </section>
 
+      <MonthlyNetProfit
+        data={data.annualNetProfit}
+        years={availableYears}
+        onYearChange={selectYear}
+      />
+
       <section
         aria-label="Tushum ko‘rsatkichlari"
         className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
@@ -642,18 +819,23 @@ export function DashboardPage() {
           description={trendScope}
           points={data.revenueTrend}
           ariaLabel="Tushum reja va amalda diagrammasi"
-          actualColor="#16a34a"
+          tone="revenue"
         />
         <TrendChart
           title="Xarajat: reja va amalda"
           description={trendScope}
           points={data.expenseTrend}
           ariaLabel="Xarajat reja va amalda diagrammasi"
-          actualColor="#2563eb"
+          tone="expense"
         />
       </div>
 
-      <AnnualSummary data={data.annual} />
+      <AnnualSummary
+        data={data.annual}
+        revenue={data.annualRevenue}
+        netProfit={data.annualNetProfit}
+        growth={data.revenueGrowth}
+      />
 
       <Card
         title="Filiallar kesimi"

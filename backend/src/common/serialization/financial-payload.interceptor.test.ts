@@ -31,6 +31,32 @@ describe('FinancialPayloadInterceptor', () => {
     return logged.join('\n');
   }
 
+  it('stays silent on an investor share, which carries two decimals', () => {
+    // Mirrors shareValueKeys in the frontend client. Logging a correct payload
+    // is how a warning stops being read — every investor response did before.
+    expect(
+      check({
+        annual: {
+          factRevenueUzs: '313841471',
+          shareUzs: '6276829.42',
+          paidUzs: '5000000.00',
+          openUzs: '0.00',
+          remainingUzs: '1276829.42',
+          payableUzs: '1276829',
+          residualUzs: '0.42',
+        },
+      }),
+    ).toBe('');
+  });
+
+  it('flags a share that arrives without its decimals', () => {
+    expect(check({ annual: { shareUzs: '6276829' } })).toContain('ShareUzs two-decimal string emas');
+  });
+
+  it('still flags decimals in an ordinary money field', () => {
+    expect(check({ amountUzs: '100.50' })).toContain('MoneyUzs integer-string emas');
+  });
+
   it('stays silent on a compliant payload', () => {
     expect(
       check({

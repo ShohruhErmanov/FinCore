@@ -139,6 +139,14 @@ model user_identities {
   notification_deliveries notification_deliveries[]
   expense_category_baselines expense_category_baselines[]
 
+  investor_profile              investor_profiles?      @relation("investor_profile_user")
+  investor_profiles_created     investor_profiles[]     @relation("investor_profile_creator")
+  investor_entitlements_created investor_entitlements[] @relation("investor_entitlement_creator")
+  investor_entitlements_edited  investor_entitlements[] @relation("investor_entitlement_editor")
+  investor_payments_created     investor_payments[]     @relation("investor_payment_creator")
+  investor_payments_reversed    investor_payments[]     @relation("investor_payment_reverser")
+  investor_capital_contributions_created investor_capital_contributions[] @relation("investor_capital_creator")
+
   @@schema("fincore")
 }
 
@@ -220,6 +228,9 @@ model roles {
   name                    String
   is_active               Boolean  @default(true)
   allows_all_branch_scope Boolean  @default(false)
+  /// PHASE 47: the role has no branch dimension, so a grant may carry
+  /// branch_id = NULL. Distinct from allows_all_branch_scope.
+  allows_branchless_scope Boolean @default(false)
   created_at              DateTime @default(now()) @db.Timestamptz(6)
   updated_at              DateTime @default(now()) @db.Timestamptz(6)
 
@@ -288,6 +299,7 @@ model branches {
   revenue_plans revenue_plans[]
   notification_events notification_events[]
   expense_category_baselines expense_category_baselines[]
+  investor_profiles investor_profiles[]
 
   @@schema("fincore")
 }
@@ -320,6 +332,7 @@ model payment_methods {
   updated_at DateTime @default(now()) @db.Timestamptz(6)
 
   expenses expenses[]
+  investor_capital_contributions investor_capital_contributions[]
 
   @@schema("fincore")
 }
@@ -370,6 +383,10 @@ model accounting_periods {
   expenses        expenses[]
   budget_versions budget_versions[]
   revenue_plans   revenue_plans[]
+
+  investor_entitlements investor_entitlements[]
+  investor_payments     investor_payments[]
+  investor_capital_contributions investor_capital_contributions[]
 
   @@schema("fincore")
 }
@@ -539,5 +556,111 @@ model expense_category_baselines {
 
   @@unique([category_id, branch_id])
   @@index([branch_id])
+  @@schema("fincore")
+}
+
+// ---------------------------------------------------------------------------
+// PHASE 45 — investor ownership and settlement (docs/database/014_*.sql)
+//
+// ownership_percent is the share of the company. The share of an entitlement
+// that has been paid is derived per period from the two tables below and is a
+// different number entirely.
+// ---------------------------------------------------------------------------
+
+enum investor_payment_status {
+  posted
+  reversed
+
+  @@schema("fincore")
+}
+
+model investor_profiles {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id           String   @unique @db.Uuid
+  /// CHECK (ownership_percent >= 0 AND ownership_percent <= 100) in SQL.
+  ownership_percent Decimal  @default(0) @db.Decimal(5, 2)
+  /// NULL = company-wide investor; otherwise scoped to this branch.
+  branch_id         String?  @db.Uuid
+  note              String?
+  is_active         Boolean  @default(true)
+  created_by        String?  @db.Uuid
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime @default(now()) @db.Timestamptz(6)
+
+  identity  user_identities  @relation("investor_profile_user", fields: [user_id], references: [id], onDelete: Restrict)
+  createdBy user_identities? @relation("investor_profile_creator", fields: [created_by], references: [id], onDelete: Restrict)
+  branch    branches?        @relation(fields: [branch_id], references: [id])
+
+  entitlements investor_entitlements[]
+  payments     investor_payments[]
+  capitalContribution investor_capital_contributions?
+
+  @@schema("fincore")
+}
+
+/// One immutable initial capital fact per investor. The database guard rejects
+/// UPDATE and DELETE; ownership remains an independent business parameter.
+model investor_capital_contributions {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  investor_id       String   @unique @db.Uuid
+  amount_uzs        BigInt
+  start_period_id   String   @db.Uuid
+  payment_method_id String   @db.Uuid
+  created_by        String   @db.Uuid
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+
+  investor     investor_profiles @relation(fields: [investor_id], references: [id], onDelete: Restrict)
+  startPeriod  accounting_periods @relation(fields: [start_period_id], references: [id], onDelete: Restrict)
+  paymentMethod payment_methods @relation(fields: [payment_method_id], references: [id], onDelete: Restrict)
+  createdBy    user_identities @relation("investor_capital_creator", fields: [created_by], references: [id], onDelete: Restrict)
+
+  @@index([start_period_id])
+  @@index([payment_method_id])
+  @@schema("fincore")
+}
+
+model investor_entitlements {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  investor_id          String   @db.Uuid
+  accounting_period_id String   @db.Uuid
+  entitled_amount_uzs  BigInt   @default(0)
+  note                 String?
+  created_by           String?  @db.Uuid
+  updated_by           String?  @db.Uuid
+  created_at           DateTime @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime @default(now()) @db.Timestamptz(6)
+
+  investor  investor_profiles  @relation(fields: [investor_id], references: [id], onDelete: Cascade)
+  period    accounting_periods @relation(fields: [accounting_period_id], references: [id])
+  createdBy user_identities?   @relation("investor_entitlement_creator", fields: [created_by], references: [id], onDelete: Restrict)
+  updatedBy user_identities?   @relation("investor_entitlement_editor", fields: [updated_by], references: [id], onDelete: Restrict)
+
+  @@unique([investor_id, accounting_period_id])
+  @@schema("fincore")
+}
+
+/// Append-only: a mistake is corrected by reversing the row, never by editing
+/// or deleting it (trg_investor_payments_guard).
+model investor_payments {
+  id                   String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  investor_id          String                  @db.Uuid
+  accounting_period_id String                  @db.Uuid
+  paid_on              DateTime                @db.Date
+  amount_uzs           BigInt
+  note                 String?
+  status               investor_payment_status @default(posted)
+  reversal_reason      String?
+  reversed_at          DateTime?               @db.Timestamptz(6)
+  reversed_by          String?                 @db.Uuid
+  created_by           String?                 @db.Uuid
+  created_at           DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime                @default(now()) @db.Timestamptz(6)
+
+  investor   investor_profiles  @relation(fields: [investor_id], references: [id], onDelete: Cascade)
+  period     accounting_periods @relation(fields: [accounting_period_id], references: [id])
+  createdBy  user_identities?   @relation("investor_payment_creator", fields: [created_by], references: [id], onDelete: Restrict)
+  reversedBy user_identities?   @relation("investor_payment_reverser", fields: [reversed_by], references: [id], onDelete: Restrict)
+
+  @@index([investor_id, accounting_period_id])
   @@schema("fincore")
 }

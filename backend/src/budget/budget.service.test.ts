@@ -128,7 +128,13 @@ describe('BudgetService — Budjet_tarixi parity', () => {
 
   it('izoh/sababni mavjud budget line bilan bir atomar save oqimida saqlaydi', async () => {
     const update = vi.fn().mockResolvedValue({ id: 'line' });
+    const versionUpdateMany = vi.fn().mockResolvedValue({ count: 0 });
+    const versionUpdate = vi.fn().mockResolvedValue({ id: VERSION });
     const tx = {
+      budget_versions: {
+        updateMany: versionUpdateMany,
+        update: versionUpdate,
+      },
       budget_lines: {
         findFirst: vi.fn().mockResolvedValue({ id: 'line' }),
         update,
@@ -200,6 +206,18 @@ describe('BudgetService — Budjet_tarixi parity', () => {
         reason: 'Ijara shartnomasi',
         updated_by: ACTOR,
       },
+    });
+    expect(versionUpdateMany).toHaveBeenCalledWith({
+      where: {
+        period_id: PERIOD,
+        is_applicable: true,
+        id: { not: VERSION },
+      },
+      data: { is_applicable: false },
+    });
+    expect(versionUpdate).toHaveBeenCalledWith({
+      where: { id: VERSION },
+      data: { is_applicable: true },
     });
     expect(result.lines[0]?.reason).toBe('Ijara shartnomasi');
   });

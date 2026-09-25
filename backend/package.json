@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "db:check": "node --env-file=.env scripts/check-db.mjs",
     "bootstrap:admin": "node --env-file=.env scripts/bootstrap-admin.mjs",
+    "bootstrap:owner": "node --env-file=.env scripts/bootstrap-owner.mjs",
     "bootstrap:users": "node --env-file=.env scripts/bootstrap-users.mjs",
     "init:actor-key": "node --env-file=.env scripts/init-actor-key.mjs"
   },

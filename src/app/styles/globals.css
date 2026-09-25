@@ -72,6 +72,13 @@ table {
     linear-gradient(180deg, rgb(6 20 44) 0%, rgb(var(--navy)) 58%, rgb(3 13 30) 100%);
   box-shadow: 20px 0 60px -42px rgba(2, 8, 23, 0.9);
 }
+.fincore-sidebar nav {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.fincore-sidebar nav::-webkit-scrollbar {
+  display: none;
+}
 .fincore-topbar {
   background: rgba(255, 255, 255, 0.82);
   box-shadow:

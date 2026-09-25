@@ -7,11 +7,12 @@ const BRANCH_B = '22222222-2222-4222-8222-222222222222';
 
 interface AssignmentOptions {
   id?: string;
-  role: 'cashier' | 'finance_manager' | 'director';
+  role: 'cashier' | 'finance_manager' | 'director' | 'investor' | 'business_owner';
   branchId?: string | null;
   branchActive?: boolean;
   roleActive?: boolean;
   allowsAllBranchScope?: boolean;
+  allowsBranchlessScope?: boolean;
   permissions?: string[];
 }
 
@@ -23,12 +24,16 @@ function assignment(options: AssignmentOptions) {
     branch:
       branchId === null
         ? null
-        : { name: branchId === BRANCH_A ? 'Sayxun' : 'Xalqlar', is_active: options.branchActive ?? true },
+        : {
+            name: branchId === BRANCH_A ? 'Sayxun' : 'Xalqlar',
+            is_active: options.branchActive ?? true,
+          },
     role: {
       code: options.role,
       name: options.role,
       is_active: options.roleActive ?? true,
       allows_all_branch_scope: options.allowsAllBranchScope ?? false,
+      allows_branchless_scope: options.allowsBranchlessScope ?? false,
       role_permissions: (options.permissions ?? []).map((code) => ({ permission: { code } })),
     },
   };
@@ -53,10 +58,7 @@ describe('AuthService branch write policy', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    findMany.mockResolvedValue([
-      { id: BRANCH_A },
-      { id: BRANCH_B },
-    ]);
+    findMany.mockResolvedValue([{ id: BRANCH_A }, { id: BRANCH_B }]);
     service = new AuthService({
       db: {
         users: { findUnique },
@@ -125,7 +127,9 @@ describe('AuthService branch write policy', () => {
 
   it('keeps a branch-scoped cashier on its assigned active branch', async () => {
     findUnique.mockResolvedValue(
-      storedUser([assignment({ role: 'cashier', branchId: BRANCH_A, permissions: ['revenue.create'] })]),
+      storedUser([
+        assignment({ role: 'cashier', branchId: BRANCH_A, permissions: ['revenue.create'] }),
+      ]),
     );
 
     const user = await service.getAuthenticatedUser('user-id');
@@ -137,9 +141,7 @@ describe('AuthService branch write policy', () => {
 
   it('excludes inactive explicit branches from write scope', async () => {
     findUnique.mockResolvedValue(
-      storedUser([
-        assignment({ role: 'cashier', branchId: BRANCH_A, branchActive: false }),
-      ]),
+      storedUser([assignment({ role: 'cashier', branchId: BRANCH_A, branchActive: false })]),
     );
 
     const user = await service.getAuthenticatedUser('user-id');
@@ -180,5 +182,139 @@ describe('AuthService branch write policy', () => {
         }),
       }),
     );
+  });
+});
+
+/**
+ * PHASE 47 — a branchless role (the investor) reads company-wide because it has
+ * no branch dimension, but that must never become a write scope.
+ */
+describe('AuthService branchless scope', () => {
+  const findUnique = vi.fn();
+  const findMany = vi.fn();
+  let service: AuthService;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    findMany.mockResolvedValue([{ id: BRANCH_A }, { id: BRANCH_B }]);
+    service = new AuthService({
+      db: { users: { findUnique }, branches: { findMany } },
+    } as unknown as PrismaService);
+  });
+
+  it('gives a branchless role company-wide READ and no write scope', async () => {
+    findUnique.mockResolvedValue(
+      storedUser([
+        assignment({
+          role: 'investor',
+          branchId: null,
+          allowsBranchlessScope: true,
+          permissions: ['investor.view_own'],
+        }),
+      ]),
+    );
+
+    const user = await service.getAuthenticatedUser('user-id');
+
+    expect(user.branchScopes).toEqual([BRANCH_A, BRANCH_B]);
+    // The whole point: company-wide READ is not company-wide WRITE.
+    expect(user.writeBranchScopes).toEqual([]);
+    expect(user.permissions).toEqual(['investor.view_own']);
+  });
+
+  it('does not let a branchless role inherit any mutation permission', async () => {
+    findUnique.mockResolvedValue(
+      storedUser([
+        assignment({
+          role: 'investor',
+          branchId: null,
+          allowsBranchlessScope: true,
+          permissions: ['investor.view_own'],
+        }),
+      ]),
+    );
+
+    const user = await service.getAuthenticatedUser('user-id');
+    for (const denied of [
+      'expense.create',
+      'revenue.create',
+      'budget.create_edit',
+      'user.manage',
+      'investor.manage',
+      'investor.view_all',
+    ])
+      expect(user.permissions).not.toContain(denied);
+  });
+
+  it('leaves a role with neither capability branch-scoped', async () => {
+    findUnique.mockResolvedValue(
+      storedUser([
+        assignment({ role: 'cashier', branchId: BRANCH_A, permissions: ['expense.create'] }),
+      ]),
+    );
+
+    const user = await service.getAuthenticatedUser('user-id');
+    expect(user.branchScopes).toEqual([BRANCH_A]);
+    expect(user.writeBranchScopes).toEqual([BRANCH_A]);
+  });
+
+  it('keeps allows_all_branch_scope working on its own', async () => {
+    findUnique.mockResolvedValue(
+      storedUser([
+        assignment({
+          role: 'finance_manager',
+          allowsAllBranchScope: true,
+          permissions: ['reports.view'],
+        }),
+      ]),
+    );
+
+    const user = await service.getAuthenticatedUser('user-id');
+    expect(user.branchScopes).toEqual([BRANCH_A, BRANCH_B]);
+    // finance_manager is not a global writer, so read-all never became write-all.
+    expect(user.writeBranchScopes).toEqual([]);
+  });
+});
+
+describe('AuthService Business Owner scope', () => {
+  it('resolves every active branch for read and never creates a write scope', async () => {
+    const findUnique = vi.fn().mockResolvedValue(
+      storedUser([
+        assignment({
+          role: 'business_owner',
+          allowsAllBranchScope: true,
+          permissions: [
+            'dashboard.view',
+            'expense.view_all_branches',
+            'revenue.view_all_branches',
+            'budget.view',
+            'reports.view',
+            'investor.view_all',
+            'audit.view',
+          ],
+        }),
+      ]),
+    );
+    const findMany = vi.fn().mockResolvedValue([{ id: BRANCH_A }, { id: BRANCH_B }]);
+    const service = new AuthService({
+      db: { users: { findUnique }, branches: { findMany } },
+    } as unknown as PrismaService);
+
+    const user = await service.getAuthenticatedUser('owner-id');
+
+    expect(user.branchScopes).toEqual([BRANCH_A, BRANCH_B]);
+    expect(user.writeBranchScopes).toEqual([]);
+    expect(user.roles[0]).toMatchObject({ role: 'business_owner' });
+    for (const denied of [
+      'revenue.create',
+      'expense.create',
+      'budget.create_edit',
+      'investor.manage',
+      'investor.settlement.approve',
+      'investor.settlement.pay',
+      'user.manage',
+      'role.manage',
+    ])
+      expect(user.permissions).not.toContain(denied);
   });
 });

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, type ReactNode } from 'react';
 import { authApi } from '@/shared/api/contracts';
-import { ApiError } from '@/shared/api/client';
+import { ApiError, onSessionExpired } from '@/shared/api/client';
 import { queryKeys } from '@/shared/api/query-keys';
 import type { AuthenticatedUser, PermissionCode } from '@/shared/types/domain';
 
@@ -25,6 +25,14 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
+  useEffect(
+    () =>
+      onSessionExpired(() => {
+        queryClient.setQueryData(queryKeys.me, null);
+        queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== 'auth' });
+      }),
+    [queryClient],
+  );
   const me = useQuery({
     queryKey: queryKeys.me,
     queryFn: ({ signal }) => authApi.me(signal),

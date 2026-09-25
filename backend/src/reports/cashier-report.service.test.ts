@@ -171,6 +171,61 @@ describe('CashierReportService (PHASE 19)', () => {
     expect(queryRaw).not.toHaveBeenCalled();
   });
 
+  it('narrows a full reader to their own row when scope=own is asked for', async () => {
+    // "Mening natijam" for somebody who may also read everyone. Without this
+    // the entry would open the same full report twice under two labels.
+    const ownMetric = [{ branch_id: BRANCH_A, user_id: CASHIER_A, total_uzs: 70n, salary: '10' }];
+    const ownDays = [{ branch_id: BRANCH_A, user_id: CASHIER_A, days: 1 }];
+    const { service } = setupQueryResults([branchRows, rosterRows, ownMetric, ownDays]);
+    const viewer = authenticatedUser({
+      id: CASHIER_A,
+      permissions: ['reports.view_cashiers', 'reports.view_own_performance'],
+    });
+
+    const result = await service.get(viewer, PERIOD_ID, BRANCH_A, 'own');
+
+    expect(result.scope).toBe('own');
+    expect(result.branches[0]?.cashiers).toHaveLength(1);
+    expect(result.branches[0]?.cashiers[0]).toMatchObject({ userId: CASHIER_A });
+  });
+
+  it('still shows everyone when scope is not asked for', async () => {
+    const metrics = [
+      { branch_id: BRANCH_A, user_id: CASHIER_A, total_uzs: 70n, salary: '10' },
+      { branch_id: BRANCH_A, user_id: CASHIER_B, total_uzs: 0n, salary: '20' },
+    ];
+    const days = [{ branch_id: BRANCH_A, user_id: CASHIER_A, days: 2 }];
+    const { service } = setupQueryResults([branchRows, rosterRows, metrics, days]);
+
+    const result = await service.get(authenticatedUser(), PERIOD_ID, 'all');
+    expect(result.scope).toBe('all');
+  });
+
+  it('never widens: scope=own cannot give a self-only reader anybody else', async () => {
+    // The parameter only narrows. A reader without reports.view_cashiers gets
+    // their own row whether they ask for it or not.
+    const ownMetric = [{ branch_id: BRANCH_A, user_id: CASHIER_A, total_uzs: 70n, salary: '10' }];
+    const ownDays = [{ branch_id: BRANCH_A, user_id: CASHIER_A, days: 1 }];
+    const { service } = setupQueryResults([branchRows, rosterRows, ownMetric, ownDays]);
+    const viewer = authenticatedUser({
+      id: CASHIER_A,
+      permissions: ['reports.view_own_performance'],
+    });
+
+    const result = await service.get(viewer, PERIOD_ID, BRANCH_A, 'own');
+    expect(result.scope).toBe('own');
+    expect(result.branches[0]?.cashiers).toHaveLength(1);
+  });
+
+  it('refuses a reader holding neither report permission, scope or no scope', async () => {
+    const { service } = setupQueryResults([branchRows, rosterRows, [], []]);
+    const stranger = authenticatedUser({ permissions: ['expense.create'] });
+
+    await expect(service.get(stranger, PERIOD_ID, 'all', 'own')).rejects.toMatchObject({
+      status: 403,
+    });
+  });
+
   it('rejects an out-of-scope branch before executing financial report queries', async () => {
     const { service, accountingPeriods, queryRaw } = setupQueryResults([]);
 

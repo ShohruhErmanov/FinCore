@@ -21,6 +21,8 @@ vi.mock('recharts', () => {
   const Container = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
   return {
     ResponsiveContainer: Container,
+    AreaChart: Container,
+    Area: Container,
     BarChart: Container,
     CartesianGrid: Container,
     Legend: Container,
@@ -31,6 +33,8 @@ vi.mock('recharts', () => {
     XAxis: Container,
     YAxis: Container,
     Bar: Container,
+    LineChart: Container,
+    Line: Container,
   };
 });
 
@@ -56,6 +60,94 @@ const dashboardResponse: DashboardResponse = {
   revenueVarianceUzs: '-114000000',
   revenueCompletionPct: 62,
   revenueTrend: trend,
+  // Two months with data, one of them a loss, so the section has something
+  // real to render: a best month, a worst month and a gap.
+  revenueGrowth: {
+    monthly: {
+      month: 8,
+      monthLabel: 'Avg',
+      previousMonth: 7,
+      previousMonthLabel: 'Iyul',
+      currentUzs: '50000000',
+      previousUzs: '20000000',
+      changePct: 150,
+      throughDay: null,
+    },
+    annual: {
+      year: 2026,
+      previousYear: 2025,
+      currentUzs: '70000000',
+      previousUzs: '59000000',
+      changePct: 18.6,
+    },
+  },
+  annualRevenue: {
+    year: 2026,
+    totalActualUzs: '70000000',
+    totalPlanUzs: '80000000',
+    completionPct: 87.5,
+    averageMonthlyUzs: '35000000',
+    averageMonthsCount: 2,
+    peakMonth: { month: 8, label: 'Avg', actualUzs: '50000000' },
+    growthPct: 18.7,
+    previousYear: 2025,
+    previousYearUzs: '59000000',
+    months: Array.from({ length: 12 }, (_, index) => ({
+      month: index + 1,
+      label: ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyun', 'Iyul', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'][
+        index
+      ]!,
+      actualUzs: index === 6 ? '20000000' : index === 7 ? '50000000' : '0',
+      planUzs: index === 6 ? '30000000' : index === 7 ? '50000000' : '0',
+      completionPct: index === 6 ? 66.67 : index === 7 ? 100 : null,
+    })),
+  },
+  annualNetProfit: {
+    year: 2026,
+    totalNetProfitUzs: '19000000',
+    netMarginPct: 27.14,
+    bestMonth: { month: 8, label: 'Avg', netProfitUzs: '24000000' },
+    worstMonth: { month: 7, label: 'Iyul', netProfitUzs: '-5000000' },
+    monthsWithData: 2,
+    months: Array.from({ length: 12 }, (_, index) => {
+      const month = index + 1;
+      const july = month === 7;
+      const august = month === 8;
+      const hasData = july || august;
+      return {
+        month,
+        label: [
+          'Yan',
+          'Fev',
+          'Mar',
+          'Apr',
+          'May',
+          'Iyun',
+          'Iyul',
+          'Avg',
+          'Sen',
+          'Okt',
+          'Noy',
+          'Dek',
+        ][index]!,
+        revenueUzs: july ? '20000000' : august ? '50000000' : '0',
+        expenseUzs: july ? '25000000' : august ? '26000000' : '0',
+        netProfitUzs: july ? '-5000000' : august ? '24000000' : '0',
+        changePct: august ? 580 : null,
+        comparedToLabel: august ? 'Iyul' : null,
+        hasData,
+      };
+    }),
+    paymentMethods: [],
+    paymentMethodMonths: Array.from({ length: 12 }, (_, index) => ({
+      month: index + 1,
+      label: ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyun', 'Iyul', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'][
+        index
+      ]!,
+      totalNetProfitUzs: index === 6 ? '-5000000' : index === 7 ? '24000000' : '0',
+      paymentMethods: [],
+    })),
+  },
   annual: {
     year: 2026,
     totalActualUzs: '170000000',
@@ -162,6 +254,19 @@ describe('[FE-MSW, AC-14, AC-16] dashboard integration', () => {
     expect(screen.queryByText('O‘zgaruvchan xarajat')).not.toBeInTheDocument();
   });
 
+  it('reja va amaldagi diagrammada jami hamda bajarilishni tushunarli ko‘rsatadi', async () => {
+    renderDashboard();
+
+    const revenueChart = await screen.findByRole('region', {
+      name: 'Tushum reja va amalda diagrammasi',
+    });
+    expect(within(revenueChart).getByText('Reja jami')).toBeInTheDocument();
+    expect(within(revenueChart).getByText('580 mln')).toBeInTheDocument();
+    expect(within(revenueChart).getByText('Amalda jami')).toBeInTheDocument();
+    expect(within(revenueChart).getByText('446 mln')).toBeInTheDocument();
+    expect(within(revenueChart).getByText('76,89%')).toBeInTheDocument();
+  });
+
   it('Excel «Xulosa» ko‘rsatkichlarini va oylik dinamika jadvalini chiqaradi', async () => {
     renderDashboard();
 
@@ -171,7 +276,9 @@ describe('[FE-MSW, AC-14, AC-16] dashboard integration', () => {
     expect(screen.getByText('O‘rtacha oylik xarajat')).toBeInTheDocument();
     expect(screen.getByText('Fakt mavjud 2 oy bo‘yicha')).toBeInTheDocument();
     expect(screen.getByText('Eng qimmat oy')).toBeInTheDocument();
-    expect(screen.getByText('Avg oyi')).toBeInTheDocument();
+    // Scoped: the net-profit section below names its best month the same way.
+    const summary = screen.getByRole('region', { name: 'Yillik xulosa' });
+    expect(within(summary).getByText('Avg oyi')).toBeInTheDocument();
     expect(screen.getByText('Doimiy xarajatlar (yil)')).toBeInTheDocument();
     expect(screen.getByText('O‘zgaruvchan xarajatlar (yil)')).toBeInTheDocument();
     expect(screen.getByText('O‘rtacha kiritilgan oylik reja')).toBeInTheDocument();

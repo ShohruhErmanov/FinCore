@@ -38,9 +38,9 @@ import {
 import {
   averageMonthlyPlan,
   buildMonthlyReportMatrix,
-  type MonthlyMoneySummary,
   type MonthlyReportSectionSummary,
 } from './monthly-report';
+import { MonthlyReportDashboard, MonthlyReportSkeleton } from './monthly-report-dashboard';
 
 const monthNames = [
   'Yan',
@@ -249,32 +249,6 @@ function InsightList({
   );
 }
 
-function monthlySummaryPlanActual(value: MonthlyMoneySummary): PlanActual {
-  const actual = BigInt(value.actualAmountUzs);
-  const planned = value.plannedAmountUzs === null ? null : BigInt(value.plannedAmountUzs);
-  const completionPercent =
-    planned === null || planned === 0n
-      ? null
-      : Number((actual * 10_000n + planned / 2n) / planned) / 100;
-  return {
-    hasPlan: planned !== null,
-    plannedAmountUzs: value.plannedAmountUzs,
-    actualAmountUzs: value.actualAmountUzs,
-    varianceUzs: value.varianceUzs,
-    completionPercent,
-    status:
-      planned === null
-        ? actual > 0n
-          ? 'unplanned'
-          : 'no_plan'
-        : actual > planned
-          ? 'over_plan'
-          : actual < planned
-            ? 'under_plan'
-            : 'on_plan',
-  };
-}
-
 function exportMonthlyReport(report: MonthlyReport) {
   const matrix = buildMonthlyReportMatrix(report);
   const rows: Array<Array<string | number | null>> = [
@@ -333,7 +307,9 @@ export function MonthlyReportPage() {
     staleTime: 300_000,
   });
   const requestedPeriod = searchParams.get('period');
-  const selectedPeriod = periodsQuery.data?.find((period) => period.id === requestedPeriod);
+  const selectedPeriod = requestedPeriod
+    ? periodsQuery.data?.find((period) => period.id === requestedPeriod)
+    : (periodsQuery.data?.find((period) => period.status === 'open') ?? periodsQuery.data?.[0]);
   const now = new Date();
   const year = String(selectedPeriod?.year ?? now.getFullYear());
   const month = selectedPeriod?.month ?? now.getMonth() + 1;
@@ -342,15 +318,23 @@ export function MonthlyReportPage() {
   const reportQuery = useQuery({
     queryKey: queryKeys.report('monthly', filterKey),
     queryFn: ({ signal }) => reportApi.monthly({ year, branch }, signal),
-    enabled: !requestedPeriod || periodsQuery.isSuccess,
+    enabled: Boolean(selectedPeriod),
+  });
+  const branchesQuery = useQuery({
+    queryKey: queryKeys.report('branches', filterKey),
+    queryFn: ({ signal }) => reportApi.branchComparison({ year, month, branch }, signal),
+    enabled: Boolean(selectedPeriod),
   });
 
+  const isLoading = periodsQuery.isLoading || reportQuery.isLoading || branchesQuery.isLoading;
+  const hasError = periodsQuery.isError || reportQuery.isError || branchesQuery.isError;
+
   return (
-    <div>
+    <div className="min-w-0 space-y-6">
       <Breadcrumbs items={[{ label: 'Hisobotlar' }, { label: 'Oylik hisobot', current: true }]} />
       <PageHeader
         title="Oylik hisobot"
-        description={`${monthLongNames[month - 1]} ${year} uchun reja-fakt va eng muhim xarajat xulosalari.`}
+        description={`Xarajat reja-fakti va filiallar natijasi · ${monthLongNames[month - 1]} ${year}`}
         actions={
           <Button
             variant="secondary"
@@ -361,61 +345,31 @@ export function MonthlyReportPage() {
           </Button>
         }
       />
-      {reportQuery.isLoading || (requestedPeriod && periodsQuery.isLoading) ? (
-        <LoadingState label="Oylik hisobot hisoblanmoqda…" />
+      {isLoading ? <MonthlyReportSkeleton /> : null}
+      {periodsQuery.isSuccess && !selectedPeriod ? (
+        <EmptyState
+          title="Hisob davri mavjud emas"
+          description="Oylik hisobot uchun hisob davri topilmadi."
+        />
       ) : null}
-      {reportQuery.isError ? (
+      {hasError ? (
         <ErrorState
-          message={getApiErrorMessage(reportQuery.error)}
-          onRetry={() => void reportQuery.refetch()}
+          message="Hisobotni yuklab bo‘lmadi."
+          onRetry={() => {
+            void periodsQuery.refetch();
+            void reportQuery.refetch();
+            void branchesQuery.refetch();
+          }}
         />
       ) : null}
-      {reportQuery.data ? <MonthlyReportContent report={reportQuery.data} month={month} /> : null}
+      {!isLoading && !hasError && reportQuery.data && branchesQuery.data ? (
+        <MonthlyReportDashboard
+          report={reportQuery.data}
+          comparison={branchesQuery.data}
+          month={month}
+        />
+      ) : null}
     </div>
-  );
-}
-
-function MonthlyReportContent({ report, month }: { report: MonthlyReport; month: number }) {
-  if (!report.rows.length)
-    return (
-      <EmptyState
-        title="Hisobot ma’lumoti yo‘q"
-        description="Navbar’da tanlangan oy va filial uchun kategoriya agregatlari topilmadi."
-      />
-    );
-  const matrix = buildMonthlyReportMatrix(report);
-  const monthIndex = Math.max(0, Math.min(month - 1, 11));
-  const monthLabel = monthLongNames[monthIndex] ?? String(month);
-  const insights = report.rows
-    .map((row) => {
-      const selected = row.months.find((item) => item.month === month)?.planActual;
-      return selected
-        ? planActualInsight(row.category.id, `${row.category.name} xarajati`, selected)
-        : null;
-    })
-    .filter((item): item is ReportInsight => item !== null);
-  return (
-    <>
-      <div className="mb-5 grid gap-4 lg:grid-cols-3">
-        <PlanActualSummary
-          title="Doimiy jami"
-          data={monthlySummaryPlanActual(matrix.fixed.months[monthIndex]!)}
-        />
-        <PlanActualSummary
-          title="O‘zgaruvchan jami"
-          data={monthlySummaryPlanActual(matrix.variable.months[monthIndex]!)}
-        />
-        <PlanActualSummary
-          title="Umumiy jami"
-          data={monthlySummaryPlanActual(matrix.overall.months[monthIndex]!)}
-        />
-      </div>
-      <InsightList
-        title={`${monthLabel} ${report.year} · asosiy xulosalar`}
-        description="Uzun jadval o‘rniga reja-faktdagi eng muhim og‘ishlar. To‘liq ma’lumot CSV’da saqlanadi."
-        insights={insights}
-      />
-    </>
   );
 }
 
