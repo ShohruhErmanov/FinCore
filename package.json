@@ -58,5 +58,10 @@
     "workerDirectory": [
       "public"
     ]
+  },
+  "overrides": {
+    "exceljs": {
+      "uuid": "^11.1.1"
+    }
   }
 }

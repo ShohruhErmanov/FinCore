@@ -97,7 +97,9 @@ function Tile({ label, value, helper }: { label: string; value: React.ReactNode;
  * foydalanuvchiga ham faqat o‘z qatorini qaytaradi. Kengaytirmaydi — server
  * "own" ichida nima borligini baribir o‘zi hal qiladi.
  */
-export function CashierReportPage({ ownScope: ownScopeRoute = false }: { ownScope?: boolean } = {}) {
+export function CashierReportPage({
+  ownScope: ownScopeRoute = false,
+}: { ownScope?: boolean } = {}) {
   const [searchParams] = useSearchParams();
   const periods = useQuery({
     queryKey: queryKeys.periods,
@@ -116,7 +118,10 @@ export function CashierReportPage({ ownScope: ownScopeRoute = false }: { ownScop
       `period=${period}&branch=${branch}${ownScopeRoute ? '&scope=own' : ''}`,
     ),
     queryFn: ({ signal }) =>
-      reportApi.cashiers({ period, branch, ...(ownScopeRoute ? { scope: 'own' as const } : {}) }, signal),
+      reportApi.cashiers(
+        { period, branch, ...(ownScopeRoute ? { scope: 'own' as const } : {}) },
+        signal,
+      ),
     enabled: Boolean(period),
   });
 
@@ -377,8 +382,7 @@ function CashierReportContent({ report }: { report: CashierReport }) {
       <Alert title="Reja qanday bo‘linadi" tone="info" className="mt-5">
         Kassirning rejasi — <strong>markazning oylik tushum rejasi</strong> shu filialdagi{' '}
         <strong>faol</strong> kassirlar orasida teng bo‘lingani. Nofaol xodimga reja berilmaydi,
-        lekin uning tarixiy tushumi hisobotdan yo‘qolmaydi. Fix oylikni «Foydalanuvchilar»
-        sahifasida o‘zgartirasiz.
+        lekin uning tarixiy tushumi hisobotdan yo‘qolmaydi.
       </Alert>
     </>
   );

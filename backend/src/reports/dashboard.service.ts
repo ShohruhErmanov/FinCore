@@ -90,7 +90,13 @@ export interface DashboardResponse {
   };
   annualRevenue: AnnualRevenue;
   revenueGrowth: RevenueGrowth;
-  annualNetProfit: AnnualNetProfit & { netMarginPct: number | null };
+  /**
+   * Company profit is deliberately absent for operational-only roles such as
+   * Cashier. Optionality is part of the wire contract: clients must not infer
+   * authorization from zeroes or receive a redacted object that still leaks
+   * payment-method/monthly profit structure.
+   */
+  annualNetProfit?: AnnualNetProfit & { netMarginPct: number | null };
   branches: Array<{
     branchId: string;
     name: string;
@@ -256,6 +262,7 @@ export class DashboardService {
       orderBy: { code: 'asc' },
     });
 
+    const canViewNetProfit = this.canViewNetProfit(user);
     const [
       expense,
       revenue,
@@ -274,7 +281,9 @@ export class DashboardService {
       this.perBranchTotals(period.id, branchIds),
       this.annualSummary(period.year, branchIds),
       this.monthlyRevenue(period.year, branchIds),
-      this.annualNetProfitByPaymentMethod(period.year, branchIds),
+      canViewNetProfit
+        ? this.annualNetProfitByPaymentMethod(period.year, branchIds)
+        : Promise.resolve([]),
       this.revenueBetween(monthlyGrowthSpans(period.year, period.month), branchIds),
       this.buildTrends(granularity, period, branchIds),
       period.closed_by
@@ -290,27 +299,41 @@ export class DashboardService {
       monthlyRevenue.byMonth,
       monthlyRevenue.previousYearTotal,
     );
-    const netProfit = buildAnnualNetProfit(
-      period.year,
-      new Map([...monthlyRevenue.byMonth].map(([month, row]) => [month, row.actual])),
-      new Map(annual.months.map((row) => [row.month, BigInt(row.actualUzs)])),
-    );
-    const paymentMethodBreakdown = buildNetProfitPaymentMethodBreakdown(paymentMethodNetProfitRows);
-    const paymentMethodTotal = paymentMethodBreakdown.paymentMethods.reduce(
-      (total, method) => total + BigInt(method.netProfitUzs),
-      0n,
-    );
-    const monthsReconcile = netProfit.months.every(
-      (month) =>
-        paymentMethodBreakdown.paymentMethodMonths.find((row) => row.month === month.month)
-          ?.totalNetProfitUzs === month.netProfitUzs,
-    );
-    if (paymentMethodTotal !== BigInt(netProfit.totalNetProfitUzs) || !monthsReconcile)
-      throw new ApiException(
-        500,
-        'REPORT_RECONCILIATION_FAILED',
-        'Sof foyda to‘lov usullari bo‘yicha yillik jami bilan mos kelmadi.',
+    let annualNetProfit: DashboardResponse['annualNetProfit'];
+    if (canViewNetProfit) {
+      const netProfit = buildAnnualNetProfit(
+        period.year,
+        new Map([...monthlyRevenue.byMonth].map(([month, row]) => [month, row.actual])),
+        new Map(annual.months.map((row) => [row.month, BigInt(row.actualUzs)])),
       );
+      const paymentMethodBreakdown = buildNetProfitPaymentMethodBreakdown(
+        paymentMethodNetProfitRows,
+      );
+      const paymentMethodTotal = paymentMethodBreakdown.paymentMethods.reduce(
+        (total, method) => total + BigInt(method.netProfitUzs),
+        0n,
+      );
+      const monthsReconcile = netProfit.months.every(
+        (month) =>
+          paymentMethodBreakdown.paymentMethodMonths.find((row) => row.month === month.month)
+            ?.totalNetProfitUzs === month.netProfitUzs,
+      );
+      if (paymentMethodTotal !== BigInt(netProfit.totalNetProfitUzs) || !monthsReconcile)
+        throw new ApiException(
+          500,
+          'REPORT_RECONCILIATION_FAILED',
+          'Sof foyda to‘lov usullari bo‘yicha yillik jami bilan mos kelmadi.',
+        );
+
+      annualNetProfit = {
+        ...netProfit,
+        ...paymentMethodBreakdown,
+        netMarginPct: netMarginPct(
+          BigInt(netProfit.totalNetProfitUzs),
+          BigInt(annualRevenue.totalActualUzs),
+        ),
+      };
+    }
 
     return {
       isDemo: false,
@@ -348,16 +371,10 @@ export class DashboardService {
           previous: monthlyRevenue.previousYearTotal,
         },
       ),
-      // The total still reuses the revenue/expense aggregates already loaded;
-      // payment-method detail comes from one additional grouped query.
-      annualNetProfit: {
-        ...netProfit,
-        ...paymentMethodBreakdown,
-        netMarginPct: netMarginPct(
-          BigInt(netProfit.totalNetProfitUzs),
-          BigInt(annualRevenue.totalActualUzs),
-        ),
-      },
+      // Omit the property entirely for Cashier. Sending zero/null/redacted
+      // subfields would still disclose the existence and shape of a protected
+      // company-profit aggregate in DevTools Network.
+      ...(annualNetProfit ? { annualNetProfit } : {}),
       branches: branches.map((branch) => {
         const totals = perBranch.get(branch.id) ?? {
           expense: { planned: 0n, actual: 0n },
@@ -375,6 +392,18 @@ export class DashboardService {
         };
       }),
     };
+  }
+
+  /**
+   * Existing role policy without a schema change. Finance Manager may also
+   * carry a secondary Cashier assignment; an allow-list preserves that
+   * legitimate management access while a pure Cashier remains denied.
+   * Investor profit-share is intentionally unrelated and is not listed here.
+   */
+  private canViewNetProfit(user: AuthenticatedUser): boolean {
+    return user.roles.some((assignment) =>
+      ['director', 'business_owner', 'finance_manager'].includes(assignment.role),
+    );
   }
 
   /**

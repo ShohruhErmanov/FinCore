@@ -20,6 +20,7 @@ import type {
   MoneyUzs,
   PaginatedResponse,
   RevenuePlanBoard,
+  RevenuePlanYear,
   TelegramSettings,
   TelegramLinkStatus,
   TelegramSettingsInput,
@@ -571,6 +572,100 @@ function buildRevenuePlanBoard(periodId: string): RevenuePlanBoard {
   };
 }
 
+/** Mirrors backend/src/revenue-plans/revenue-plan-year.ts on the mock's own rows. */
+function buildRevenuePlanYear(year: number): RevenuePlanYear {
+  const short = [
+    'Yan',
+    'Fev',
+    'Mar',
+    'Apr',
+    'May',
+    'Iyn',
+    'Iyl',
+    'Avg',
+    'Sen',
+    'Okt',
+    'Noy',
+    'Dek',
+  ];
+  const pct = (actual: bigint, planned: bigint | null) =>
+    planned === null || planned === 0n
+      ? null
+      : percentageValue(actual.toString(), planned.toString());
+  const totals = new Map(
+    branches.map((branch) => [branch.id, { planned: 0n, actual: 0n, against: 0n, months: 0 }]),
+  );
+  const yearTotals = { planned: 0n, actual: 0n, against: 0n, months: 0 };
+
+  const months = short.map((label, index) => {
+    const period = periodRows.find((row) => row.year === year && row.month === index + 1);
+    let planned: bigint | null = null;
+    let actual = 0n;
+    let against = 0n;
+    const cells = branches.map((branch) => {
+      const plan = period ? revenuePlanFor(period.id, branch.id) : null;
+      const fact = period ? BigInt(monthlyRevenueActualUzs(period.id, new Set([branch.id]))) : 0n;
+      const branchTotals = totals.get(branch.id)!;
+      actual += fact;
+      branchTotals.actual += fact;
+      if (plan !== null) {
+        planned = (planned ?? 0n) + BigInt(plan);
+        against += fact;
+        branchTotals.planned += BigInt(plan);
+        branchTotals.against += fact;
+        branchTotals.months += 1;
+      }
+      return {
+        branchId: branch.id,
+        plannedAmountUzs: plan,
+        actualAmountUzs: fact.toString(),
+        completionPercent: pct(fact, plan === null ? null : BigInt(plan)),
+      };
+    });
+    yearTotals.actual += actual;
+    if (planned !== null) {
+      yearTotals.planned += planned;
+      yearTotals.against += against;
+      yearTotals.months += 1;
+    }
+    return {
+      month: index + 1,
+      label,
+      periodId: period?.id ?? null,
+      plannedAmountUzs: planned === null ? null : (planned as bigint).toString(),
+      actualAmountUzs: actual.toString(),
+      actualAgainstPlanUzs: against.toString(),
+      completionPercent: pct(against, planned),
+      branches: cells,
+    };
+  });
+
+  return {
+    year,
+    plannedAmountUzs: yearTotals.planned.toString(),
+    actualAmountUzs: yearTotals.actual.toString(),
+    actualAgainstPlanUzs: yearTotals.against.toString(),
+    completionPercent: pct(yearTotals.against, yearTotals.months ? yearTotals.planned : null),
+    plannedMonths: yearTotals.months,
+    branches: branches.map((branch) => {
+      const branchTotals = totals.get(branch.id)!;
+      return {
+        branchId: branch.id,
+        branchName: branch.name,
+        plannedAmountUzs: branchTotals.planned.toString(),
+        actualAmountUzs: branchTotals.actual.toString(),
+        actualAgainstPlanUzs: branchTotals.against.toString(),
+        completionPercent: pct(
+          branchTotals.against,
+          branchTotals.months ? branchTotals.planned : null,
+        ),
+        plannedMonths: branchTotals.months,
+      };
+    }),
+    months,
+  };
+}
+
 /** Tanlangan filial(lar)ning umumiy rejadagi ulushi — tarixiy oylarni masshtablash uchun. */
 function branchSharePercent(branchIds: Set<string>, kind: 'revenue' | 'expense'): bigint {
   const all = new Set(branches.map((branch) => branch.id));
@@ -948,6 +1043,7 @@ function buildDashboard(
   branchId: string | null,
   periodId: string,
   granularity: TrendGranularity,
+  canViewNetProfit = true,
 ): DashboardResponse {
   const selectedBranches = branches.filter((branch) => !branchId || branch.id === branchId);
   const selectedBranchIds = new Set(selectedBranches.map((branch) => branch.id));
@@ -1023,7 +1119,9 @@ function buildDashboard(
     annual: buildAnnualSummary(period.year, selectedBranchIds),
     annualRevenue: buildAnnualRevenue(period.year, selectedBranchIds),
     revenueGrowth: buildRevenueGrowth(period.year, period.month, selectedBranchIds),
-    annualNetProfit: buildAnnualNetProfit(period.year, selectedBranchIds),
+    ...(canViewNetProfit
+      ? { annualNetProfit: buildAnnualNetProfit(period.year, selectedBranchIds) }
+      : {}),
     branches: branchMetrics,
   };
 }
@@ -1551,7 +1649,10 @@ export const handlers = [
       requestedGranularity === 'daily' || requestedGranularity === 'weekly'
         ? requestedGranularity
         : 'monthly';
-    return ok(buildDashboard(branchId, periodId, granularity));
+    const canViewNetProfit = user.roles.some((assignment) =>
+      ['director', 'business_owner', 'finance_manager'].includes(assignment.role),
+    );
+    return ok(buildDashboard(branchId, periodId, granularity, canViewNetProfit));
   }),
 
   http.get(`${API}/reports/expense-analytics`, ({ request }) => {
@@ -1677,7 +1778,13 @@ export const handlers = [
     if (!old) return problem(404, 'EXPENSE_NOT_FOUND', 'Xarajat topilmadi.');
     if (!canWriteBranch(user, old.branchId))
       return problem(403, 'BRANCH_SCOPE_DENIED', 'Filial scope mos emas.');
-    const body = (await request.json()) as Partial<ExpenseCreateInput>;
+    const body = (await request.json()) as Partial<ExpenseCreateInput> & { editReason?: string };
+    if (hasRole(user, 'cashier') && !body.editReason?.trim())
+      return problem(
+        422,
+        'EDIT_REASON_REQUIRED',
+        'Kassir tahrirlashi uchun izoh kiritish majburiy.',
+      );
     if (body.amountUzs !== undefined && !isPositiveMoney(body.amountUzs))
       return problem(422, 'AMOUNT_INVALID', 'Summa musbat butun so‘mda bo‘lishi kerak.');
     const oldPeriod = periodRows.find((period) => period.id === old.periodId);
@@ -1922,7 +2029,13 @@ export const handlers = [
       return problem(403, 'BRANCH_SCOPE_DENIED', 'Filial scope mos emas.');
     if (periodRows.find((row) => row.id === old.periodId)?.status === 'closed')
       return problem(409, 'PERIOD_LOCKED', 'Yopilgan davrdagi tushum tahrirlanmaydi.');
-    const body = (await request.json()) as Partial<DailyRevenueInput>;
+    const body = (await request.json()) as Partial<DailyRevenueInput> & { editReason?: string };
+    if (hasRole(user, 'cashier') && !body.editReason?.trim())
+      return problem(
+        422,
+        'EDIT_REASON_REQUIRED',
+        'Kassir tahrirlashi uchun izoh kiritish majburiy.',
+      );
     const cashUzs = body.cashUzs ?? old.cashUzs;
     const cardUzs = body.cardUzs ?? old.cardUzs;
     const transferUzs = body.transferUzs ?? old.transferUzs;
@@ -1944,6 +2057,17 @@ export const handlers = [
     return ok(updated);
   }),
 
+  // Two path segments, so ':periodId' below never sees it.
+  http.get(`${API}/revenue-plans/year/:year`, ({ params }) => {
+    const user = requireUser();
+    if (user instanceof HttpResponse) return user;
+    if (!hasAnyPermission(user, 'revenue_plan.manage', 'reports.view'))
+      return problem(403, 'PERMISSION_DENIED', 'Tushum rejasini ko‘rish huquqi yo‘q.');
+    const year = Number(params.year);
+    if (!Number.isInteger(year) || year < 2000 || year > 2100)
+      return problem(400, 'VALIDATION_ERROR', 'Yil 2000–2100 oralig‘ida bo‘lishi kerak.');
+    return ok(buildRevenuePlanYear(year));
+  }),
   http.get(`${API}/revenue-plans/:periodId`, ({ params }) => {
     const user = requireUser();
     if (user instanceof HttpResponse) return user;
@@ -2045,6 +2169,13 @@ export const handlers = [
     if (!hasPermission(user, 'notification.manage'))
       return problem(403, 'PERMISSION_DENIED', 'Bildirishnoma sozlamalari uchun ruxsat yo‘q.');
     return ok(publicTelegramSettings());
+  }),
+  http.get(`${API}/notifications/inbox`, () => {
+    const user = requireUser();
+    if (user instanceof HttpResponse) return user;
+    if (!hasPermission(user, 'notification.manage'))
+      return problem(403, 'PERMISSION_DENIED', 'Bildirishnomalar uchun ruxsat yo‘q.');
+    return ok([]);
   }),
   http.put(`${API}/notifications/telegram`, async ({ request }) => {
     const user = requireUser();
@@ -2438,6 +2569,42 @@ export const handlers = [
         row.months.filter((month) => month.transactionCount > 0).map((month) => month.month),
       ),
     ).size;
+    const canViewNetProfit = user.roles.some((assignment) =>
+      ['director', 'business_owner', 'finance_manager'].includes(assignment.role),
+    );
+    const financialMonths = canViewNetProfit
+      ? Array.from({ length: 12 }, (_, monthIndex) => {
+          const month = monthIndex + 1;
+          const period = periodRows.find(
+            (candidate) => candidate.year === requestedYear && candidate.month === month,
+          );
+          const revenuePlans = period
+            ? [...selectedBranchIds].flatMap((branchId) => {
+                const value = revenuePlanFor(period.id, branchId);
+                return value === null ? [] : [value];
+              })
+            : [];
+          const revenuePlanUzs = revenuePlans.length ? sumMoney(revenuePlans) : null;
+          const revenueActualUzs = period
+            ? monthlyRevenueActualUzs(period.id, selectedBranchIds)
+            : '0';
+          const expenseActualUzs = sumMoney(
+            rows.map((row) => row.months[monthIndex]!.planActual.actualAmountUzs),
+          );
+          const netProfitUzs = (BigInt(revenueActualUzs) - BigInt(expenseActualUzs)).toString();
+          return {
+            month,
+            revenuePlanUzs,
+            revenueActualUzs,
+            expenseActualUzs,
+            netProfitUzs,
+            revenueCompletionPercent:
+              revenuePlanUzs === null ? null : percentageValue(revenueActualUzs, revenuePlanUzs),
+            netMarginPercent:
+              revenueActualUzs === '0' ? null : percentageValue(netProfitUzs, revenueActualUzs),
+          };
+        })
+      : undefined;
     return ok({
       year: requestedYear,
       branchFilter,
@@ -2452,6 +2619,7 @@ export const handlers = [
         variable: aggregateRows('variable'),
         overall: aggregateRows(),
       },
+      ...(financialMonths ? { financialMonths } : {}),
     });
   }),
   http.get(`${API}/reports/branch-comparison`, ({ request }) => {
@@ -2878,6 +3046,41 @@ export const handlers = [
         };
     }
     return ok(created, 201);
+  }),
+  // Mirrors AdminUsersService.updatePassword. The mock keeps no passwords
+  // (login accepts the shared demo one), so it only validates and answers 204.
+  http.put(`${API}/users/:id/password`, async ({ params, request }) => {
+    const actor = requireUser();
+    if (actor instanceof HttpResponse) return actor;
+    if (!hasPermission(actor, 'user.manage'))
+      return problem(403, 'PERMISSION_DENIED', 'Foydalanuvchi parolini boshqarish huquqi yo‘q.');
+    const item = userRows.find((row) => row.id === params.id);
+    if (!item) return problem(404, 'USER_NOT_FOUND', 'Foydalanuvchi topilmadi.');
+    const self = item.id === actor.id;
+    if (!self && hasRole(item, 'director') && !hasRole(actor, 'director'))
+      return problem(
+        403,
+        'PRIVILEGE_ESCALATION_DENIED',
+        'Direktor parolini faqat direktor o‘zgartirishi mumkin.',
+      );
+    const body = (await request.json()) as {
+      password?: string;
+      confirmPassword?: string;
+      currentPassword?: string;
+    };
+    if ((body.password ?? '').length < 12)
+      return problem(400, 'VALIDATION_ERROR', 'Parol kamida 12 belgidan iborat bo‘lishi kerak');
+    if (body.password !== body.confirmPassword)
+      return problem(422, 'PASSWORD_MISMATCH', 'Parol va tasdiqlash mos emas.');
+    if (self && !body.currentPassword)
+      return problem(
+        422,
+        'CURRENT_PASSWORD_REQUIRED',
+        'O‘z parolingizni o‘zgartirish uchun joriy parolni kiriting.',
+      );
+    if (self && body.currentPassword !== 'demo123')
+      return problem(422, 'CURRENT_PASSWORD_INVALID', 'Joriy parol noto‘g‘ri.');
+    return new HttpResponse(null, { status: 204 });
   }),
   http.put(`${API}/users/:id/access`, async ({ params, request }) => {
     const actor = requireUser();

@@ -8,6 +8,7 @@ import type { TelegramLinkStatus, TelegramSettings } from '@/shared/types/domain
 import { ToastProvider } from '@/shared/ui';
 
 const mocks = vi.hoisted(() => ({
+  inbox: vi.fn(),
   settings: vi.fn(),
   saveSettings: vi.fn(),
   reminderPreview: vi.fn(),
@@ -22,6 +23,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/shared/api/contracts', () => ({
   notificationApi: {
+    inbox: mocks.inbox,
     settings: mocks.settings,
     saveSettings: mocks.saveSettings,
     reminderPreview: mocks.reminderPreview,
@@ -68,6 +70,7 @@ function renderPage() {
 describe('NotificationsPage — Telegram linking (PHASE 38)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.inbox.mockResolvedValue([]);
     mocks.settings.mockResolvedValue(settings);
     mocks.users.mockResolvedValue([
       { id: 'u1', fullName: 'Ali Valiyev', status: 'active', roles: [] },
@@ -76,6 +79,23 @@ describe('NotificationsPage — Telegram linking (PHASE 38)', () => {
     mocks.reminderPreview.mockResolvedValue({ businessDate: '2026-08-20', branches: [] });
     mocks.monthlyPreview.mockResolvedValue({ periodLabel: '', message: '', recipients: [] });
     mocks.linkStatus.mockResolvedValue(linkState('unlinked'));
+  });
+
+  it('shows a cashier edit reason in-app even when Telegram was unreachable', async () => {
+    mocks.inbox.mockResolvedValue([
+      {
+        id: 'notification-1',
+        eventType: 'daily_revenue.replaced',
+        message: '♻️ Kassir kunlik tushumni tahrirladi\nIzoh: Noto‘g‘ri summa kiritilgan edi',
+        occurredAt: '2026-10-05T05:54:06.170Z',
+        telegramStatus: 'permanently_failed',
+      },
+    ]);
+
+    renderPage();
+
+    expect(await screen.findByText(/Noto‘g‘ri summa kiritilgan edi/)).toBeInTheDocument();
+    expect(screen.getByText(/Telegram ulanmagan yoki yetkazib bo‘lmadi/)).toBeInTheDocument();
   });
 
   it('offers to connect while the account is unlinked', async () => {

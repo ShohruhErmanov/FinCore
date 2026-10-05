@@ -8,10 +8,31 @@ const booleanish = z
   .enum(['true', 'false', '1', '0'])
   .transform((value) => value === 'true' || value === '1');
 
+/**
+ * .env.example ships placeholders like __KAMIDA_32_BELGILI_TASODIFIY_QIYMAT__.
+ * Some are long enough to pass a length check, so a copied-but-unedited file
+ * would boot with a secret anyone can read on GitHub. Refuse them outright.
+ */
+const notPlaceholder = (value: string) => !/^__.*__$/.test(value.trim());
+const PLACEHOLDER_MESSAGE = 'still the .env.example placeholder — generate a real random value';
+
 const schema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
+    /**
+     * Interface the API listens on. Loopback by default: on a laptop on shared
+     * Wi-Fi, an API bound to every interface is reachable by the whole network.
+     * Behind a reverse proxy on the same host this stays 127.0.0.1; set 0.0.0.0
+     * only when another machine must reach the process directly.
+     */
+    HOST: z.string().min(1).default('127.0.0.1'),
+    /**
+     * Number of reverse-proxy hops to trust for the client address. 0 (the
+     * default) trusts none. Behind nginx set 1 — otherwise every request seems
+     * to come from the proxy, and one client's login throttle locks out all.
+     */
+    TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
 
     /**
      * Optional outside production so the foundation boots and /health can report
@@ -42,7 +63,10 @@ const schema = z
       .default('http://localhost:5173'),
 
     /** Signs the session cookie. Rotating it invalidates every live session. */
-    SESSION_SECRET: z.string().min(32, 'SESSION_SECRET must be at least 32 characters'),
+    SESSION_SECRET: z
+      .string()
+      .min(32, 'SESSION_SECRET must be at least 32 characters')
+      .refine(notPlaceholder, `SESSION_SECRET is ${PLACEHOLDER_MESSAGE}`),
 
     COOKIE_DOMAIN: z.string().min(1).optional(),
     COOKIE_SECURE: booleanish.default('false'),
@@ -67,7 +91,8 @@ const schema = z
     ACTOR_SIGNING_KEY_ID: z.string().uuid('ACTOR_SIGNING_KEY_ID must be a UUID'),
     ACTOR_SIGNING_KEY: z
       .string()
-      .min(32, 'ACTOR_SIGNING_KEY must be the base64 of at least 24 random bytes'),
+      .min(32, 'ACTOR_SIGNING_KEY must be the base64 of at least 24 random bytes')
+      .refine(notPlaceholder, `ACTOR_SIGNING_KEY is ${PLACEHOLDER_MESSAGE}`),
     /** Only has to outlive a single transaction. */
     ACTOR_TOKEN_TTL_SECONDS: z.coerce.number().int().min(5).max(300).default(60),
 
@@ -88,11 +113,13 @@ const schema = z
     TELEGRAM_WEBHOOK_SECRET: z
       .string()
       .min(32, 'TELEGRAM_WEBHOOK_SECRET must be at least 32 characters')
+      .refine(notPlaceholder, `TELEGRAM_WEBHOOK_SECRET is ${PLACEHOLDER_MESSAGE}`)
       .optional(),
     /** HMAC key for link tokens: the raw token is never stored, only its digest. */
     TELEGRAM_LINK_TOKEN_PEPPER: z
       .string()
       .min(32, 'TELEGRAM_LINK_TOKEN_PEPPER must be at least 32 characters')
+      .refine(notPlaceholder, `TELEGRAM_LINK_TOKEN_PEPPER is ${PLACEHOLDER_MESSAGE}`)
       .optional(),
     /** Deep links are short-lived by design; a stale link must not stay usable. */
     TELEGRAM_LINK_TOKEN_TTL_MINUTES: z.coerce.number().int().min(1).max(60).default(10),

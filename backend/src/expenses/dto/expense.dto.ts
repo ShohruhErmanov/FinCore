@@ -108,6 +108,16 @@ export class ExpenseUpdateDto {
   @IsString()
   @MaxLength(1000)
   comment?: string;
+
+  @ApiPropertyOptional({
+    description: 'Kassir tahriri sababi. Kassir roli uchun majburiy.',
+    example: 'Chek bilan solishtirganda summa noto‘g‘ri kiritilgan.',
+  })
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(500)
+  editReason?: string;
 }
 
 /** Every filter accepts the literal "all", which the ledger UI sends for "no filter". */

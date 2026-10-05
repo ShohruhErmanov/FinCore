@@ -34,10 +34,19 @@ const uzDate = (value: unknown): string => {
 
 const RENDERERS: Record<NotificationEventType, Renderer> = {
   'expense.created': (p) =>
-    ['🧾 Yangi xarajat', `Sana: ${uzDate(p.transactionDate)}`, `Summa: ${telegramMoney(text(p.amountUzs, '0'))}`].join('\n'),
+    [
+      '🧾 Yangi xarajat',
+      `Sana: ${uzDate(p.transactionDate)}`,
+      `Summa: ${telegramMoney(text(p.amountUzs, '0'))}`,
+    ].join('\n'),
 
   'expense.updated': (p) =>
-    ['✏️ Xarajat tahrirlandi', `Sana: ${uzDate(p.transactionDate)}`, `Yangi summa: ${telegramMoney(text(p.amountUzs, '0'))}`].join('\n'),
+    [
+      '✏️ Kassir xarajatni tahrirladi',
+      `Sana: ${uzDate(p.transactionDate)}`,
+      `Yangi summa: ${telegramMoney(text(p.amountUzs, '0'))}`,
+      `Izoh: ${text(p.editReason)}`,
+    ].join('\n'),
 
   'daily_revenue.recorded': (p) =>
     [
@@ -49,9 +58,10 @@ const RENDERERS: Record<NotificationEventType, Renderer> = {
 
   'daily_revenue.replaced': (p) =>
     [
-      '♻️ Kunlik tushum qayta kiritildi',
+      '♻️ Kassir kunlik tushumni tahrirladi',
       `Sana: ${uzDate(p.businessDate)}`,
       `Yangi jami: ${telegramMoney(text(p.totalUzs, '0'))}`,
+      `Izoh: ${text(p.editReason)}`,
     ].join('\n'),
 
   'expense_import.completed': (p) =>
@@ -76,7 +86,11 @@ const RENDERERS: Record<NotificationEventType, Renderer> = {
     `🔧 Rol huquqlari yangilandi (${num(p.permissionCount)} ta ruxsat).`,
 
   'daily_revenue.missing': (p) =>
-    ['⏰ Kunlik tushum kiritilmagan', `Sana: ${uzDate(p.businessDate)}`, 'Iltimos, tushumni kiriting.'].join('\n'),
+    [
+      '⏰ Kunlik tushum kiritilmagan',
+      `Sana: ${uzDate(p.businessDate)}`,
+      'Iltimos, tushumni kiriting.',
+    ].join('\n'),
 
   'monthly_report.ready': () => '📅 Oylik hisobot tayyor.',
 

@@ -63,6 +63,7 @@ const expenseFormSchema = z.object({
   paymentMethodId: z.string().min(1, 'To‘lov usulini tanlang.'),
   departmentId: z.string().min(1, 'Bo‘limni tanlang.'),
   responsibleUserId: z.string().min(1, 'Mas’ul xodimni tanlang.'),
+  editReason: z.string().max(500, '500 belgidan oshmasin.').optional(),
 });
 
 type ExpenseFormValues = z.infer<typeof expenseFormSchema>;
@@ -870,13 +871,22 @@ function DefinitionItem({ label, children }: { label: string; children: React.Re
   );
 }
 
-function ExpenseEditForm({ expense, onDone }: { expense: Expense; onDone: () => void }) {
+function ExpenseEditForm({
+  expense,
+  onDone,
+  requireEditReason,
+}: {
+  expense: Expense;
+  onDone: () => void;
+  requireEditReason: boolean;
+}) {
   const queryClient = useQueryClient();
   const references = useExpenseReferences();
   const {
     register,
     handleSubmit,
     watch,
+    setError,
     formState: { errors },
   } = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
@@ -889,6 +899,7 @@ function ExpenseEditForm({ expense, onDone }: { expense: Expense; onDone: () => 
       paymentMethodId: expense.paymentMethodId,
       departmentId: expense.departmentId,
       responsibleUserId: expense.responsibleUserId,
+      editReason: '',
     },
   });
   const selectedCategory = references.categories.data?.find(
@@ -904,6 +915,7 @@ function ExpenseEditForm({ expense, onDone }: { expense: Expense; onDone: () => 
         paymentMethodId: values.paymentMethodId,
         departmentId: values.departmentId,
         responsibleUserId: values.responsibleUserId,
+        ...(values.editReason?.trim() ? { editReason: values.editReason.trim() } : {}),
       }),
     onSuccess: async () => {
       await Promise.all([
@@ -924,7 +936,13 @@ function ExpenseEditForm({ expense, onDone }: { expense: Expense; onDone: () => 
 
   return (
     <form
-      onSubmit={handleSubmit((values) => mutation.mutate(values))}
+      onSubmit={handleSubmit((values) => {
+        if (requireEditReason && !values.editReason?.trim()) {
+          setError('editReason', { message: 'Tahrirlash sababini kiriting.' });
+          return;
+        }
+        mutation.mutate(values);
+      })}
       noValidate
       className="space-y-5"
     >
@@ -1033,6 +1051,24 @@ function ExpenseEditForm({ expense, onDone }: { expense: Expense; onDone: () => 
             <Textarea id="edit-expense-description" {...register('description')} />
           </FormField>
         </div>
+        {requireEditReason ? (
+          <div className="md:col-span-2">
+            <FormField
+              label="Tahrirlash izohi"
+              htmlFor="edit-expense-reason"
+              required
+              error={errors.editReason?.message}
+              hint="Majburiy. Ushbu izoh direktor bildirishnomasiga yuboriladi."
+            >
+              <Textarea
+                id="edit-expense-reason"
+                required
+                aria-invalid={Boolean(errors.editReason)}
+                {...register('editReason')}
+              />
+            </FormField>
+          </div>
+        ) : null}
       </div>
       <div className="flex justify-end gap-3">
         <Button type="button" variant="secondary" onClick={onDone}>
@@ -1081,6 +1117,9 @@ export function ExpenseDetailPage() {
     Boolean(meQuery.data?.permissions.includes('expense.edit')) &&
     canWriteBranch &&
     period?.status !== 'closed';
+  const isCashier = Boolean(
+    meQuery.data?.roles.some((assignment) => assignment.role === 'cashier'),
+  );
 
   return (
     <div>
@@ -1111,7 +1150,11 @@ export function ExpenseDetailPage() {
 
       {editing ? (
         <Card title="Xarajatni tahrirlash">
-          <ExpenseEditForm expense={expense} onDone={() => setEditing(false)} />
+          <ExpenseEditForm
+            expense={expense}
+            onDone={() => setEditing(false)}
+            requireEditReason={isCashier}
+          />
         </Card>
       ) : (
         <div className="grid gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">

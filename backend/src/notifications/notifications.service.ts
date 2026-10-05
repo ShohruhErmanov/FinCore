@@ -10,6 +10,7 @@ import {
 } from '@/daily-revenues/daily-revenues.service';
 import { buildMonthlyReportMessage, buildReminderMessage } from './telegram-message';
 import type { TelegramSettingsInputDto } from './dto/notification.dto';
+import { renderNotification } from '@/notification-events/message-renderer';
 
 /**
  * Organisation-level notification settings — schedules and which employees are
@@ -57,6 +58,14 @@ export interface TelegramTestResultDto {
   note: string;
 }
 
+export interface NotificationInboxItemDto {
+  id: string;
+  eventType: string;
+  message: string;
+  occurredAt: string;
+  telegramStatus: string;
+}
+
 interface StoredConfig {
   enabled: boolean;
   dailyReminderEnabled: boolean;
@@ -96,6 +105,42 @@ export class NotificationsService {
       botTokenSet: this.env.TELEGRAM_ENABLED && Boolean(this.env.TELEGRAM_BOT_TOKEN),
       recipients: await this.withLinkState(config.recipients),
     };
+  }
+
+  /**
+   * In-app inbox for the signed-in recipient. It is intentionally backed by
+   * the immutable event/outbox rows rather than Telegram delivery success, so
+   * a Director still sees a cashier's edit reason when Telegram is not linked.
+   */
+  async inbox(user: AuthenticatedUser): Promise<NotificationInboxItemDto[]> {
+    const rows = await this.prisma.db.$queryRaw<
+      Array<{
+        id: string;
+        event_type: string;
+        payload: Record<string, unknown>;
+        occurred_at: Date;
+        telegram_status: string;
+      }>
+    >`
+      SELECT e.id::text AS id,
+             e.event_type,
+             e.payload,
+             e.occurred_at,
+             d.status::text AS telegram_status
+      FROM fincore.notification_deliveries d
+      JOIN fincore.notification_events e ON e.id = d.event_id
+      WHERE d.recipient_identity_id = ${user.id}::uuid
+      ORDER BY e.occurred_at DESC
+      LIMIT 50
+    `;
+
+    return rows.map((row) => ({
+        id: row.id,
+        eventType: row.event_type,
+        message: renderNotification(row.event_type, row.payload),
+        occurredAt: row.occurred_at.toISOString(),
+        telegramStatus: row.telegram_status,
+      }));
   }
 
   async saveSettings(

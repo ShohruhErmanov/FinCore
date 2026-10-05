@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Download, Save } from 'lucide-react';
+import { ChevronDown, Download, MessageSquareText, Save } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { authApi, budgetApi, referenceApi, reportApi } from '@/shared/api/contracts';
@@ -86,7 +86,7 @@ const BudgetBranchEditor = memo(function BudgetBranchEditor({
   return (
     <div className="budget-branch-editor">
       <div className="budget-branch-heading">
-        <span className="font-medium text-ink">{line.branchName}</span>
+        <span className="budget-branch-name">{line.branchName}</span>
         {editable ? (
           <div
             role="group"
@@ -115,16 +115,14 @@ const BudgetBranchEditor = memo(function BudgetBranchEditor({
             </button>
           </div>
         ) : (
-          <span className="text-sm text-muted">{draft.hasPlan ? 'Reja mavjud' : 'Reja yo‘q'}</span>
+          <span className="text-xs text-muted">{draft.hasPlan ? 'Reja mavjud' : 'Reja yo‘q'}</span>
         )}
       </div>
       {draft.hasPlan ? (
         <div className="budget-branch-fields">
-          <div>
-            <label
-              className="mb-1.5 block text-xs font-medium text-muted"
-              htmlFor={`budget-amount-${line.id}`}
-            >
+          <div className="min-w-0">
+            {/* The input carries its own aria-label; this stays for the click target. */}
+            <label className="sr-only" htmlFor={`budget-amount-${line.id}`}>
               Reja summasi
             </label>
             {editable ? (
@@ -175,39 +173,40 @@ const BudgetBranchEditor = memo(function BudgetBranchEditor({
               </p>
             ) : null}
             {previewPlan === '0' ? (
-              <p className="mt-1 text-xs text-info">0 so‘m — haqiqiy nol reja</p>
+              <p className="mt-0.5 text-[11px] text-info">0 so‘m — haqiqiy nol reja</p>
             ) : null}
           </div>
-          <div className="budget-note-control">
-            {editable ? (
-              <button
-                type="button"
-                className="budget-note-button"
-                aria-expanded={noteOpen}
-                onClick={() => setNoteOpen((open) => !open)}
-              >
-                {draft.reason ? 'Izohni tahrirlash' : 'Izoh qo‘shish'}
-              </button>
-            ) : null}
-            {draft.reason && !noteOpen ? (
-              <p className="budget-note-preview" title={draft.reason}>
-                {draft.reason}
-              </p>
-            ) : null}
-            {editable && noteOpen ? (
-              <Textarea
-                aria-label={`${line.branchName}, ${line.categoryNameSnapshot} izoh yoki sabab`}
-                value={draft.reason ?? ''}
-                maxLength={1000}
-                className="mt-2 min-h-20"
-                placeholder="Izoh yoki reja sababi"
-                onChange={(event) => onChange({ ...draft, reason: event.target.value || null })}
-              />
-            ) : null}
-          </div>
+          {editable ? (
+            <button
+              type="button"
+              className="budget-note-button"
+              aria-expanded={noteOpen}
+              aria-label={draft.reason ? 'Izohni tahrirlash' : 'Izoh qo‘shish'}
+              title={draft.reason ? 'Izohni tahrirlash' : 'Izoh qo‘shish'}
+              data-has-note={draft.reason ? 'true' : undefined}
+              onClick={() => setNoteOpen((open) => !open)}
+            >
+              <MessageSquareText className="h-4 w-4" aria-hidden="true" />
+            </button>
+          ) : null}
+          {draft.reason && !noteOpen ? (
+            <p className="budget-note-preview" title={draft.reason}>
+              {draft.reason}
+            </p>
+          ) : null}
+          {editable && noteOpen ? (
+            <Textarea
+              aria-label={`${line.branchName}, ${line.categoryNameSnapshot} izoh yoki sabab`}
+              value={draft.reason ?? ''}
+              maxLength={1000}
+              className="budget-note-input min-h-16"
+              placeholder="Izoh yoki reja sababi"
+              onChange={(event) => onChange({ ...draft, reason: event.target.value || null })}
+            />
+          ) : null}
         </div>
       ) : (
-        <p className="budget-no-plan">Bu filial uchun reja kiritilmagan.</p>
+        <p className="budget-no-plan">Reja kiritilmagan</p>
       )}
       <div className="budget-branch-meta">
         <span>
@@ -217,7 +216,7 @@ const BudgetBranchEditor = memo(function BudgetBranchEditor({
           Farq: {previewVariance === null ? '—' : <VarianceText value={previewVariance} />}
         </span>
         <span
-          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${presentation.className}`}
+          className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${presentation.className}`}
         >
           {presentation.label}
         </span>
@@ -555,8 +554,7 @@ function BudgetPageContent({
   /** Top-bar branch, or "all". */
   branch: string;
 }) {
-  const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'all' | 'fixed' | 'variable'>('all');
+  const [selectedCategoryId, setSelectedCategoryId] = useState('');
   // A display filter only: editing still saves every branch, so narrowing
   // the view to one branch can never drop the other one’s plan.
   const lines = useMemo(
@@ -576,14 +574,20 @@ function BudgetPageContent({
     }
     return [...grouped.values()];
   }, [lines]);
-  const filteredCategories = categories.filter((categoryLines) => {
-    const first = categoryLines[0];
-    return (
-      first &&
-      (typeFilter === 'all' || first.expenseTypeSnapshot === typeFilter) &&
-      first.categoryNameSnapshot.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())
-    );
-  });
+  const selectedCategoryLines = useMemo(
+    () =>
+      categories.find((categoryLines) => categoryLines[0]?.categoryId === selectedCategoryId) ??
+      categories[0] ??
+      null,
+    [categories, selectedCategoryId],
+  );
+  const activeCategoryId = selectedCategoryLines?.[0]?.categoryId ?? '';
+  const fixedCategories = categories.filter(
+    (categoryLines) => categoryLines[0]?.expenseTypeSnapshot === 'fixed',
+  );
+  const variableCategories = categories.filter(
+    (categoryLines) => categoryLines[0]?.expenseTypeSnapshot === 'variable',
+  );
   const totals = useMemo(() => {
     let fixed = 0n;
     let variable = 0n;
@@ -643,72 +647,57 @@ function BudgetPageContent({
                   summani kiriting.
                 </p>
               ) : null}
-              <div className="budget-entry-tools">
-                <input
-                  type="search"
-                  aria-label="Kategoriya qidirish"
-                  placeholder="Kategoriya qidirish..."
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-                <div role="group" aria-label="Kategoriya turi" className="budget-type-filter">
-                  {(
-                    [
-                      ['all', 'Barchasi'],
-                      ['fixed', 'Doimiy'],
-                      ['variable', 'O‘zgaruvchan'],
-                    ] as const
-                  ).map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      aria-pressed={typeFilter === value}
-                      onClick={() => setTypeFilter(value)}
-                    >
-                      {label}
-                    </button>
-                  ))}
+              <div className="budget-category-picker">
+                <div className="budget-category-picker-copy">
+                  <label htmlFor="budget-category-select">Xarajat kategoriyasi</label>
+                  <p>Reja kiritish uchun kategoriyani tanlang</p>
+                </div>
+                <div className="budget-category-select-wrap">
+                  <select
+                    id="budget-category-select"
+                    aria-label="Budjet kategoriyasi"
+                    value={activeCategoryId}
+                    onChange={(event) => setSelectedCategoryId(event.target.value)}
+                  >
+                    {fixedCategories.length ? (
+                      <optgroup label="Doimiy xarajatlar">
+                        {fixedCategories.map((categoryLines) => {
+                          const category = categoryLines[0]!;
+                          return (
+                            <option key={category.categoryId} value={category.categoryId}>
+                              {category.categoryNameSnapshot}
+                            </option>
+                          );
+                        })}
+                      </optgroup>
+                    ) : null}
+                    {variableCategories.length ? (
+                      <optgroup label="O‘zgaruvchan xarajatlar">
+                        {variableCategories.map((categoryLines) => {
+                          const category = categoryLines[0]!;
+                          return (
+                            <option key={category.categoryId} value={category.categoryId}>
+                              {category.categoryNameSnapshot}
+                            </option>
+                          );
+                        })}
+                      </optgroup>
+                    ) : null}
+                  </select>
+                  <ChevronDown aria-hidden="true" />
                 </div>
               </div>
-              {filteredCategories.length ? (
+              {selectedCategoryLines ? (
                 <div className="budget-category-list">
-                  {filteredCategories.map((categoryLines) => {
-                    const first = categoryLines[0]!;
-                    const categoryTotal = categoryLines.reduce((sum, line) => {
-                      const draft = drafts[line.id] ?? line;
-                      return sum + (draft.hasPlan ? BigInt(draft.plannedAmountUzs ?? '0') : 0n);
-                    }, 0n);
-                    return (
-                      <article className="budget-category-card" key={first.categoryId}>
-                        <div className="budget-category-heading">
-                          <h3>{first.categoryNameSnapshot}</h3>
-                          <span className="budget-type-badge">
-                            {first.expenseTypeSnapshot === 'fixed' ? 'Doimiy' : 'O‘zgaruvchan'}
-                          </span>
-                        </div>
-                        <div className="budget-category-branches">
-                          {categoryLines.map((line) => (
-                            <BudgetBranchEditor
-                              key={line.id}
-                              line={line}
-                              draft={drafts[line.id] ?? line}
-                              editable={editable}
-                              onChange={onChangeLine}
-                            />
-                          ))}
-                        </div>
-                        <div className="budget-category-total">
-                          <span>Jami kategoriya</span>
-                          <strong>{formatMoney(categoryTotal.toString())}</strong>
-                        </div>
-                      </article>
-                    );
-                  })}
+                  <SelectedBudgetCategory
+                    categoryLines={selectedCategoryLines}
+                    drafts={drafts}
+                    editable={editable}
+                    onChangeLine={onChangeLine}
+                  />
                 </div>
               ) : (
-                <p className="budget-entry-empty">
-                  Kategoriya topilmadi. Qidiruv yoki turni o‘zgartiring.
-                </p>
+                <p className="budget-entry-empty">Kiritish uchun kategoriya mavjud emas.</p>
               )}
             </>
           ) : (
@@ -724,5 +713,51 @@ function BudgetPageContent({
         {plan.updatedByName ? <p>Oxirgi saqlash: {updatedLabel}</p> : null}
       </div>
     </>
+  );
+}
+
+function SelectedBudgetCategory({
+  categoryLines,
+  drafts,
+  editable,
+  onChangeLine,
+}: {
+  categoryLines: BudgetLine[];
+  drafts: Record<string, BudgetLineDraft>;
+  editable: boolean;
+  onChangeLine: (next: BudgetLineDraft) => void;
+}) {
+  const first = categoryLines[0]!;
+  const categoryTotal = categoryLines.reduce((sum, line) => {
+    const draft = drafts[line.id] ?? line;
+    return sum + (draft.hasPlan ? BigInt(draft.plannedAmountUzs ?? '0') : 0n);
+  }, 0n);
+
+  return (
+    <article className="budget-category-card" key={first.categoryId}>
+      <div className="budget-category-heading">
+        <h3>{first.categoryNameSnapshot}</h3>
+        <div className="budget-category-side">
+          <span className="budget-type-badge">
+            {first.expenseTypeSnapshot === 'fixed' ? 'Doimiy' : 'O‘zgaruvchan'}
+          </span>
+          <span className="budget-category-total">
+            <span>Jami</span>
+            <strong>{formatMoney(categoryTotal.toString())}</strong>
+          </span>
+        </div>
+      </div>
+      <div className="budget-category-branches">
+        {categoryLines.map((line) => (
+          <BudgetBranchEditor
+            key={line.id}
+            line={line}
+            draft={drafts[line.id] ?? line}
+            editable={editable}
+            onChange={onChangeLine}
+          />
+        ))}
+      </div>
+    </article>
   );
 }

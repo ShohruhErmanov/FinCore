@@ -35,10 +35,12 @@ import type {
   TelegramSettingsInput,
   TelegramLinkStatus,
   TelegramLinkCreated,
+  NotificationInboxItem,
   MoneyUzs,
   PaginatedResponse,
   BranchComparisonReport,
   RevenuePlanBoard,
+  RevenuePlanYear,
   RoleCode,
   PermissionCode,
   RolePermissionMatrix,
@@ -107,7 +109,7 @@ export const expenseApi = {
   detail: (id: string, signal?: AbortSignal) =>
     api.get<Expense>(`/expenses/${id}`, undefined, signal),
   create: (input: ExpenseCreateInput) => api.post<Expense>('/expenses', input),
-  update: (id: string, input: Partial<ExpenseCreateInput>) =>
+  update: (id: string, input: Partial<ExpenseCreateInput> & { editReason?: string }) =>
     api.patch<Expense>(`/expenses/${id}`, input),
 };
 
@@ -123,6 +125,8 @@ export const budgetApi = {
 };
 
 export const notificationApi = {
+  inbox: (signal?: AbortSignal) =>
+    api.get<NotificationInboxItem[]>('/notifications/inbox', undefined, signal),
   settings: (signal?: AbortSignal) =>
     api.get<TelegramSettings>('/notifications/telegram', undefined, signal),
   saveSettings: (input: TelegramSettingsInput) =>
@@ -155,10 +159,12 @@ export const revenueApi = {
   detail: (id: string, signal?: AbortSignal) =>
     api.get<DailyRevenue>(`/daily-revenues/${id}`, undefined, signal),
   create: (input: DailyRevenueInput) => api.post<DailyRevenue>('/daily-revenues', input),
-  update: (id: string, input: Partial<DailyRevenueInput>) =>
+  update: (id: string, input: Partial<DailyRevenueInput> & { editReason?: string }) =>
     api.patch<DailyRevenue>(`/daily-revenues/${id}`, input),
   plan: (periodId: string, signal?: AbortSignal) =>
     api.get<RevenuePlanBoard>(`/revenue-plans/${periodId}`, undefined, signal),
+  planYear: (year: number, signal?: AbortSignal) =>
+    api.get<RevenuePlanYear>(`/revenue-plans/year/${year}`, undefined, signal),
   savePlan: (
     periodId: string,
     lines: Array<{ branchId: string; plannedAmountUzs: MoneyUzs | null }>,
@@ -188,6 +194,11 @@ export const adminApi = {
   updateUserStatus: (id: string, status: UserStatus) =>
     api.patch<AuthenticatedUser>(`/users/${id}/status`, { status }),
   deleteUser: (id: string) => api.delete<void>(`/users/${id}`),
+  /** 204 — the password is hashed server-side and never comes back. */
+  updateUserPassword: (
+    id: string,
+    input: { password: string; confirmPassword: string; currentPassword?: string },
+  ) => api.put<void>(`/users/${id}/password`, input),
 
   /** Sozlamalar uchun: scope filtrsiz butun filial ro'yxati. */
   allBranches: (signal?: AbortSignal) => api.get<Branch[]>('/master/branches', undefined, signal),

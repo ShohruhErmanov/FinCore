@@ -342,4 +342,31 @@ describe('[FE-MSW, AC-14, AC-16] dashboard integration', () => {
       `${routes.expenseAnalytics}?period=${ids.periodAug}&branch=all`,
     );
   });
+
+  it('Cashier uchun sof foyda DOMga render qilinmaydi va Pulse uni qayta hisoblamaydi', async () => {
+    const cashier = users[2]!;
+    useAuthMock.mockReturnValue({
+      user: cashier,
+      isLoading: false,
+      isAuthenticated: true,
+      login: vi.fn(),
+      logout: vi.fn(),
+      hasPermission: (permission: PermissionCode) => cashier.permissions.includes(permission),
+      canAccessBranch: (branchId: string) => cashier.branchScopes.includes(branchId),
+    });
+    // Defense in depth: even a stale/incorrect response carrying the protected
+    // block must not make a Cashier render it. The backend contract test covers
+    // the real Network response omission separately.
+    vi.mocked(dashboardApi.get).mockResolvedValue(dashboardResponse);
+
+    renderDashboard();
+
+    const pulse = await screen.findByRole('region', { name: 'FinCore Pulse' });
+    expect(within(pulse).getByText('186 000 000 so‘m')).toBeInTheDocument();
+    expect(within(pulse).queryByText('76 000 000 so‘m')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Oylik sof foyda' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Yillik sof foyda')).not.toBeInTheDocument();
+    expect(screen.queryByText('Sof foyda')).not.toBeInTheDocument();
+    expect(screen.queryByText(/sof foyda dinamikasi/i)).not.toBeInTheDocument();
+  });
 });

@@ -229,6 +229,14 @@ export interface TelegramRecipient {
   linked: boolean;
 }
 
+export interface NotificationInboxItem {
+  id: UUID;
+  eventType: string;
+  message: string;
+  occurredAt: IsoDateTime;
+  telegramStatus: string;
+}
+
 /** O‘z hisobing uchun Telegram ulanish holati. Hech qanday identifikator qaytmaydi. */
 export interface TelegramLinkStatus {
   status: 'linked' | 'unlinked' | 'disabled' | 'pending';
@@ -421,6 +429,51 @@ export interface RevenuePlanBoard {
   lines: RevenuePlanLine[];
 }
 
+/** One branch's plan and revenue for one month of the year overview. */
+export interface RevenuePlanYearCell {
+  branchId: UUID;
+  plannedAmountUzs: MoneyUzs | null;
+  actualAmountUzs: MoneyUzs;
+  completionPercent: number | null;
+}
+
+export interface RevenuePlanYearMonth {
+  month: number;
+  label: string;
+  /** null when that month's accounting period has not been opened. */
+  periodId: UUID | null;
+  /** Sum over the branches that have a plan; null when none do. */
+  plannedAmountUzs: MoneyUzs | null;
+  /** Every posted revenue that month. */
+  actualAmountUzs: MoneyUzs;
+  /** Revenue of the branches that had a plan — what completion is measured on. */
+  actualAgainstPlanUzs: MoneyUzs;
+  completionPercent: number | null;
+  branches: RevenuePlanYearCell[];
+}
+
+export interface RevenuePlanYearBranch {
+  branchId: UUID;
+  branchName: string;
+  plannedAmountUzs: MoneyUzs;
+  actualAmountUzs: MoneyUzs;
+  actualAgainstPlanUzs: MoneyUzs;
+  completionPercent: number | null;
+  plannedMonths: number;
+}
+
+/** Every month's revenue plan for a year, side by side — GET /revenue-plans/year/:year. */
+export interface RevenuePlanYear {
+  year: number;
+  plannedAmountUzs: MoneyUzs;
+  actualAmountUzs: MoneyUzs;
+  actualAgainstPlanUzs: MoneyUzs;
+  completionPercent: number | null;
+  plannedMonths: number;
+  branches: RevenuePlanYearBranch[];
+  months: RevenuePlanYearMonth[];
+}
+
 export interface TrendPoint {
   bucket: string;
   label: string;
@@ -573,7 +626,8 @@ export interface DashboardResponse {
   annual: AnnualExpenseSummary;
   annualRevenue: AnnualRevenue;
   revenueGrowth: RevenueGrowth;
-  annualNetProfit: AnnualNetProfit;
+  /** Backend omits company-profit aggregates for operational-only roles. */
+  annualNetProfit?: AnnualNetProfit;
   branches: Array<{
     branchId: UUID;
     name: string;
@@ -704,6 +758,16 @@ export interface MonthlyReport {
   };
   rows: MonthlyReportRow[];
   totals: { fixed: PlanActual; variable: PlanActual; overall: PlanActual };
+  /** Omitted when the signed-in role may not read company net profit. */
+  financialMonths?: Array<{
+    month: number;
+    revenuePlanUzs: MoneyUzs | null;
+    revenueActualUzs: MoneyUzs;
+    expenseActualUzs: MoneyUzs;
+    netProfitUzs: MoneyUzs;
+    revenueCompletionPercent: number | null;
+    netMarginPercent: number | null;
+  }>;
 }
 
 export interface BranchSummary {

@@ -391,14 +391,16 @@ function AnnualSummary({
 }: {
   data: AnnualExpenseSummary;
   revenue: AnnualRevenue;
-  netProfit: AnnualNetProfit;
+  netProfit: AnnualNetProfit | undefined;
   growth: RevenueGrowth;
 }) {
   return (
     <section aria-label="Yillik xulosa" className="mt-8">
       <h2 className="text-lg font-bold text-ink">{data.year} yil xulosasi</h2>
       <p className="mt-0.5 text-sm text-muted">
-        Yillik tushum, xarajat va sof foyda dinamikasi — tanlangan filial bo‘yicha.
+        {netProfit
+          ? 'Yillik tushum, xarajat va sof foyda dinamikasi — tanlangan filial bo‘yicha.'
+          : 'Yillik tushum va xarajat dinamikasi — tanlangan filial bo‘yicha.'}
       </p>
 
       <AnnualGroupHeading title="Tushumlar" kind="revenue" />
@@ -463,10 +465,13 @@ function AnnualSummary({
         />
       </div>
 
-      <AnnualGroupHeading title="Sof foyda" kind="profit" />
-      <AnnualNetProfitTiles data={netProfit} />
-
-      <AnnualFinancialOverview revenue={revenue} expense={data} netProfit={netProfit} />
+      {netProfit ? (
+        <>
+          <AnnualGroupHeading title="Sof foyda" kind="profit" />
+          <AnnualNetProfitTiles data={netProfit} />
+          <AnnualFinancialOverview revenue={revenue} expense={data} netProfit={netProfit} />
+        </>
+      ) : null}
 
       <Card
         title="Oylik dinamika"
@@ -566,7 +571,7 @@ function percentOf(actualUzs: string, planUzs: string): number | null {
 }
 
 export function DashboardPage() {
-  const { hasPermission } = useAuth();
+  const { user, hasPermission } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const branchesQuery = useQuery({
     queryKey: queryKeys.branches,
@@ -624,8 +629,15 @@ export function DashboardPage() {
   if (dashboardQuery.isError || !dashboardQuery.data)
     return <ErrorState onRetry={() => void dashboardQuery.refetch()} />;
   const data = dashboardQuery.data;
-  const netResult = BigInt(data.revenueActualUzs) - BigInt(data.expenseActualUzs);
-  const netResultUzs = netResult.toString();
+  const canViewNetProfit =
+    user?.roles.some((assignment) =>
+      ['director', 'business_owner', 'finance_manager'].includes(assignment.role),
+    ) ?? false;
+  const visibleNetProfit = canViewNetProfit ? data.annualNetProfit : undefined;
+  const netResult = visibleNetProfit
+    ? BigInt(data.revenueActualUzs) - BigInt(data.expenseActualUzs)
+    : null;
+  const heroAmountUzs = netResult?.toString() ?? data.revenueActualUzs;
   const queryBase = { period, branch };
   const trendScope =
     granularity === 'monthly'
@@ -674,17 +686,21 @@ export function DashboardPage() {
               FinCore Pulse
             </div>
             <p className="mt-5 max-w-2xl text-sm font-medium text-blue-100">
-              {data.period.label} uchun tushum va xarajatning tezkor operatsion natijasi
+              {netResult === null
+                ? `${data.period.label} uchun amaldagi tushum`
+                : `${data.period.label} uchun tushum va xarajatning tezkor operatsion natijasi`}
             </p>
             <div className="mt-2 text-3xl font-bold tracking-[-0.04em] sm:text-4xl">
-              <MoneyText value={netResultUzs} compact />
+              <MoneyText value={heroAmountUzs} compact />
             </div>
             <p className="mt-2 text-sm text-blue-100/85">
-              {netResult > 0n
-                ? 'Tushum xarajatdan yuqori — davr natijasi musbat.'
-                : netResult < 0n
-                  ? 'Xarajat tushumdan yuqori — rahbar e’tibori talab qilinadi.'
-                  : 'Davr uchun tushum va xarajat ma’lumoti hali shakllanmagan.'}
+              {netResult === null
+                ? 'Tanlangan davr bo‘yicha qayd etilgan amaldagi tushum.'
+                : netResult > 0n
+                  ? 'Tushum xarajatdan yuqori — davr natijasi musbat.'
+                  : netResult < 0n
+                    ? 'Xarajat tushumdan yuqori — rahbar e’tibori talab qilinadi.'
+                    : 'Davr uchun tushum va xarajat ma’lumoti hali shakllanmagan.'}
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
@@ -716,11 +732,13 @@ export function DashboardPage() {
         </div>
       </section>
 
-      <MonthlyNetProfit
-        data={data.annualNetProfit}
-        years={availableYears}
-        onYearChange={selectYear}
-      />
+      {visibleNetProfit ? (
+        <MonthlyNetProfit
+          data={visibleNetProfit}
+          years={availableYears}
+          onYearChange={selectYear}
+        />
+      ) : null}
 
       <section
         aria-label="Tushum ko‘rsatkichlari"
@@ -833,7 +851,7 @@ export function DashboardPage() {
       <AnnualSummary
         data={data.annual}
         revenue={data.annualRevenue}
-        netProfit={data.annualNetProfit}
+        netProfit={visibleNetProfit}
         growth={data.revenueGrowth}
       />
 

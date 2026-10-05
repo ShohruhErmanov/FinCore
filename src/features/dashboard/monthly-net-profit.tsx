@@ -121,124 +121,148 @@ export function MonthlyNetProfit({
         </div>
       </div>
 
-      <ul
-        aria-label="Oylar"
-        className="relative mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
-      >
-        {data.months.map((row) => (
-          <MonthTile key={row.month} row={row} />
-        ))}
-      </ul>
-
-      <div className="relative mt-5 rounded-2xl border border-white/15 bg-white/[0.07] p-4 backdrop-blur-md">
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-blue-100">
-          12 oylik sof foyda dinamikasi
-        </p>
-        <div className="mt-3 h-40 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
-              <XAxis
-                dataKey="name"
-                tick={{ fill: 'rgba(219,234,254,0.75)', fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                tick={{ fill: 'rgba(219,234,254,0.6)', fontSize: 10 }}
-                axisLine={false}
-                tickLine={false}
-                width={64}
-                tickFormatter={(value: number) => formatMoneyCompact(String(Math.trunc(value)))}
-              />
-              <Tooltip
-                cursor={{ stroke: 'rgba(103,232,249,0.35)' }}
-                contentStyle={{
-                  background: '#071a3b',
-                  border: '1px solid rgba(147,197,253,0.25)',
-                  borderRadius: 12,
-                  color: '#fff',
-                }}
-                formatter={(value, name) => [
-                  formatMoney(String(Math.trunc(Number(value)))),
-                  name === 'total'
-                    ? 'Jami sof foyda'
-                    : (paymentMethods.find((method) => method.code === name)?.name ?? String(name)),
-                ]}
-              />
-              <Line
-                type="monotone"
-                dataKey="total"
-                name="total"
-                stroke="#67e8f9"
-                strokeWidth={3}
-                dot={{ r: 2.5, fill: '#67e8f9', strokeWidth: 0 }}
-                activeDot={{ r: 4 }}
-              />
-              {paymentMethods.map((method, index) => (
-                <Line
-                  key={method.paymentMethodId}
-                  type="monotone"
-                  dataKey={method.code}
-                  name={method.code}
-                  stroke={METHOD_COLORS[index % METHOD_COLORS.length]}
-                  strokeWidth={1.8}
-                  strokeDasharray="5 4"
-                  dot={false}
-                  activeDot={{ r: 3 }}
-                />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-medium text-blue-100/75">
-          <ChartLegend color="#67e8f9" label="Jami sof foyda" />
-          {paymentMethods.map((method, index) => (
-            <ChartLegend
-              key={method.paymentMethodId}
-              color={METHOD_COLORS[index % METHOD_COLORS.length] ?? '#ffffff'}
-              label={method.name}
-              dashed
-            />
+      {/* The months and their chart are one reading — the tiles give the exact
+          figure, the line the shape — so from xl up they share a row. Halves at
+          xl, because a narrower tile column would cut "−182 672 000 so‘m" short
+          on a 1280px screen with the sidebar open; the chart takes more of the
+          row once 2xl leaves room for both. */}
+      <div className="relative mt-5 grid gap-3 xl:grid-cols-2 2xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <ul
+          aria-label="Oylar"
+          className="grid grid-cols-2 content-start gap-1.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-3"
+        >
+          {data.months.map((row) => (
+            <MonthTile key={row.month} row={row} />
           ))}
+        </ul>
+
+        <div className="flex min-w-0 flex-col rounded-2xl border border-white/15 bg-white/[0.07] p-4 backdrop-blur-md">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-blue-100">
+            12 oylik sof foyda dinamikasi
+          </p>
+          {/* Stretched to the tiles' height beside them. The chart sits in an
+              absolute layer so its measured SVG never feeds back into the row
+              height — otherwise the row could grow and never shrink again. */}
+          <div className="relative mt-3 h-40 w-full xl:h-auto xl:min-h-40 xl:flex-1">
+            <div className="absolute inset-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fill: 'rgba(219,234,254,0.75)', fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fill: 'rgba(219,234,254,0.6)', fontSize: 10 }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={64}
+                    tickFormatter={(value: number) => formatMoneyCompact(String(Math.trunc(value)))}
+                  />
+                  <Tooltip
+                    cursor={{ stroke: 'rgba(103,232,249,0.35)' }}
+                    contentStyle={{
+                      background: '#071a3b',
+                      border: '1px solid rgba(147,197,253,0.25)',
+                      borderRadius: 12,
+                      color: '#fff',
+                    }}
+                    formatter={(value, name) => [
+                      formatMoney(String(Math.trunc(Number(value)))),
+                      name === 'total'
+                        ? 'Jami sof foyda'
+                        : (paymentMethods.find((method) => method.code === name)?.name ?? String(name)),
+                    ]}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="total"
+                    name="total"
+                    stroke="#67e8f9"
+                    strokeWidth={3}
+                    dot={{ r: 2.5, fill: '#67e8f9', strokeWidth: 0 }}
+                    activeDot={{ r: 4 }}
+                  />
+                  {paymentMethods.map((method, index) => (
+                    <Line
+                      key={method.paymentMethodId}
+                      type="monotone"
+                      dataKey={method.code}
+                      name={method.code}
+                      stroke={METHOD_COLORS[index % METHOD_COLORS.length]}
+                      strokeWidth={1.8}
+                      strokeDasharray="5 4"
+                      dot={false}
+                      activeDot={{ r: 3 }}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-medium text-blue-100/75">
+            <ChartLegend color="#67e8f9" label="Jami sof foyda" />
+            {paymentMethods.map((method, index) => (
+              <ChartLegend
+                key={method.paymentMethodId}
+                color={METHOD_COLORS[index % METHOD_COLORS.length] ?? '#ffffff'}
+                label={method.name}
+                dashed
+              />
+            ))}
+          </div>
         </div>
       </div>
 
-      <div className="relative mt-5 overflow-hidden rounded-2xl border border-white/15 bg-white/[0.07] backdrop-blur-md">
-        <div className="border-b border-white/10 px-4 py-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-blue-100">
+      <div className="relative mt-4 overflow-hidden rounded-xl border border-white/15 bg-white/[0.07] backdrop-blur-md">
+        <div className="border-b border-white/10 px-3 py-2">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-blue-100">
             12 oylik to‘lov usullari tahlili
           </p>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[680px] border-collapse text-left text-sm">
-            <thead className="text-[11px] uppercase tracking-[0.08em] text-blue-100/65">
+          <table className="w-full min-w-[560px] border-collapse text-left text-xs">
+            <thead className="text-[10px] uppercase tracking-[0.08em] text-blue-100/65">
               <tr>
-                <th className="px-4 py-3 font-semibold">Oy</th>
+                <th className="px-3 py-1.5 font-semibold">Oy</th>
                 {paymentMethods.map((method) => (
-                  <th key={method.paymentMethodId} className="px-4 py-3 text-right font-semibold">
+                  <th key={method.paymentMethodId} className="px-3 py-1.5 text-right font-semibold">
                     {method.name}
                   </th>
                 ))}
-                <th className="px-4 py-3 text-right font-semibold">Jami</th>
+                <th className="px-3 py-1.5 text-right font-semibold">Jami</th>
               </tr>
             </thead>
             <tbody>
               {paymentMethodMonths.map((month) => (
                 <tr key={month.month} className="border-t border-white/[0.08]">
-                  <th className="px-4 py-3 font-semibold text-white">{month.label}</th>
-                  {paymentMethods.map((method) => (
-                    <td
-                      key={method.paymentMethodId}
-                      className="px-4 py-3 text-right tabular-nums text-blue-100/80"
-                    >
-                      {formatMoney(
-                        month.paymentMethods.find((item) => item.code === method.code)
-                          ?.netProfitUzs ?? '0',
-                      )}
-                    </td>
-                  ))}
-                  <td className="px-4 py-3 text-right font-semibold tabular-nums text-white">
+                  <th className="px-3 py-1 font-semibold text-white">{month.label}</th>
+                  {paymentMethods.map((method) => {
+                    const amount =
+                      month.paymentMethods.find((item) => item.code === method.code)
+                        ?.netProfitUzs ?? '0';
+                    return (
+                      <td
+                        key={method.paymentMethodId}
+                        className={cn(
+                          'px-3 py-1 text-right tabular-nums',
+                          // Most of a young year is zeros; dimming them lets
+                          // the months that moved stand out.
+                          amount === '0' ? 'text-blue-100/30' : 'text-blue-100/80',
+                        )}
+                      >
+                        {formatMoney(amount)}
+                      </td>
+                    );
+                  })}
+                  <td
+                    className={cn(
+                      'px-3 py-1 text-right font-semibold tabular-nums',
+                      month.totalNetProfitUzs === '0' ? 'text-blue-100/30' : 'text-white',
+                    )}
+                  >
                     {formatMoney(month.totalNetProfitUzs)}
                   </td>
                 </tr>
@@ -248,7 +272,7 @@ export function MonthlyNetProfit({
         </div>
       </div>
 
-      <div className="relative mt-4 grid gap-3 sm:grid-cols-3">
+      <div className="relative mt-3 grid gap-2 sm:grid-cols-3">
         <SummaryChip
           label="Yillik jami sof foyda"
           value={formatMoney(data.totalNetProfitUzs)}
@@ -348,13 +372,13 @@ function MonthTile({ row }: { row: NetProfitMonth }) {
   return (
     <li
       className={cn(
-        'rounded-xl border px-3 py-2.5 backdrop-blur-md transition-colors',
+        'rounded-lg border px-2 py-1.5 backdrop-blur-md transition-colors',
         row.hasData
           ? 'border-white/15 bg-white/[0.08]'
           : 'border-white/[0.06] bg-white/[0.02] text-blue-100/45',
       )}
     >
-      <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-blue-100/80">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-blue-100/80">
         {row.label}
       </p>
 
@@ -362,7 +386,9 @@ function MonthTile({ row }: { row: NetProfitMonth }) {
         <>
           <p
             className={cn(
-              'mt-1 truncate text-[13px] font-bold tabular-nums sm:text-sm',
+              // Beside the chart on a 1280px screen a tile is ~140px wide; one
+              // pixel of type is what keeps "−182 672 000 so‘m" whole there.
+              'mt-0.5 truncate text-[13px] font-bold tabular-nums xl:max-2xl:text-xs',
               positive && 'text-emerald-300',
               negative && 'text-rose-300',
               !positive && !negative && 'text-white',
@@ -372,11 +398,11 @@ function MonthTile({ row }: { row: NetProfitMonth }) {
             {formatMoney(row.netProfitUzs)}
           </p>
           {row.changePct === null ? (
-            <p className="mt-0.5 text-[11px] text-blue-100/50">—</p>
+            <p className="text-[10px] text-blue-100/50">—</p>
           ) : (
             <p
               className={cn(
-                'mt-0.5 inline-flex items-center gap-1 truncate text-[11px] font-semibold tabular-nums',
+                'flex items-center gap-1 truncate text-[10px] font-semibold tabular-nums',
                 row.changePct >= 0 ? 'text-emerald-300/90' : 'text-rose-300/90',
               )}
               title={
@@ -402,8 +428,8 @@ function MonthTile({ row }: { row: NetProfitMonth }) {
         </>
       ) : (
         <>
-          <p className="mt-1 text-[13px] font-bold tabular-nums sm:text-sm">—</p>
-          <p className="mt-0.5 text-[11px]">Ma’lumot yo‘q</p>
+          <p className="mt-0.5 text-[13px] font-bold tabular-nums">—</p>
+          <p className="text-[10px]">Ma’lumot yo‘q</p>
         </>
       )}
     </li>
@@ -422,11 +448,11 @@ function SummaryChip({
   tone: 'positive' | 'negative' | 'neutral';
 }) {
   return (
-    <div className="rounded-2xl border border-white/15 bg-white/[0.07] px-4 py-3 backdrop-blur-md">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-blue-100">{label}</p>
+    <div className="rounded-xl border border-white/15 bg-white/[0.07] px-3 py-2 backdrop-blur-md">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-blue-100">{label}</p>
       <p
         className={cn(
-          'mt-1 text-lg font-bold tabular-nums',
+          'mt-0.5 text-[15px] font-bold tabular-nums',
           tone === 'positive' && 'text-emerald-300',
           tone === 'negative' && 'text-rose-300',
           tone === 'neutral' && 'text-white',
@@ -434,7 +460,7 @@ function SummaryChip({
       >
         {value}
       </p>
-      {helper ? <p className="mt-0.5 text-[11px] text-blue-100/70">{helper}</p> : null}
+      {helper ? <p className="text-[10px] text-blue-100/70">{helper}</p> : null}
     </div>
   );
 }

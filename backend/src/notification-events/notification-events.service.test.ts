@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PrismaTransaction } from '@/database';
 import { EVENT_CATALOG, NOTIFICATION_EVENT_TYPES } from './event-catalog';
+import { renderNotification } from './message-renderer';
 import { NotificationEventsService } from './notification-events.service';
 
 const BRANCH = '11111111-1111-4111-8111-111111111111';
@@ -29,6 +30,7 @@ interface EventRow {
  */
 function makeTx() {
   const committed: EventRow[] = [];
+  const deliveryFanouts: string[] = [];
   let staged: EventRow[] = [];
 
   const tx = {
@@ -58,6 +60,10 @@ function makeTx() {
         const found = visible.find((row) => row.dedupe_key === values[0]);
         return found ? [{ id: found.id }] : [];
       }
+      if (sql.includes('INSERT INTO fincore.notification_deliveries')) {
+        deliveryFanouts.push(values[0] as string);
+        return [{ id: `delivery-${deliveryFanouts.length}` }];
+      }
       throw new Error(`kutilmagan SQL: ${sql.slice(0, 60)}`);
     },
   } as unknown as PrismaTransaction;
@@ -65,6 +71,7 @@ function makeTx() {
   return {
     tx,
     committed,
+    deliveryFanouts,
     /** Mirrors prisma.$transaction: writes survive only a clean return. */
     run: async <T>(work: (tx: PrismaTransaction) => Promise<T>): Promise<T> => {
       staged = [];
@@ -152,6 +159,7 @@ describe('NotificationEventsService — transactional behaviour', () => {
         branchId: BRANCH,
         amountUzs: '1500000',
         transactionDate: '2026-08-20',
+        editReason: 'Chekdagi summa bilan moslashtirildi.',
         updatedAt: '2026-08-20T10:00:00.000Z',
       },
     };
@@ -166,6 +174,17 @@ describe('NotificationEventsService — transactional behaviour', () => {
 
     expect(second.deduplicated).toBe(false);
     expect(db.committed).toHaveLength(2);
+  });
+
+  it('creates Director delivery rows in the same transaction', async () => {
+    const db = makeTx();
+    const result = await db.run((tx) =>
+      service.createForActiveDirectorsInTransaction(tx, expenseCreated),
+    );
+
+    expect(result).toMatchObject({ deduplicated: false, deliveryCount: 1 });
+    expect(db.committed).toHaveLength(1);
+    expect(db.deliveryFanouts).toEqual([result.id]);
   });
 });
 
@@ -310,5 +329,22 @@ describe('event catalog', () => {
       fixedSalaryUzs: '4500000',
     });
     expect(salary.success).toBe(false);
+  });
+
+  it('renders the cashier edit reason for the Director notification', () => {
+    expect(
+      renderNotification('expense.updated', {
+        transactionDate: '2026-08-20',
+        amountUzs: '1500000',
+        editReason: 'Chek bilan solishtirib tuzatildi.',
+      }),
+    ).toContain('Izoh: Chek bilan solishtirib tuzatildi.');
+    expect(
+      renderNotification('daily_revenue.replaced', {
+        businessDate: '2026-08-20',
+        totalUzs: '2500000',
+        editReason: 'Terminal yakuni bo‘yicha tuzatildi.',
+      }),
+    ).toContain('Izoh: Terminal yakuni bo‘yicha tuzatildi.');
   });
 });

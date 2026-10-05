@@ -128,8 +128,7 @@ describe('Investor least privilege — what the role may not open', () => {
  */
 describe('Investor least privilege — the service-enforced screens', () => {
   /** Nothing is queried: the permission check runs before any database work. */
-  const dailyRevenues = () =>
-    new DailyRevenuesService({} as never, {} as never);
+  const dailyRevenues = () => new DailyRevenuesService({} as never, {} as never, {} as never);
 
   it('refuses an investor the daily revenue ledger', async () => {
     await expect(

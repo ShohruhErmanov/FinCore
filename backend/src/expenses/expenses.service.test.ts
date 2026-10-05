@@ -92,7 +92,11 @@ function harness() {
     { id: RESPONSIBLE_USER_ID, full_name: 'Responsible user' },
   ]);
   const txQueryRaw = vi.fn(async () => [{ id: EXPENSE_ID }]);
-  const txExpenseUpdate = vi.fn(async () => ({ id: EXPENSE_ID }));
+  const txExpenseUpdate = vi.fn(async () => ({
+    amount_uzs: 100n,
+    transaction_date: new Date('2026-08-20T00:00:00.000Z'),
+    updated_at: new Date('2026-08-20T06:00:00.000Z'),
+  }));
   const tx = {
     $queryRaw: txQueryRaw,
     expenses: { update: txExpenseUpdate },
@@ -118,9 +122,14 @@ function harness() {
   } as unknown as PrismaService;
   const mint = vi.fn(() => 'signed-actor-token');
   const actor = { mint } as unknown as ActorContextService;
+  const events = {
+    createForActiveDirectorsInTransaction: vi
+      .fn()
+      .mockResolvedValue({ id: 'event-id', deduplicated: false, deliveryCount: 1 }),
+  };
 
   return {
-    service: new ExpensesService(prisma, actor),
+    service: new ExpensesService(prisma, actor, events as never),
     expenseFindFirst,
     expenseFindUnique,
     expenseCount,
@@ -129,6 +138,7 @@ function harness() {
     categoryCount,
     withActor,
     mint,
+    events,
   };
 }
 
@@ -164,6 +174,48 @@ describe('ExpensesService operational ledger', () => {
 });
 
 describe('ExpensesService branch write guards', () => {
+  const cashierRoles = [
+    {
+      id: '99999999-9999-4999-8999-999999999999',
+      role: 'cashier',
+      roleName: 'Kassir',
+      branchId: BRANCH_ID,
+      branchName: 'Active branch',
+    },
+  ];
+
+  it('requires a reason before a cashier can edit an expense', async () => {
+    const test = harness();
+
+    await test.service
+      .update(user({ roles: cashierRoles }), EXPENSE_ID, { amountUzs: '200' })
+      .then(() => expect.unreachable('cashier edit without a reason must fail'))
+      .catch((error: unknown) => expectApiCode(error, 422, 'EDIT_REASON_REQUIRED'));
+
+    expect(test.expenseFindUnique).not.toHaveBeenCalled();
+    expect(test.withActor).not.toHaveBeenCalled();
+  });
+
+  it('sends the cashier reason to active Directors inside the edit transaction', async () => {
+    const test = harness();
+
+    await test.service.update(user({ roles: cashierRoles }), EXPENSE_ID, {
+      amountUzs: '200',
+      editReason: 'Chekdagi summa bo‘yicha tuzatildi.',
+    });
+
+    expect(test.events.createForActiveDirectorsInTransaction).toHaveBeenCalledTimes(1);
+    expect(test.events.createForActiveDirectorsInTransaction.mock.calls[0]?.[1]).toMatchObject({
+      eventType: 'expense.updated',
+      aggregateId: EXPENSE_ID,
+      actorIdentityId: ACTOR_ID,
+      payload: {
+        editReason: 'Chekdagi summa bo‘yicha tuzatildi.',
+        amountUzs: '100',
+      },
+    });
+  });
+
   it('creates on an active branch inside current write scope', async () => {
     const test = harness();
 
