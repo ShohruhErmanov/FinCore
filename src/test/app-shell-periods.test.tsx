@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppShell } from '@/app/layout/app-shell';
-import { referenceApi } from '@/shared/api/contracts';
+import { notificationApi, referenceApi } from '@/shared/api/contracts';
 import type { AccountingPeriod } from '@/shared/types/domain';
 import { ToastProvider } from '@/shared/ui';
 
@@ -117,5 +117,28 @@ describe('global accounting year selector', () => {
 
     expect(await screen.findByLabelText('Hisobot yili')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Yangi yil qo‘shish' })).not.toBeInTheDocument();
+  });
+
+  it('shows a small unread badge when a cashier edited revenue or expense', async () => {
+    mocks.useAuth.mockReturnValue({
+      ...mocks.useAuth(),
+      hasPermission: (permission: string) =>
+        ['master_data.manage', 'expense.view_all_branches', 'notification.manage'].includes(
+          permission,
+        ),
+    });
+    vi.spyOn(notificationApi, 'inbox').mockResolvedValue([
+      {
+        id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        eventType: 'daily_revenue.replaced',
+        message: 'Kassir tushumni tahrirladi',
+        occurredAt: '2026-10-05T05:54:06.170Z',
+        telegramStatus: 'permanently_failed',
+      },
+    ]);
+
+    renderShell([period(2026, 8)]);
+
+    expect(await screen.findByLabelText('1 ta yangi kassir tahriri')).toBeInTheDocument();
   });
 });

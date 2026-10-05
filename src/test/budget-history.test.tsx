@@ -304,7 +304,7 @@ describe('Budjet sahifasi', () => {
     );
   });
 
-  it('kategoriya qidiruvi va tur filtri faqat ko‘rinishni o‘zgartiradi', async () => {
+  it('selectdan tanlangan kategoriyaning o‘zigina kiritish uchun ko‘rsatiladi', async () => {
     const user = userEvent.setup();
     vi.mocked(budgetApi.get).mockResolvedValue({
       ...plan,
@@ -321,16 +321,21 @@ describe('Budjet sahifasi', () => {
     });
     renderPage();
     const editor = await screen.findByRole('region', { name: 'Budjet rejasini tahrirlash' });
-    await user.click(within(editor).getByRole('button', { name: 'O‘zgaruvchan' }));
+    const categorySelect = within(editor).getByRole('combobox', { name: 'Budjet kategoriyasi' });
+
+    expect(categorySelect).toHaveValue(RENT);
+    expect(
+      within(editor).getByRole('heading', { name: 'Ijara (bino arendasi)' }),
+    ).toBeInTheDocument();
+    expect(within(editor).queryByRole('heading', { name: 'Marketing' })).not.toBeInTheDocument();
+
+    await user.selectOptions(categorySelect, 'marketing');
     expect(within(editor).getByRole('heading', { name: 'Marketing' })).toBeInTheDocument();
     expect(
       within(editor).queryByRole('heading', { name: 'Ijara (bino arendasi)' }),
     ).not.toBeInTheDocument();
-    await user.click(within(editor).getByRole('button', { name: 'Barchasi' }));
-    await user.type(
-      within(editor).getByRole('searchbox', { name: 'Kategoriya qidirish' }),
-      'ijara',
-    );
+
+    await user.selectOptions(categorySelect, RENT);
     expect(
       within(editor).getByRole('heading', { name: 'Ijara (bino arendasi)' }),
     ).toBeInTheDocument();
@@ -558,7 +563,9 @@ describe('Budjet sahifasi', () => {
       permissions: [...me.permissions, 'reports.view'],
     });
     vi.mocked(reportApi.monthly).mockImplementation(async ({ year, branch }) => {
-      const actual = branch === 'all' ? '23680000' : '7000000';
+      // All branches exceed the 27.2m budget, while Sayxun remains below its
+      // own 7.2m budget. This covers both variance labels in one branch-flow.
+      const actual = branch === 'all' ? '30000000' : '7000000';
       const total = {
         hasPlan: false,
         plannedAmountUzs: null,
@@ -587,17 +594,36 @@ describe('Budjet sahifasi', () => {
     });
     renderPage();
     const trend = await screen.findByRole('region', { name: 'Budjet dinamikasi' });
-    expect(await within(trend).findByText(formatMoney('23680000'))).toBeInTheDocument();
+    expect(await within(trend).findByText(formatMoney('30000000'))).toBeInTheDocument();
+    expect(within(trend).getByText(`${formatMoney('2800000')} oshdi`)).toBeInTheDocument();
     expect(reportApi.monthly).toHaveBeenCalledWith(
       { year: 2026, branch: 'all' },
       expect.any(AbortSignal),
     );
     await userEvent.click(screen.getByRole('link', { name: 'Navbar: Sayxun' }));
     expect(await within(trend).findByText(formatMoney('7000000'))).toBeInTheDocument();
-    expect(within(trend).queryByText(formatMoney('23680000'))).not.toBeInTheDocument();
+    expect(within(trend).getByText(`${formatMoney('200000')} qoldi`)).toBeInTheDocument();
+    expect(within(trend).queryByText(formatMoney('30000000'))).not.toBeInTheDocument();
     expect(reportApi.monthly).toHaveBeenLastCalledWith(
       { year: 2026, branch: SAYXUN },
       expect.any(AbortSignal),
     );
+  });
+
+  it('Budjet dinamikasi yilning barcha 12 oyini ixcham ko‘rsatadi', async () => {
+    renderPage();
+    const trend = await screen.findByRole('region', { name: 'Budjet dinamikasi' });
+    const months = within(within(trend).getByRole('list', { name: 'Oylar' })).getAllByRole(
+      'listitem',
+    );
+
+    expect(months).toHaveLength(12);
+    // Months after the selected one are listed too; the old view stopped at it.
+    expect(within(months[11]!).getByText('Dekabr')).toBeInTheDocument();
+    expect(months[7]).toHaveAttribute('aria-current', 'true');
+    expect(within(months[7]!).getByText(formatMoney('27200000'))).toBeInTheDocument();
+    // A month with no budget shows a dash, not a long sentence on every row.
+    expect(within(months[0]!).getByText('—')).toBeInTheDocument();
+    expect(within(trend).queryByText('Reja mavjud emas')).not.toBeInTheDocument();
   });
 });

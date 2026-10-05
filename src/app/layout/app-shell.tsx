@@ -28,7 +28,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, NavLink, Outlet, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/features/auth/auth-context';
 import { getApiErrorMessage } from '@/shared/api/client';
-import { referenceApi } from '@/shared/api/contracts';
+import { notificationApi, referenceApi } from '@/shared/api/contracts';
 import { queryKeys } from '@/shared/api/query-keys';
 import { isNavItemActive, navigation, routes, type NavigationItem } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/cn';
@@ -67,10 +67,12 @@ const iconByPath: Record<string, typeof LayoutDashboard> = {
 function NavigationLink({
   item,
   collapsed,
+  notificationCount = 0,
   onClick,
 }: {
   item: NavigationItem;
   collapsed: boolean;
+  notificationCount?: number;
   onClick?: () => void;
 }) {
   const Icon = iconByPath[item.to] ?? BookOpenCheck;
@@ -86,7 +88,7 @@ function NavigationLink({
       {...(isActive ? { 'aria-current': 'page' as const } : {})}
       className={() =>
         cn(
-          'group flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium text-slate-300 transition-all duration-200 hover:translate-x-0.5 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400',
+          'group relative flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium text-slate-300 transition-all duration-200 hover:translate-x-0.5 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400',
           isActive &&
             'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-[0_12px_28px_-16px_rgba(37,99,235,0.95)] ring-1 ring-white/10',
           collapsed && 'justify-center px-2',
@@ -98,6 +100,20 @@ function NavigationLink({
         aria-hidden="true"
       />
       {!collapsed ? <span>{item.label}</span> : <span className="sr-only">{item.label}</span>}
+      {notificationCount > 0 ? (
+        <span
+          aria-label={`${notificationCount} ta yangi kassir tahriri`}
+          title={`${notificationCount} ta yangi xabar`}
+          className={cn(
+            'grid shrink-0 place-items-center rounded-full bg-red-500 font-bold text-white shadow-[0_0_0_3px_rgba(239,68,68,0.16)]',
+            collapsed
+              ? 'absolute right-2 top-2 h-2.5 w-2.5 text-[0px]'
+              : 'ml-auto min-h-5 min-w-5 px-1.5 text-[10px]',
+          )}
+        >
+          {notificationCount > 9 ? '9+' : notificationCount}
+        </span>
+      ) : null}
     </NavLink>
   );
 }
@@ -105,11 +121,13 @@ function NavigationLink({
 function Sidebar({
   collapsed,
   mobile,
+  notificationCount,
   onClose,
   onToggle,
 }: {
   collapsed: boolean;
   mobile?: boolean;
+  notificationCount: number;
   onClose?: () => void;
   onToggle?: () => void;
 }) {
@@ -179,6 +197,7 @@ function Sidebar({
                   key={`${item.to}:${item.label}`}
                   item={item}
                   collapsed={collapsed}
+                  notificationCount={item.to === routes.notifications ? notificationCount : 0}
                   {...(mobile && onClose ? { onClick: onClose } : {})}
                 />
               ))}
@@ -606,11 +625,56 @@ function MobileBottomNav() {
 }
 
 export function AppShell() {
+  const { user, hasPermission } = useAuth();
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem('fincore.sidebar.collapsed') === 'true',
   );
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  const inbox = useQuery({
+    queryKey: ['notifications', 'inbox'],
+    queryFn: ({ signal }) => notificationApi.inbox(signal),
+    enabled: hasPermission('notification.manage'),
+    refetchInterval: 15_000,
+  });
+  const seenStorageKey = `fincore.notifications.seen.${user?.id ?? 'anonymous'}`;
+  const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
+  const cashierEditIds = useMemo(
+    () =>
+      (inbox.data ?? [])
+        .filter(
+          (item) =>
+            item.eventType === 'expense.updated' || item.eventType === 'daily_revenue.replaced',
+        )
+        .map((item) => item.id),
+    [inbox.data],
+  );
+
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(seenStorageKey) ?? '[]') as unknown;
+      setSeenIds(
+        new Set(
+          Array.isArray(stored) ? stored.filter((value): value is string => typeof value === 'string') : [],
+        ),
+      );
+    } catch {
+      setSeenIds(new Set());
+    }
+  }, [seenStorageKey]);
+
+  useEffect(() => {
+    if (location.pathname !== routes.notifications || cashierEditIds.length === 0) return;
+    setSeenIds((current) => {
+      const next = new Set(current);
+      cashierEditIds.forEach((id) => next.add(id));
+      if (next.size === current.size) return current;
+      localStorage.setItem(seenStorageKey, JSON.stringify([...next].slice(-200)));
+      return next;
+    });
+  }, [cashierEditIds, location.pathname, seenStorageKey]);
+
+  const unreadNotificationCount = cashierEditIds.filter((id) => !seenIds.has(id)).length;
   useEffect(() => setMobileOpen(false), [location.pathname]);
   useEffect(
     () => localStorage.setItem('fincore.sidebar.collapsed', String(collapsed)),
@@ -619,7 +683,11 @@ export function AppShell() {
   return (
     <div className="min-h-screen bg-canvas">
       <div className="fixed inset-y-0 left-0 z-40 hidden lg:block">
-        <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((value) => !value)} />
+        <Sidebar
+          collapsed={collapsed}
+          notificationCount={unreadNotificationCount}
+          onToggle={() => setCollapsed((value) => !value)}
+        />
       </div>
       {mobileOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden">
@@ -630,7 +698,12 @@ export function AppShell() {
             aria-label="Menyuni yopish"
           />
           <div className="relative h-full w-min shadow-2xl">
-            <Sidebar collapsed={false} mobile onClose={() => setMobileOpen(false)} />
+            <Sidebar
+              collapsed={false}
+              mobile
+              notificationCount={unreadNotificationCount}
+              onClose={() => setMobileOpen(false)}
+            />
           </div>
         </div>
       ) : null}

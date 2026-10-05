@@ -29,6 +29,10 @@ export interface NotificationEventRef {
   deduplicated: boolean;
 }
 
+export interface DirectorNotificationRef extends NotificationEventRef {
+  deliveryCount: number;
+}
+
 /**
  * Writes immutable notification events.
  *
@@ -98,6 +102,38 @@ export class NotificationEventsService {
     // No payload in this line: it is a notification event, but still business data.
     this.logger.debug(`Takroriy hodisa e'tiborga olinmadi: ${input.eventType}`);
     return { id: existing[0].id, deduplicated: true };
+  }
+
+  /**
+   * Raises an event and fans it out to every active Director in the same
+   * transaction. The outbox row is created even when Telegram is currently
+   * unavailable; the worker resolves each Director's verified destination.
+   */
+  async createForActiveDirectorsInTransaction(
+    tx: PrismaTransaction,
+    input: NotificationEventInput,
+  ): Promise<DirectorNotificationRef> {
+    const event = await this.createInTransaction(tx, input);
+    const deliveries = await tx.$queryRaw<Array<{ id: string }>>`
+      INSERT INTO fincore.notification_deliveries (
+        event_id, recipient_identity_id, channel
+      )
+      SELECT DISTINCT
+        ${event.id}::uuid,
+        identity.id,
+        'telegram'::fincore.notification_channel
+      FROM fincore.users u
+      JOIN fincore.user_identities identity
+        ON identity.id = u.id AND identity.deleted_at IS NULL
+      JOIN fincore.user_roles ur
+        ON ur.user_id = u.id AND ur.is_active = true AND ur.revoked_at IS NULL
+      JOIN fincore.roles role
+        ON role.id = ur.role_id AND role.code = 'director' AND role.is_active = true
+      WHERE u.status = 'active'
+      ON CONFLICT (event_id, recipient_identity_id, channel) DO NOTHING
+      RETURNING id::text AS id
+    `;
+    return { ...event, deliveryCount: deliveries.length };
   }
 
   // ------------------------------------------------------------- internals --

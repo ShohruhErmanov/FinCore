@@ -41,9 +41,7 @@ afterEach(() => {
 
 describe('Daily revenue business-date helpers', () => {
   it('uses the Asia/Tashkent calendar day at the UTC boundary', () => {
-    expect(currentTashkentBusinessDate(new Date('2026-08-19T20:30:00.000Z'))).toBe(
-      '2026-08-20',
-    );
+    expect(currentTashkentBusinessDate(new Date('2026-08-19T20:30:00.000Z'))).toBe('2026-08-20');
   });
 
   it('rejects impossible Gregorian dates before SQL receives them', () => {
@@ -54,12 +52,11 @@ describe('Daily revenue business-date helpers', () => {
   });
 
   it('limits reminder totals to the three DailyRevenue-managed channels', async () => {
-    const queryRaw = vi.fn().mockResolvedValue([
-      { branch_id: BRANCH_ONE, total_uzs: '2750000' },
-    ]);
+    const queryRaw = vi.fn().mockResolvedValue([{ branch_id: BRANCH_ONE, total_uzs: '2750000' }]);
     const revenues = new DailyRevenuesService(
       { db: { $queryRaw: queryRaw } } as unknown as PrismaService,
       {} as ActorContextService,
+      {} as never,
     );
 
     await expect(revenues.totalsByBranch('2026-08-20', [BRANCH_ONE])).resolves.toEqual(
@@ -85,6 +82,7 @@ describe('Daily revenue business-date helpers', () => {
     const revenues = new DailyRevenuesService(
       { db: { $queryRaw: queryRaw } } as unknown as PrismaService,
       {} as ActorContextService,
+      {} as never,
     );
 
     await expect(revenues.totalsByBranch('2026-02-31', [BRANCH_ONE])).rejects.toMatchObject({
@@ -165,5 +163,44 @@ describe('NotificationsService.reminderPreview', () => {
 
     expect(totalsByBranch).toHaveBeenCalledWith('2026-07-31', user.branchScopes);
     expect(result.businessDate).toBe('2026-07-31');
+  });
+});
+
+describe('NotificationsService.inbox', () => {
+  it('shows the recipient event even when Telegram delivery permanently failed', async () => {
+    const occurredAt = new Date('2026-10-05T05:54:06.170Z');
+    const queryRaw = vi.fn().mockResolvedValue([
+      {
+        id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+        event_type: 'daily_revenue.replaced',
+        payload: {
+          dailyRevenueId: 'daily-1',
+          businessDate: '2026-10-05',
+          totalUzs: '11000000',
+          channelCount: 3,
+          editReason: 'Noto‘g‘ri summa kiritilgan edi',
+          replacedAt: occurredAt.toISOString(),
+        },
+        occurred_at: occurredAt,
+        telegram_status: 'permanently_failed',
+      },
+    ]);
+    const notifications = new NotificationsService(
+      { db: { $queryRaw: queryRaw } } as unknown as PrismaService,
+      {} as DashboardService,
+      {} as DailyRevenuesService,
+      LINK_STUB,
+      TELEGRAM_OFF,
+    );
+
+    const result = await notifications.inbox(user);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      eventType: 'daily_revenue.replaced',
+      telegramStatus: 'permanently_failed',
+    });
+    expect(result[0]?.message).toContain('Noto‘g‘ri summa kiritilgan edi');
+    expect(queryRaw.mock.calls[0]?.[1]).toBe(user.id);
   });
 });

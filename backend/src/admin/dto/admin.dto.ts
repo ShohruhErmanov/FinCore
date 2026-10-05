@@ -137,6 +137,29 @@ export class UserStatusDto {
   status!: 'active' | 'inactive' | 'blocked';
 }
 
+/**
+ * A new password for an existing account. Same policy as UserCreateDto.
+ * Every field is writeOnly: it is hashed on arrival and never returned.
+ */
+export class UserPasswordDto {
+  @ApiProperty({ writeOnly: true, minLength: 12, description: 'Kamida 12 belgi' })
+  @IsString()
+  @MinLength(12, { message: 'Parol kamida 12 belgidan iborat bo‘lishi kerak' })
+  @MaxLength(200)
+  password!: string;
+
+  @ApiProperty({ writeOnly: true, description: 'Parol bilan bir xil bo‘lishi shart' })
+  @IsString()
+  confirmPassword!: string;
+
+  /** Only when changing your own password; an admin reset of someone else needs none. */
+  @ApiPropertyOptional({ writeOnly: true, description: 'Faqat o‘z parolini o‘zgartirganda' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  currentPassword?: string;
+}
+
 export class UserSalaryDto {
   @ApiProperty({ example: '4500000', description: 'Belgilangan oylik, butun so‘m string' })
   @Matches(/^\d+$/, {

@@ -22,6 +22,7 @@ import {
   type TelegramSettingsDto,
   type TelegramTestResultDto,
   type ReminderPreviewDto,
+  type NotificationInboxItemDto,
 } from './notifications.service';
 
 /**
@@ -33,6 +34,16 @@ import {
 @Controller('notifications')
 export class NotificationsController {
   constructor(private readonly notifications: NotificationsService) {}
+
+  @Get('inbox')
+  @RequirePermissions('notification.manage')
+  @ApiOperation({ summary: 'Joriy foydalanuvchiga kelgan bildirishnomalar' })
+  @ApiResponse({ status: 200, description: 'Telegram holatidan qat’i nazar in-app inbox' })
+  @ApiResponse({ status: 401, description: 'UNAUTHENTICATED' })
+  @ApiResponse({ status: 403, description: 'FORBIDDEN — notification.manage yo‘q' })
+  inbox(@CurrentUser() user: AuthenticatedUser): Promise<NotificationInboxItemDto[]> {
+    return this.notifications.inbox(user);
+  }
 
   @Get('telegram')
   @RequirePermissions('notification.manage')

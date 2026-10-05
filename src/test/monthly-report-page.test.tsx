@@ -76,6 +76,27 @@ const report: MonthlyReport = {
     variable: plan('10000000', '15000000'),
     overall: plan('80000000', '75000000'),
   },
+  financialMonths: Array.from({ length: 12 }, (_, index) =>
+    index === 7
+      ? {
+          month: 8,
+          revenuePlanUzs: '100000000',
+          revenueActualUzs: '90000000',
+          expenseActualUzs: '75000000',
+          netProfitUzs: '15000000',
+          revenueCompletionPercent: 90,
+          netMarginPercent: 16.67,
+        }
+      : {
+          month: index + 1,
+          revenuePlanUzs: null,
+          revenueActualUzs: '0',
+          expenseActualUzs: '0',
+          netProfitUzs: '0',
+          revenueCompletionPercent: null,
+          netMarginPercent: null,
+        },
+  ),
 };
 
 const branch = (id: string, name: string, planned: string, actual: string) => ({
@@ -158,6 +179,15 @@ describe('Oylik xarajatlar boshqaruv dashboardi', () => {
     expect(within(hero).getAllByTitle(/5.000.000/).length).toBeGreaterThan(0);
     expect(within(hero).getAllByText('Rejadan kam sarflangan').length).toBeGreaterThan(0);
     expect(within(hero).getAllByText('93,75%').length).toBeGreaterThan(0);
+    const financial = screen.getByRole('region', { name: 'Tushum va sof foyda' });
+    expect(within(financial).getByText('Rejadagi tushum')).toBeInTheDocument();
+    expect(within(financial).getByText('Amaldagi tushum')).toBeInTheDocument();
+    expect(within(financial).getByText('Sof foyda')).toBeInTheDocument();
+    expect(within(financial).getAllByTitle(/100.000.000/).length).toBeGreaterThan(0);
+    expect(within(financial).getAllByTitle(/90.000.000/).length).toBeGreaterThan(0);
+    expect(within(financial).getAllByTitle(/15.000.000/).length).toBeGreaterThan(0);
+    expect(within(financial).getByText('Reja bajarilishi 90%')).toBeInTheDocument();
+    expect(within(financial).getByText('Sof foyda marjasi 16,67%')).toBeInTheDocument();
     const branches = screen.getByRole('region', { name: 'Filiallar bo‘yicha reja-fakt' });
     expect(within(branches).getByText('Sayxun')).toBeInTheDocument();
     expect(within(branches).getByText('Xalqlar do‘stligi')).toBeInTheDocument();
@@ -176,6 +206,25 @@ describe('Oylik xarajatlar boshqaruv dashboardi', () => {
     );
   });
 
+  it('reja va fakt diagrammasi yonida 12 oyni ixcham kartalarda ko‘rsatadi', async () => {
+    renderPage();
+    const trend = await screen.findByRole('region', { name: 'Yillik reja va fakt trendi' });
+    const months = within(
+      within(trend).getByRole('list', { name: 'Oylar bo‘yicha reja va fakt' }),
+    ).getAllByRole('listitem');
+
+    expect(months).toHaveLength(12);
+    const august = months[7]!;
+    expect(august).toHaveAttribute('aria-current', 'true');
+    expect(within(august).getByText('Avgust')).toBeInTheDocument();
+    // On screen the chart colour stands in for the word; the word stays for screen readers.
+    expect(within(august).getByText('Reja:')).toHaveClass('sr-only');
+    expect(within(august).getByTitle(/^Reja: 80.000.000/)).toBeInTheDocument();
+    expect(within(august).getByTitle(/^Fakt: 75.000.000/)).toBeInTheDocument();
+    // A month with no plan says so rather than showing a zero plan.
+    expect(within(months[0]!).getByTitle('Reja mavjud emas')).toBeInTheDocument();
+  });
+
   it('doimiy/o‘zgaruvchan, reja oshishi, tejash va top xarajatni ajratadi', async () => {
     renderPage();
     await screen.findByRole('region', { name: 'Xarajat tarkibi' });
@@ -186,6 +235,59 @@ describe('Oylik xarajatlar boshqaruv dashboardi', () => {
     expect(within(exceptions).getByText('Ijara')).toBeInTheDocument();
     const top = screen.getByRole('region', { name: 'Eng katta xarajatlar' });
     expect(within(top).getByText('1. Ijara')).toBeInTheDocument();
+  });
+
+  it('backend moliyaviy blokni bermagan rol uchun sof foyda barini render qilmaydi', async () => {
+    vi.mocked(reportApi.monthly).mockResolvedValue({ ...report, financialMonths: [] });
+
+    renderPage();
+
+    await screen.findByRole('region', { name: 'Oylik moliyaviy natija' });
+    expect(screen.queryByRole('region', { name: 'Tushum va sof foyda' })).not.toBeInTheDocument();
+  });
+
+  it('rejadan oshgan va tejalgan xarajatlarni ixcham qatorlarda ko‘rsatadi', async () => {
+    renderPage();
+    await screen.findByRole('region', { name: 'Rejadan og‘ishlar' });
+    const text = (node: HTMLElement) => (node.textContent ?? '').replace(/\u00a0/g, ' ');
+
+    const over = screen.getByRole('region', { name: 'Rejadan oshgan xarajatlar' });
+    const marketing = within(over).getByText('Marketing').closest('li')!;
+    expect(text(marketing)).toContain('Reja 10 000 000 so‘m · fakt 15 000 000 so‘m');
+    expect(text(marketing)).toContain('−5 000 000');
+    expect(text(marketing)).toContain('Oshish 50%');
+    expect(within(marketing).getByRole('img', { name: 'Bajarilish 150%' })).toBeInTheDocument();
+    expect(within(over).getByText('1 ta')).toBeInTheDocument();
+
+    const saved = screen.getByRole('region', { name: 'Tejalgan xarajatlar' });
+    const rent = within(saved).getByText('Ijara').closest('li')!;
+    expect(text(rent)).toContain('10 000 000');
+    expect(text(rent)).toContain('Tejash 14,29%');
+    // The group heading already says over or under; the row does not repeat it.
+    expect(within(saved).queryByText('Rejadan kam sarflangan')).not.toBeInTheDocument();
+  });
+
+  it('kategoriyalar jadvali ixcham: turi nom yonida, farq rangda, soni sarlavhada', async () => {
+    renderPage();
+    const section = await screen.findByRole('region', {
+      name: 'Kategoriyalar bo‘yicha batafsil hisobot',
+    });
+    expect(within(section).getByText('2 ta kategoriya')).toBeInTheDocument();
+
+    const table = within(section).getByRole('table');
+    // Turi is a tag on the name now, not a column of its own.
+    expect(within(table).queryByRole('columnheader', { name: 'Turi' })).not.toBeInTheDocument();
+    const rent = within(table).getByRole('rowheader', { name: /Ijara/ }).closest('tr')!;
+    const marketing = within(table)
+      .getByRole('rowheader', { name: /Marketing/ })
+      .closest('tr')!;
+    expect(within(rent).getByText('Doimiy')).toBeInTheDocument();
+    expect(within(marketing).getByText('O‘zgaruvchan')).toBeInTheDocument();
+
+    // Under the plan reads green, over it red.
+    expect(within(rent).getByTitle(/^10.000.000/)).toHaveClass('text-emerald-700');
+    expect(within(marketing).getByTitle(/^[−-]5.000.000/)).toHaveClass('text-rose-700');
+    expect(within(marketing).getByText('150%')).toHaveClass('text-rose-700');
   });
 
   it('bitta filial filterida faqat shu filialning requestlarini yuboradi', async () => {
@@ -241,7 +343,7 @@ describe('Oylik xarajatlar boshqaruv dashboardi', () => {
       screen.queryByRole('region', { name: 'Oylik moliyaviy natija' }),
     ).not.toBeInTheDocument();
     view.unmount();
-    vi.mocked(reportApi.monthly).mockResolvedValue({ ...report, rows: [] });
+    vi.mocked(reportApi.monthly).mockResolvedValue({ ...report, rows: [], financialMonths: [] });
     renderPage();
     expect(await screen.findByText('Bu oy uchun ma’lumot mavjud emas')).toBeInTheDocument();
   });

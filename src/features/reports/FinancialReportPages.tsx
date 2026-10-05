@@ -334,7 +334,7 @@ export function MonthlyReportPage() {
       <Breadcrumbs items={[{ label: 'Hisobotlar' }, { label: 'Oylik hisobot', current: true }]} />
       <PageHeader
         title="Oylik hisobot"
-        description={`Xarajat reja-fakti va filiallar natijasi · ${monthLongNames[month - 1]} ${year}`}
+        description={`Tushum, xarajat va sof foyda natijasi · ${monthLongNames[month - 1]} ${year}`}
         actions={
           <Button
             variant="secondary"

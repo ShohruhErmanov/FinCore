@@ -19,12 +19,14 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { CurrentUser, RequirePermissions, type AuthenticatedUser } from '@/common';
 import {
   RolePermissionsDto,
   AuthenticatedUserResponseDto,
   UserAccessDto,
   UserCreateDto,
+  UserPasswordDto,
   UserSalaryDto,
   UserStatusDto,
 } from './dto/admin.dto';
@@ -129,6 +131,40 @@ export class AdminController {
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<void> {
     return this.users.deleteUser(actor, id);
+  }
+
+  @Put('users/:id/password')
+  @HttpCode(204)
+  @RequirePermissions('user.manage')
+  // As strict as login: changing your own password checks the current one, so
+  // a borrowed session must not be able to guess it at the general API rate.
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Foydalanuvchi parolini o‘zgartirish',
+    description:
+      'Parol serverda hash qilinadi va hech qachon qaytarilmaydi. O‘z parolini o‘zgartirishda joriy parol talab qilinadi. Hisobning barcha sessiyalari yakunlanadi.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({ type: UserPasswordDto })
+  @ApiResponse({ status: 204, description: 'Parol o‘zgartirildi, sessiyalar yakunlandi' })
+  @ApiResponse({ status: 400, description: 'VALIDATION_ERROR — kamida 12 belgi' })
+  @ApiResponse({ status: 401, description: 'UNAUTHENTICATED' })
+  @ApiResponse({
+    status: 403,
+    description: 'FORBIDDEN / PRIVILEGE_ESCALATION_DENIED / BUSINESS_OWNER_PASSWORD_DENIED',
+  })
+  @ApiResponse({ status: 404, description: 'USER_NOT_FOUND' })
+  @ApiResponse({ status: 409, description: 'SYSTEM_USER_PASSWORD_DENIED' })
+  @ApiResponse({
+    status: 422,
+    description: 'PASSWORD_MISMATCH / CURRENT_PASSWORD_REQUIRED / CURRENT_PASSWORD_INVALID',
+  })
+  updatePassword(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: UserPasswordDto,
+  ): Promise<void> {
+    return this.users.updatePassword(actor, id, body);
   }
 
   @Patch('users/:id/salary')

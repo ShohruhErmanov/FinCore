@@ -40,6 +40,11 @@ export function NotificationsPage() {
     queryKey: settingsKey,
     queryFn: ({ signal }) => notificationApi.settings(signal),
   });
+  const inbox = useQuery({
+    queryKey: ['notifications', 'inbox'],
+    queryFn: ({ signal }) => notificationApi.inbox(signal),
+    refetchInterval: 15_000,
+  });
   const users = useQuery({
     queryKey: queryKeys.userDirectory,
     queryFn: ({ signal }) => referenceApi.users(signal),
@@ -136,14 +141,56 @@ export function NotificationsPage() {
         items={[{ label: 'Boshqaruv' }, { label: 'Telegram bildirishnoma', current: true }]}
       />
       <PageHeader
-        title="Telegram bildirishnoma"
-        description="Kassirga kunlik tushum eslatmasi va direktorga oy yakuni hisoboti."
+        title="Bildirishnomalar"
+        description="Ilova ichidagi xabarlar va Telegram sozlamalari."
         actions={
           <Button loading={save.isPending} onClick={() => save.mutate()}>
             <Save className="h-4 w-4" /> Saqlash
           </Button>
         }
       />
+
+      <Card
+        title="Kelgan bildirishnomalar"
+        description="Kassir tahrirlashda qoldirgan izoh Telegram ulanmagan bo‘lsa ham shu yerda saqlanadi."
+        className="mb-5"
+      >
+        {inbox.isLoading ? <LoadingState label="Bildirishnomalar yuklanmoqda…" /> : null}
+        {inbox.isError ? (
+          <ErrorState
+            message={getApiErrorMessage(inbox.error)}
+            onRetry={() => void inbox.refetch()}
+          />
+        ) : null}
+        {inbox.data?.length === 0 ? (
+          <p className="text-sm text-muted">Hozircha yangi bildirishnoma yo‘q.</p>
+        ) : null}
+        {inbox.data && inbox.data.length > 0 ? (
+          <div className="space-y-3" data-testid="notification-inbox">
+            {inbox.data.map((item) => (
+              <article
+                key={item.id}
+                className="rounded-card border border-border bg-white px-4 py-3 shadow-soft"
+              >
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
+                    <Bell className="h-4 w-4 text-primary" /> Bildirishnoma
+                  </span>
+                  <time className="text-xs text-muted" dateTime={item.occurredAt}>
+                    {formatDateTime(item.occurredAt)}
+                  </time>
+                </div>
+                <p className="whitespace-pre-line text-sm leading-6 text-ink">{item.message}</p>
+                {item.telegramStatus === 'permanently_failed' ? (
+                  <p className="mt-2 text-xs text-amber-700">
+                    Ilovada saqlandi · Telegram ulanmagan yoki yetkazib bo‘lmadi
+                  </p>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        ) : null}
+      </Card>
 
       <Alert title="Yuborish uchun server kerak" tone="warning" className="mb-5">
         Sozlamalar, qabul qiluvchilar va xabar matnlari shu yerda tayyorlanadi va saqlanadi.

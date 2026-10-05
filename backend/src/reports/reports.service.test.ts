@@ -14,7 +14,15 @@ function user(overrides: Partial<AuthenticatedUser> = {}): AuthenticatedUser {
     fullName: 'Direktor',
     phone: '+998900000000',
     status: 'active',
-    roles: [],
+    roles: [
+      {
+        id: 'role-director',
+        role: 'director',
+        roleName: 'Direktor',
+        branchId: null,
+        branchName: null,
+      },
+    ],
     permissions: ['reports.view'],
     branchScopes: [BRANCH_A, BRANCH_B],
     writeBranchScopes: [BRANCH_A, BRANCH_B],
@@ -73,6 +81,10 @@ function setup() {
       { category_id: CATEGORY_FIXED, month: 1, n: 2n },
       { category_id: CATEGORY_FIXED, month: 2, n: 1n },
       { category_id: CATEGORY_VARIABLE, month: 1, n: 1n },
+    ])
+    .mockResolvedValueOnce([
+      { month: 1, planned_amount_uzs: 500n, actual_uzs: 400n },
+      { month: 2, planned_amount_uzs: null, actual_uzs: 50n },
     ]);
   const findMany = vi.fn().mockResolvedValue([
     {
@@ -105,7 +117,7 @@ describe('ReportsService — Oylik hisobot', () => {
 
     const result = await service.monthly(user(), 2026, 'all');
 
-    expect(queryRaw).toHaveBeenCalledTimes(2);
+    expect(queryRaw).toHaveBeenCalledTimes(3);
     expect(findMany).toHaveBeenCalledOnce();
     expect(result.rows.map((row) => row.category.code)).toEqual(['FIXED', 'VARIABLE']);
     expect(result.rows[0]?.months).toHaveLength(12);
@@ -130,7 +142,70 @@ describe('ReportsService — Oylik hisobot', () => {
       overall: { plannedAmountUzs: '350', actualAmountUzs: '330', varianceUzs: '20' },
     });
     expect(result.averagePolicy.denominator).toBe(2);
+    expect(result.financialMonths).toHaveLength(12);
+    expect(result.financialMonths?.[0]).toMatchObject({
+      revenuePlanUzs: '500',
+      revenueActualUzs: '400',
+      expenseActualUzs: '320',
+      netProfitUzs: '80',
+      revenueCompletionPercent: 80,
+      netMarginPercent: 20,
+    });
+    expect(result.financialMonths?.[1]).toMatchObject({
+      revenuePlanUzs: null,
+      revenueActualUzs: '50',
+      expenseActualUzs: '10',
+      netProfitUzs: '40',
+    });
   });
+
+  it('Cashier uchun tushumdan hosil qilingan sof foyda blokini umuman qaytarmaydi', async () => {
+    const { service, queryRaw } = setup();
+    const cashier = user({
+      roles: [
+        {
+          id: 'role-cashier',
+          role: 'cashier',
+          roleName: 'Kassir',
+          branchId: BRANCH_A,
+          branchName: 'Sayxun',
+        },
+      ],
+      branchScopes: [BRANCH_A],
+      writeBranchScopes: [BRANCH_A],
+    });
+
+    const result = await service.monthly(cashier, 2026, BRANCH_A);
+
+    expect(queryRaw).toHaveBeenCalledTimes(2);
+    expect(result).not.toHaveProperty('financialMonths');
+    expect(JSON.stringify(result)).not.toMatch(/netProfit|net_profit|profitMargin/i);
+  });
+
+  it.each(['business_owner', 'finance_manager'])(
+    '%s uchun oylik tushum va sof foyda accessini saqlaydi',
+    async (role) => {
+      const { service, queryRaw } = setup();
+      const result = await service.monthly(
+        user({
+          roles: [
+            {
+              id: `role-${role}`,
+              role,
+              roleName: role,
+              branchId: null,
+              branchName: null,
+            },
+          ],
+        }),
+        2026,
+        'all',
+      );
+
+      expect(queryRaw).toHaveBeenCalledTimes(3);
+      expect(result.financialMonths?.[0]?.netProfitUzs).toBe('80');
+    },
+  );
 
   it('ruxsat doirasidan tashqaridagi filial uchun ma’lumot o‘qimaydi', async () => {
     const { service, queryRaw, findMany } = setup();

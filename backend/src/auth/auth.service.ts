@@ -8,6 +8,7 @@ import {
 } from '@/common';
 import { toIsoDateTime, toMoneyUzs } from '@/common/serialization/financial';
 import { PrismaService } from '@/database';
+import { LoginAttempts } from './login-attempts';
 import { burnPasswordTiming, verifyPassword } from './password';
 
 /** Phone numbers are entered with spaces, dashes and parentheses; storage may not have them. */
@@ -21,7 +22,10 @@ const ACTIVE_ASSIGNMENT = { is_active: true, revoked_at: null } as const;
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly attempts: LoginAttempts = new LoginAttempts(),
+  ) {}
 
   /**
    * Verifies credentials and returns the session projection. Every failure path
@@ -30,6 +34,9 @@ export class AuthService {
   async authenticate(login: string, password: string): Promise<AuthenticatedUser> {
     const identifier = login.trim();
     const phone = normalizePhone(identifier);
+    // Keyed on the normalised login, so "+998 90 …" and "+99890…" share a count.
+    const attemptKey = phone.toLowerCase();
+    this.attempts.assertAllowed(attemptKey);
     const candidate = await this.prisma.db.users.findFirst({
       where: {
         OR: [{ phone: identifier }, { phone }, { email: identifier.toLowerCase() }],
@@ -39,10 +46,14 @@ export class AuthService {
 
     if (!candidate) {
       await burnPasswordTiming(password);
+      this.attempts.recordFailure(attemptKey);
       throw ApiException.invalidCredentials();
     }
-    if (!(await verifyPassword(password, candidate.password_hash)))
+    if (!(await verifyPassword(password, candidate.password_hash))) {
+      this.attempts.recordFailure(attemptKey);
       throw ApiException.invalidCredentials();
+    }
+    this.attempts.reset(attemptKey);
     if (candidate.status !== 'active') throw ApiException.accountDisabled();
 
     await this.prisma.db.users.update({
@@ -138,15 +149,16 @@ export class AuthService {
       (item) => item.branch_id === null && GLOBAL_WRITE_ROLE_CODES.has(item.role.code),
     );
 
-    const globalBranchIds = hasAllBranchRead || hasAllBranchWrite
-      ? (
-          await this.prisma.db.branches.findMany({
-            where: { is_active: true },
-            select: { id: true },
-            orderBy: { code: 'asc' },
-          })
-        ).map((branch) => branch.id)
-      : [];
+    const globalBranchIds =
+      hasAllBranchRead || hasAllBranchWrite
+        ? (
+            await this.prisma.db.branches.findMany({
+              where: { is_active: true },
+              select: { id: true },
+              orderBy: { code: 'asc' },
+            })
+          ).map((branch) => branch.id)
+        : [];
 
     const branchScopes = [...new Set([...globalBranchIds, ...scopedBranchIds])];
     const writeBranchScopes = [

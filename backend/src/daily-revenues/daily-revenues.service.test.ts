@@ -131,6 +131,7 @@ interface Harness {
   periodFindFirst: ReturnType<typeof vi.fn>;
   withActor: ReturnType<typeof vi.fn>;
   mint: ReturnType<typeof vi.fn>;
+  events: { createForActiveDirectorsInTransaction: ReturnType<typeof vi.fn> };
 }
 
 function harness(): Harness {
@@ -143,8 +144,8 @@ function harness(): Harness {
     $queryRaw: txQueryRaw,
     $executeRaw: txExecuteRaw,
   } as unknown as PrismaTransaction;
-  const withActor = vi.fn(async (_token: string, work: (client: PrismaTransaction) => Promise<unknown>) =>
-    work(tx),
+  const withActor = vi.fn(
+    async (_token: string, work: (client: PrismaTransaction) => Promise<unknown>) => work(tx),
   );
   const prisma = {
     db: {
@@ -156,8 +157,13 @@ function harness(): Harness {
   } as unknown as PrismaService;
   const mint = vi.fn(() => 'signed-actor-token');
   const actor = { mint } as unknown as ActorContextService;
+  const events = {
+    createForActiveDirectorsInTransaction: vi
+      .fn()
+      .mockResolvedValue({ id: 'event-id', deduplicated: false, deliveryCount: 1 }),
+  };
   return {
-    service: new DailyRevenuesService(prisma, actor),
+    service: new DailyRevenuesService(prisma, actor, events as never),
     dbQueryRaw,
     txQueryRaw,
     txExecuteRaw,
@@ -165,6 +171,7 @@ function harness(): Harness {
     periodFindFirst,
     withActor,
     mint,
+    events,
   };
 }
 
@@ -189,12 +196,8 @@ describe('Daily revenue date helpers', () => {
   });
 
   it('uses the Asia/Tashkent calendar day across the UTC boundary', () => {
-    expect(currentTashkentBusinessDate(new Date('2026-08-20T18:59:59.000Z'))).toBe(
-      '2026-08-20',
-    );
-    expect(currentTashkentBusinessDate(new Date('2026-08-20T19:00:00.000Z'))).toBe(
-      '2026-08-21',
-    );
+    expect(currentTashkentBusinessDate(new Date('2026-08-20T18:59:59.000Z'))).toBe('2026-08-20');
+    expect(currentTashkentBusinessDate(new Date('2026-08-20T19:00:00.000Z'))).toBe('2026-08-21');
   });
 });
 
@@ -291,9 +294,7 @@ describe('DailyRevenuesService create validation and transaction order', () => {
         idempotencyKey: 'different-body-key',
       })
       .then(() => expect.unreachable('mismatched idempotency keys must fail'))
-      .catch((error: unknown) =>
-        expectApiCode(error, 422, 'IDEMPOTENCY_KEY_REQUIRED'),
-      );
+      .catch((error: unknown) => expectApiCode(error, 422, 'IDEMPOTENCY_KEY_REQUIRED'));
     expect(test.dbQueryRaw).not.toHaveBeenCalled();
   });
 
@@ -370,7 +371,9 @@ describe('DailyRevenuesService create validation and transaction order', () => {
         return [];
       }
       events.push('detail');
-      return [aggregateRow({ cash_uzs: '100', card_uzs: '0', transfer_uzs: '0', total_uzs: '100' })];
+      return [
+        aggregateRow({ cash_uzs: '100', card_uzs: '0', transfer_uzs: '0', total_uzs: '100' }),
+      ];
     });
     test.branchFindUnique.mockImplementation(async () => {
       events.push('branch');
@@ -388,7 +391,8 @@ describe('DailyRevenuesService create validation and transaction order', () => {
             const sql = renderSqlCall(args);
             if (sql.includes('daily-revenue-idempotency:')) events.push('idempotency lock');
             else if (sql.includes('daily-revenue:')) events.push('day lock');
-            else if (sql.includes('INSERT INTO fincore.revenue_transactions')) events.push('insert');
+            else if (sql.includes('INSERT INTO fincore.revenue_transactions'))
+              events.push('insert');
             return 1;
           }),
           $queryRaw: vi.fn(async (...args: unknown[]) => {
@@ -460,18 +464,14 @@ describe('DailyRevenuesService create validation and transaction order', () => {
     test.dbQueryRaw.mockResolvedValueOnce([aggregateRow()]);
 
     await test.service
-      .create(
-        user({ writeBranchScopes: [otherBranch] }),
-        'request-key',
-        {
-          businessDate: BUSINESS_DATE,
-          branchId: otherBranch,
-          cashUzs: '1',
-          cardUzs: '0',
-          transferUzs: '0',
-          idempotencyKey: 'request-key',
-        },
-      )
+      .create(user({ writeBranchScopes: [otherBranch] }), 'request-key', {
+        businessDate: BUSINESS_DATE,
+        branchId: otherBranch,
+        cashUzs: '1',
+        cardUzs: '0',
+        transferUzs: '0',
+        idempotencyKey: 'request-key',
+      })
       .then(() => expect.unreachable('out-of-scope replay must fail'))
       .catch((error: unknown) => expectApiCode(error, 403, 'BRANCH_SCOPE_DENIED'));
     expect(test.withActor).not.toHaveBeenCalled();
@@ -500,6 +500,28 @@ describe('DailyRevenuesService create validation and transaction order', () => {
 });
 
 describe('DailyRevenuesService PATCH safety', () => {
+  const cashierRoles = [
+    {
+      id: '99999999-9999-4999-8999-999999999999',
+      role: 'cashier',
+      roleName: 'Kassir',
+      branchId: BRANCH_ID,
+      branchName: 'Markaziy filial',
+    },
+  ];
+
+  it('requires a reason before a cashier can edit revenue', async () => {
+    const test = harness();
+
+    await test.service
+      .update(user({ roles: cashierRoles }), DAILY_ID, { cashUzs: '500' })
+      .then(() => expect.unreachable('cashier edit without a reason must fail'))
+      .catch((error: unknown) => expectApiCode(error, 422, 'EDIT_REASON_REQUIRED'));
+
+    expect(test.dbQueryRaw).not.toHaveBeenCalled();
+    expect(test.withActor).not.toHaveBeenCalled();
+  });
+
   it('rejects an inactive target branch before reversing any transactions', async () => {
     const test = harness();
     test.dbQueryRaw.mockResolvedValueOnce([aggregateRow()]);
@@ -596,5 +618,36 @@ describe('DailyRevenuesService PATCH safety', () => {
       }),
     ).resolves.toMatchObject({ id: DAILY_ID, cashUzs: '500' });
     expect(test.withActor).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends the cashier reason to active Directors inside the edit transaction', async () => {
+    const test = harness();
+    const current = aggregateRow();
+    const replacement = aggregateRow({
+      cash_uzs: '500',
+      total_uzs: '1000',
+      updated_at: new Date('2026-08-20T06:00:00.000Z'),
+    });
+    test.dbQueryRaw.mockResolvedValueOnce([current]);
+    test.txQueryRaw
+      .mockResolvedValueOnce([current])
+      .mockResolvedValueOnce([{ original_transaction_id: '55555555-5555-4555-8555-555555555555' }])
+      .mockResolvedValueOnce([replacement]);
+
+    await test.service.update(user({ roles: cashierRoles }), DAILY_ID, {
+      cashUzs: '500',
+      editReason: 'Karta terminali yakuni bo‘yicha tuzatildi.',
+    });
+
+    expect(test.events.createForActiveDirectorsInTransaction).toHaveBeenCalledTimes(1);
+    expect(test.events.createForActiveDirectorsInTransaction.mock.calls[0]?.[1]).toMatchObject({
+      eventType: 'daily_revenue.replaced',
+      aggregateId: DAILY_ID,
+      actorIdentityId: USER_ID,
+      payload: {
+        editReason: 'Karta terminali yakuni bo‘yicha tuzatildi.',
+        totalUzs: '1000',
+      },
+    });
   });
 });

@@ -20,7 +20,10 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 export class DailyRevenueCreateDto {
   @ApiProperty({ example: '2026-08-20', description: 'Biznes sanasi (Asia/Tashkent)' })
   @Matches(ISO_DATE, { message: 'businessDate YYYY-MM-DD bo‘lishi kerak' })
-  @IsDateString({ strict: true, strictSeparator: true }, { message: 'businessDate haqiqiy sana bo‘lishi kerak' })
+  @IsDateString(
+    { strict: true, strictSeparator: true },
+    { message: 'businessDate haqiqiy sana bo‘lishi kerak' },
+  )
   businessDate!: string;
 
   @ApiPropertyOptional({ description: 'Berilmasa foydalanuvchining yozish scope’i ishlatiladi' })
@@ -75,13 +78,26 @@ export class DailyRevenueUpdateDto {
   @MaxLength(1000)
   comment?: string;
 
+  @ApiPropertyOptional({
+    description: 'Kassir tahriri sababi. Kassir roli uchun majburiy.',
+    example: 'Terminal yakuni bilan solishtirganda karta summasi noto‘g‘ri kiritilgan.',
+  })
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(500)
+  editReason?: string;
+
   // The revenue form reuses the create payload, so these two may arrive on a
   // PATCH as well. They are accepted and ignored: the logical identity of a
   // DailyRevenue is (branch, businessDate) and PATCH never moves a day.
   @ApiPropertyOptional({ description: 'Qabul qilinadi, lekin e’tiborga olinmaydi' })
   @IsOptional()
   @Matches(ISO_DATE, { message: 'businessDate YYYY-MM-DD bo‘lishi kerak' })
-  @IsDateString({ strict: true, strictSeparator: true }, { message: 'businessDate haqiqiy sana bo‘lishi kerak' })
+  @IsDateString(
+    { strict: true, strictSeparator: true },
+    { message: 'businessDate haqiqiy sana bo‘lishi kerak' },
+  )
   businessDate?: string;
 
   @ApiPropertyOptional({ description: 'Qabul qilinadi, lekin e’tiborga olinmaydi' })
@@ -105,8 +121,14 @@ export class DailyRevenueListQueryDto {
   branch?: string;
 
   @IsOptional() @IsUUID() periodId?: string;
-  @IsOptional() @Matches(ISO_DATE) @IsDateString({ strict: true, strictSeparator: true }) dateFrom?: string;
-  @IsOptional() @Matches(ISO_DATE) @IsDateString({ strict: true, strictSeparator: true }) dateTo?: string;
+  @IsOptional()
+  @Matches(ISO_DATE)
+  @IsDateString({ strict: true, strictSeparator: true })
+  dateFrom?: string;
+  @IsOptional()
+  @Matches(ISO_DATE)
+  @IsDateString({ strict: true, strictSeparator: true })
+  dateTo?: string;
   @IsOptional() @IsString() sort?: string;
 
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
@@ -117,7 +139,10 @@ export class ReminderPreviewQueryDto {
   @ApiPropertyOptional({ example: '2026-08-20', description: 'Berilmasa bugungi sana' })
   @IsOptional()
   @Matches(ISO_DATE, { message: 'date YYYY-MM-DD bo‘lishi kerak' })
-  @IsDateString({ strict: true, strictSeparator: true }, { message: 'date haqiqiy sana bo‘lishi kerak' })
+  @IsDateString(
+    { strict: true, strictSeparator: true },
+    { message: 'date haqiqiy sana bo‘lishi kerak' },
+  )
   date?: string;
 }
 

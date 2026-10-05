@@ -1,7 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import type { AuthenticatedUser } from '@/common';
 import { PrismaService } from '@/database';
-import { MONTHS_SHORT_UZ, MONTHS_UZ, planActual, toBigInt, type PlanActual } from './report-math';
+import {
+  MONTHS_SHORT_UZ,
+  MONTHS_UZ,
+  percentageValue,
+  planActual,
+  toBigInt,
+  type PlanActual,
+} from './report-math';
 
 /**
  * Report numbers come from the sanctioned views in
@@ -27,6 +34,16 @@ export interface MonthlyReport {
     annual: PlanActual & { transactionCount: number };
   }>;
   totals: { fixed: PlanActual; variable: PlanActual; overall: PlanActual };
+  /** Company-level income and profit are omitted for operational-only roles. */
+  financialMonths?: Array<{
+    month: number;
+    revenuePlanUzs: string | null;
+    revenueActualUzs: string;
+    expenseActualUzs: string;
+    netProfitUzs: string;
+    revenueCompletionPercent: number | null;
+    netMarginPercent: number | null;
+  }>;
 }
 
 export interface BranchComparisonReport {
@@ -62,6 +79,12 @@ interface MonthlyViewRow {
   month: number;
   actual_uzs: unknown;
   planned_amount_uzs: unknown;
+}
+
+interface MonthlyRevenueRow {
+  month: number;
+  planned_amount_uzs: unknown;
+  actual_uzs: unknown;
 }
 
 interface BranchViewRow {
@@ -114,6 +137,9 @@ export class ReportsService {
     branchFilter: string,
   ): Promise<MonthlyReport> {
     const branchIds = this.scopeBranchIds(user, branchFilter);
+    const canViewNetProfit = user.roles.some((assignment) =>
+      ['director', 'business_owner', 'finance_manager'].includes(assignment.role),
+    );
     const empty = planActual(null, 0n, false);
     if (branchIds.length === 0)
       return {
@@ -128,7 +154,7 @@ export class ReportsService {
         totals: { fixed: empty, variable: empty, overall: empty },
       };
 
-    const [rows, counts, categories] = await Promise.all([
+    const [rows, counts, revenueRows, categories] = await Promise.all([
       this.prisma.db.$queryRaw<MonthlyViewRow[]>`
         SELECT year, branch_id, category_id, category_name, expense_type, month,
                actual_uzs, planned_amount_uzs
@@ -144,6 +170,21 @@ export class ReportsService {
           AND branch_id = ANY(${branchIds}::uuid[])
         GROUP BY category_id, EXTRACT(MONTH FROM transaction_date)
       `,
+      canViewNetProfit
+        ? this.prisma.db.$queryRaw<MonthlyRevenueRow[]>`
+            SELECT month,
+                   CASE
+                     WHEN bool_or(planned_amount_uzs IS NOT NULL)
+                     THEN sum(coalesce(planned_amount_uzs, 0))
+                     ELSE NULL
+                   END AS planned_amount_uzs,
+                   sum(actual_uzs) AS actual_uzs
+            FROM fincore.v_revenue_plan_vs_actual
+            WHERE year = ${year} AND branch_id = ANY(${branchIds}::uuid[])
+            GROUP BY month
+            ORDER BY month
+          `
+        : Promise.resolve([] as MonthlyRevenueRow[]),
       this.prisma.db.expense_categories.findMany({
         select: { id: true, code: true, name: true, expense_type: true, sort_order: true },
       }),
@@ -236,6 +277,40 @@ export class ReportsService {
         row.months.filter((month) => month.transactionCount > 0).map((month) => month.month),
       ),
     ).size;
+    const revenueByMonth = new Map(
+      revenueRows.map((row) => [
+        Number(row.month),
+        {
+          planned:
+            row.planned_amount_uzs === null || row.planned_amount_uzs === undefined
+              ? null
+              : toBigInt(row.planned_amount_uzs),
+          actual: toBigInt(row.actual_uzs),
+        },
+      ]),
+    );
+    const financialMonths = canViewNetProfit
+      ? Array.from({ length: 12 }, (_, index) => {
+          const month = index + 1;
+          const revenue = revenueByMonth.get(month) ?? { planned: null, actual: 0n };
+          const expenseActual = reportRows.reduce(
+            (total, row) => total + BigInt(row.months[index]!.planActual.actualAmountUzs),
+            0n,
+          );
+          const netProfit = revenue.actual - expenseActual;
+          return {
+            month,
+            revenuePlanUzs: revenue.planned === null ? null : revenue.planned.toString(),
+            revenueActualUzs: revenue.actual.toString(),
+            expenseActualUzs: expenseActual.toString(),
+            netProfitUzs: netProfit.toString(),
+            revenueCompletionPercent:
+              revenue.planned === null ? null : percentageValue(revenue.actual, revenue.planned),
+            netMarginPercent:
+              revenue.actual === 0n ? null : percentageValue(netProfit, revenue.actual),
+          };
+        })
+      : undefined;
 
     return {
       year,
@@ -247,6 +322,7 @@ export class ReportsService {
       },
       rows: reportRows,
       totals: { fixed: aggregate('fixed'), variable: aggregate('variable'), overall: aggregate() },
+      ...(financialMonths ? { financialMonths } : {}),
     };
   }
 

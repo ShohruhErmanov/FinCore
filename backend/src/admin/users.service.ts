@@ -1,8 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { AuthService, hashPassword, SessionService } from '@/auth';
+import { AuthService, hashPassword, SessionService, verifyPassword } from '@/auth';
 import { ApiException, type AuthenticatedUser } from '@/common';
 import { ActorContextService, PrismaService, type PrismaTransaction } from '@/database';
-import type { UserAccessDto, UserCreateDto, UserSalaryDto, UserStatusDto } from './dto/admin.dto';
+import type {
+  UserAccessDto,
+  UserCreateDto,
+  UserPasswordDto,
+  UserSalaryDto,
+  UserStatusDto,
+} from './dto/admin.dto';
 
 /** Mirrors the frontend UserDirectoryItem (src/shared/types/domain.ts:77). */
 export interface UserDirectoryItemDto {
@@ -322,6 +328,7 @@ export class AdminUsersService {
     const targetIsBusinessOwner = target.roles.some(
       (role) => role.code === 'business_owner' && role.is_active,
     );
+    this.assertMayManageBusinessOwner(actor, targetIsBusinessOwner);
     if (targetIsDirector && !this.hasRole(actor, 'director'))
       throw new ApiException(
         403,
@@ -417,6 +424,7 @@ export class AdminUsersService {
     const targetIsBusinessOwner = target.roles.some(
       (role) => role.code === 'business_owner' && role.is_active,
     );
+    this.assertMayManageBusinessOwner(actor, targetIsBusinessOwner);
     if (targetIsDirector && !this.hasRole(actor, 'director'))
       throw new ApiException(
         403,
@@ -505,6 +513,7 @@ export class AdminUsersService {
             'SYSTEM_USER_DELETE_DENIED',
             'Rezerv tizim aktori servis audit identifikatori bo‘lgani uchun o‘chirib bo‘lmaydi.',
           );
+        this.assertMayManageBusinessOwner(actor, target.is_business_owner);
         if (target.is_director && target.status === 'active')
           await this.assertNotLastActiveDirector(tx, userId, true);
         if (target.is_business_owner && target.status === 'active')
@@ -525,6 +534,96 @@ export class AdminUsersService {
   }
 
   /**
+   * Sets a new password. It is hashed here and never stored, logged or
+   * returned in clear, so afterwards nobody — the director included — can read
+   * it back, only set another.
+   *
+   * Someone else's password needs no old one: that is what an admin reset is
+   * for. Your own does, so a borrowed session cannot lock its owner out.
+   * The same hierarchy as access applies: only a director resets a director,
+   * and nobody resets the Business Owner but the Business Owner. Every session
+   * of the account ends, so the old password stops working everywhere at once.
+   */
+  async updatePassword(
+    actor: AuthenticatedUser,
+    userId: string,
+    input: UserPasswordDto,
+  ): Promise<void> {
+    if (input.password !== input.confirmPassword)
+      throw new ApiException(422, 'PASSWORD_MISMATCH', 'Parol va tasdiqlash mos emas.');
+
+    const target = await this.requireUser(userId);
+    if (target.is_system)
+      throw new ApiException(
+        409,
+        'SYSTEM_USER_PASSWORD_DENIED',
+        'Tizim aktori tizimga kirmaydi, uning paroli o‘zgartirilmaydi.',
+      );
+
+    const self = actor.id === userId;
+    const targetIsDirector = target.roles.some(
+      (role) => role.code === 'director' && role.is_active,
+    );
+    const targetIsBusinessOwner = target.roles.some(
+      (role) => role.code === 'business_owner' && role.is_active,
+    );
+    if (!self && targetIsBusinessOwner)
+      throw new ApiException(
+        403,
+        'BUSINESS_OWNER_PASSWORD_DENIED',
+        'Biznes egasi parolini faqat uning o‘zi o‘zgartiradi.',
+      );
+    if (!self && targetIsDirector && !this.hasRole(actor, 'director'))
+      throw new ApiException(
+        403,
+        'PRIVILEGE_ESCALATION_DENIED',
+        'Direktor parolini faqat direktor o‘zgartirishi mumkin.',
+      );
+
+    if (self) {
+      if (!input.currentPassword)
+        throw new ApiException(
+          422,
+          'CURRENT_PASSWORD_REQUIRED',
+          'O‘z parolingizni o‘zgartirish uchun joriy parolni kiriting.',
+        );
+      const stored = await this.prisma.db.users.findUnique({
+        where: { id: userId },
+        select: { password_hash: true },
+      });
+      if (!stored || !(await verifyPassword(input.currentPassword, stored.password_hash)))
+        throw new ApiException(422, 'CURRENT_PASSWORD_INVALID', 'Joriy parol noto‘g‘ri.');
+    }
+
+    const password_hash = await hashPassword(input.password);
+    await this.prisma
+      .withActor(this.actor.mint(actor.id), async (tx) => {
+        await tx.users.update({ where: { id: userId }, data: { password_hash } });
+        // users has no generic audit trigger (the row carries the hash), so the
+        // event is recorded by hand — who and whose, never the password.
+        await tx.$executeRaw`
+          INSERT INTO fincore.audit_logs (
+            actor_user_id, action, entity_type, entity_id, result, before_payload, after_payload
+          ) VALUES (
+            fincore.fn_current_actor_id(),
+            ${self ? 'users.password_change' : 'users.password_reset'},
+            'users',
+            ${userId},
+            'success',
+            NULL,
+            jsonb_build_object('id', ${userId}::text, 'self', ${self}, 'sessions_revoked', true)
+          )
+        `;
+      })
+      .catch((error: unknown) => {
+        throw this.translateWriteError(error);
+      });
+
+    // Process-local sessions; revoked only once the new hash is committed.
+    this.sessions.destroyAllForUser(userId);
+  }
+
+  /**
    * PHASE 19 / DECISION 2: fixed salary lives on fincore.users, one current
    * value per user. The column is a uzs_amount_nonnegative domain, so a
    * negative figure is refused by the database as well as by the DTO.
@@ -534,7 +633,11 @@ export class AdminUsersService {
     userId: string,
     input: UserSalaryDto,
   ): Promise<AuthenticatedUser> {
-    await this.requireUser(userId);
+    const target = await this.requireUser(userId);
+    this.assertMayManageBusinessOwner(
+      actor,
+      target.roles.some((role) => role.code === 'business_owner' && role.is_active),
+    );
     if (!/^\d+$/.test(input.fixedSalaryUzs) || BigInt(input.fixedSalaryUzs) > MAX_UZS)
       throw new ApiException(
         422,
@@ -691,6 +794,21 @@ export class AdminUsersService {
       'Foydalanuvchi o‘chirilmadi: boshqarilmagan tashqi kalit xavfsizlik cheklovi mavjud.',
       { dependencyCategories },
     );
+  }
+
+  /**
+   * The Business Owner sits above the director. Only a Business Owner may
+   * re-role, deactivate, delete or set the salary of a Business Owner account;
+   * a director — or anyone else holding user.manage — can do nothing to it.
+   * (Its password is stricter still: only its owner, see updatePassword.)
+   */
+  private assertMayManageBusinessOwner(actor: AuthenticatedUser, targetIsBusinessOwner: boolean) {
+    if (targetIsBusinessOwner && !this.hasRole(actor, 'business_owner'))
+      throw new ApiException(
+        403,
+        'BUSINESS_OWNER_PROTECTED',
+        'Biznes egasi hisobini faqat Biznes egasi boshqaradi.',
+      );
   }
 
   private hasRole(user: AuthenticatedUser, code: string): boolean {

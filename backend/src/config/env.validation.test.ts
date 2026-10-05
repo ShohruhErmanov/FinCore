@@ -20,6 +20,25 @@ describe('validateEnv', () => {
     expect(env.DATABASE_URL).toBeUndefined();
   });
 
+  it('listens on loopback only unless told otherwise', () => {
+    // Bound to every interface, the API is reachable by everyone on the Wi-Fi.
+    const env = validateEnv({ ...base });
+    expect(env.HOST).toBe('127.0.0.1');
+    expect(env.TRUST_PROXY_HOPS).toBe(0);
+    expect(validateEnv({ ...base, HOST: '0.0.0.0', TRUST_PROXY_HOPS: '1' })).toMatchObject({
+      HOST: '0.0.0.0',
+      TRUST_PROXY_HOPS: 1,
+    });
+  });
+
+  it.each([
+    ['SESSION_SECRET', '__KAMIDA_32_BELGILI_TASODIFIY_QIYMAT__'],
+    ['ACTOR_SIGNING_KEY', '__BASE64_32_BAYT_LEKIN_ANCHA_UZUNROQ_NAMUNA__'],
+  ])('refuses the .env.example placeholder for %s', (key, placeholder) => {
+    // Long enough to pass the length check, and public on GitHub.
+    expect(() => validateEnv({ ...base, [key]: placeholder })).toThrow(/placeholder/);
+  });
+
   it('rejects a session secret shorter than 32 characters', () => {
     expect(() => validateEnv({ ...base, SESSION_SECRET: 'qisqa' })).toThrow(/SESSION_SECRET/);
   });

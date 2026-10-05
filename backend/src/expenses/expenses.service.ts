@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { ApiException, type AuthenticatedUser } from '@/common';
+import { ApiException, cashierEditReason, hasCashierRole, type AuthenticatedUser } from '@/common';
 import { toIsoDate, toIsoDateTime, toMoneyUzs } from '@/common/serialization/financial';
 import { ActorContextService, PrismaService } from '@/database';
+import { NotificationEventsService } from '@/notification-events/notification-events.service';
 import type { ExpenseCreateDto, ExpenseListQueryDto, ExpenseUpdateDto } from './dto/expense.dto';
 
 /** Mirrors the frontend Expense interface (src/shared/types/domain.ts:110). */
@@ -78,6 +79,7 @@ export class ExpensesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly actor: ActorContextService,
+    private readonly events: NotificationEventsService,
   ) {}
 
   async list(user: AuthenticatedUser, query: ExpenseListQueryDto): Promise<PaginatedExpenses> {
@@ -193,6 +195,8 @@ export class ExpensesService {
   }
 
   async update(user: AuthenticatedUser, id: string, input: ExpenseUpdateDto): Promise<ExpenseDto> {
+    const cashierEdit = hasCashierRole(user);
+    const editReason = cashierEditReason(user, input.editReason);
     const existing = await this.prisma.db.expenses.findUnique({
       where: { id },
       select: { id: true, branch_id: true },
@@ -217,7 +221,33 @@ export class ExpensesService {
 
     if (Object.keys(data).length > 0)
       await this.prisma
-        .withActor(this.actor.mint(user.id), (tx) => tx.expenses.update({ where: { id }, data }))
+        .withActor(this.actor.mint(user.id), async (tx) => {
+          const updated = await tx.expenses.update({
+            where: { id },
+            data,
+            select: {
+              amount_uzs: true,
+              transaction_date: true,
+              updated_at: true,
+            },
+          });
+          if (cashierEdit && editReason) {
+            await this.events.createForActiveDirectorsInTransaction(tx, {
+              eventType: 'expense.updated',
+              aggregateId: id,
+              branchId: existing.branch_id,
+              actorIdentityId: user.id,
+              payload: {
+                expenseId: id,
+                branchId: existing.branch_id,
+                amountUzs: updated.amount_uzs.toString(),
+                transactionDate: toIsoDate(updated.transaction_date),
+                editReason,
+                updatedAt: updated.updated_at.toISOString(),
+              },
+            });
+          }
+        })
         .catch((error: unknown) => {
           throw this.translateWriteError(error);
         });

@@ -37,6 +37,8 @@ import {
   type Column,
 } from '@/shared/ui';
 
+import { RevenuePlanYearOverview } from './revenue-plan-year';
+
 const money = z.string().regex(/^\d+$/, 'Faqat butun so‘m kiriting.');
 
 const revenueFormSchema = z
@@ -47,6 +49,7 @@ const revenueFormSchema = z
     cardUzs: money,
     transferUzs: money,
     comment: z.string().max(500, '500 belgidan oshmasin.').optional(),
+    editReason: z.string().max(500, '500 belgidan oshmasin.').optional(),
   })
   .refine(
     (values) =>
@@ -533,12 +536,21 @@ export function RevenueCreatePage() {
   );
 }
 
-function RevenueEditForm({ revenue, onDone }: { revenue: DailyRevenue; onDone: () => void }) {
+function RevenueEditForm({
+  revenue,
+  onDone,
+  requireEditReason,
+}: {
+  revenue: DailyRevenue;
+  onDone: () => void;
+  requireEditReason: boolean;
+}) {
   const queryClient = useQueryClient();
   const {
     register,
     handleSubmit,
     watch,
+    setError,
     formState: { errors },
   } = useForm<RevenueFormValues>({
     resolver: zodResolver(revenueFormSchema),
@@ -549,6 +561,7 @@ function RevenueEditForm({ revenue, onDone }: { revenue: DailyRevenue; onDone: (
       cardUzs: revenue.cardUzs,
       transferUzs: revenue.transferUzs,
       comment: revenue.comment ?? '',
+      editReason: '',
     },
   });
   const mutation = useMutation({
@@ -557,7 +570,8 @@ function RevenueEditForm({ revenue, onDone }: { revenue: DailyRevenue; onDone: (
         cashUzs: values.cashUzs,
         cardUzs: values.cardUzs,
         transferUzs: values.transferUzs,
-        comment: values.comment?.trim() || undefined,
+        ...(values.comment?.trim() ? { comment: values.comment.trim() } : {}),
+        ...(values.editReason?.trim() ? { editReason: values.editReason.trim() } : {}),
       }),
     onSuccess: async () => {
       await Promise.all([
@@ -575,7 +589,13 @@ function RevenueEditForm({ revenue, onDone }: { revenue: DailyRevenue; onDone: (
 
   return (
     <form
-      onSubmit={handleSubmit((values) => mutation.mutate(values))}
+      onSubmit={handleSubmit((values) => {
+        if (requireEditReason && !values.editReason?.trim()) {
+          setError('editReason', { message: 'Tahrirlash sababini kiriting.' });
+          return;
+        }
+        mutation.mutate(values);
+      })}
       noValidate
       className="space-y-5"
     >
@@ -605,6 +625,24 @@ function RevenueEditForm({ revenue, onDone }: { revenue: DailyRevenue; onDone: (
             <Textarea id="edit-revenue-comment" {...register('comment')} />
           </FormField>
         </div>
+        {requireEditReason ? (
+          <div className="md:col-span-2">
+            <FormField
+              label="Tahrirlash izohi"
+              htmlFor="edit-revenue-reason"
+              required
+              error={errors.editReason?.message}
+              hint="Majburiy. Ushbu izoh direktor bildirishnomasiga yuboriladi."
+            >
+              <Textarea
+                id="edit-revenue-reason"
+                required
+                aria-invalid={Boolean(errors.editReason)}
+                {...register('editReason')}
+              />
+            </FormField>
+          </div>
+        ) : null}
       </div>
       <div className="flex justify-end gap-3">
         <Button type="button" variant="secondary" onClick={onDone}>
@@ -664,6 +702,9 @@ export function RevenueDetailPage() {
     ) &&
     Boolean(meQuery.data?.writeBranchScopes.includes(revenue.branchId)) &&
     period?.status !== 'closed';
+  const isCashier = Boolean(
+    meQuery.data?.roles.some((assignment) => assignment.role === 'cashier'),
+  );
 
   return (
     <div>
@@ -698,7 +739,11 @@ export function RevenueDetailPage() {
 
       {editing ? (
         <Card title="Kunlik tushumni tahrirlash">
-          <RevenueEditForm revenue={revenue} onDone={() => setEditing(false)} />
+          <RevenueEditForm
+            revenue={revenue}
+            onDone={() => setEditing(false)}
+            requireEditReason={isCashier}
+          />
         </Card>
       ) : (
         <Card title="Kun kesimi">
@@ -949,6 +994,22 @@ export function RevenuePlanPage() {
             {formatDateTime(planQuery.data.updatedAt)}.
           </Alert>
         </>
+      ) : null}
+      {selectedPeriod ? (
+        <RevenuePlanYearOverview
+          year={selectedPeriod.year}
+          branchId={planBranch}
+          selectedPeriodId={selectedPeriodId}
+          onSelectPeriod={(periodId) => {
+            const next = new URLSearchParams(searchParams);
+            next.set('period', periodId);
+            setSearchParams(next, { replace: true });
+            // Whichever ancestor scrolls, bring the board with the month back into view.
+            document
+              .getElementById('main-content')
+              ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }}
+        />
       ) : null}
     </div>
   );

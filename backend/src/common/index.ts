@@ -6,6 +6,7 @@ export { RequirePermissions, PERMISSIONS_KEY } from './decorators/require-permis
 export { PermissionsGuard } from './guards/permissions.guard';
 export { CsrfGuard } from './guards/csrf.guard';
 export { GLOBAL_WRITE_ROLE_CODES, hasCompanyWideWrite } from './authz/branch-scope';
+export { cashierEditReason, hasCashierRole } from './authz/cashier-edit-reason';
 export { FinancialPayloadInterceptor } from './serialization/financial-payload.interceptor';
 export { toMoneyUzs, toIsoDate, toIsoDateTime, toPercent } from './serialization/financial';
 export type {

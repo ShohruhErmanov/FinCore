@@ -120,7 +120,7 @@ describe('Business Owner real endpoint authorization', () => {
   });
 
   it('blocks the service-enforced revenue update rule too', async () => {
-    const service = new DailyRevenuesService({} as never, {} as never);
+    const service = new DailyRevenuesService({} as never, {} as never, {} as never);
 
     await expect(service.update(owner(), 'revenue-id', {} as never)).rejects.toMatchObject({
       status: 403,

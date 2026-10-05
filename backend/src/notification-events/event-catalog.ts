@@ -85,14 +85,15 @@ export const EVENT_CATALOG = {
     aggregateType: 'expense',
     scope: 'branch',
     sensitivity: 'internal',
-    policyVersion: 1,
-    templateVersion: 1,
+    policyVersion: 2,
+    templateVersion: 2,
     payload: z
       .object({
         expenseId: uuid,
         branchId: uuid,
         amountUzs: moneyUzs,
         transactionDate: isoDate,
+        editReason: z.string().trim().min(1).max(500),
         // An expense can be edited repeatedly; the edit instant is what makes
         // each occurrence distinct.
         updatedAt: isoDateTime,
@@ -125,8 +126,8 @@ export const EVENT_CATALOG = {
     aggregateType: 'daily_revenue',
     scope: 'branch',
     sensitivity: 'internal',
-    policyVersion: 1,
-    templateVersion: 1,
+    policyVersion: 2,
+    templateVersion: 2,
     payload: z
       .object({
         dailyRevenueId: z.string().min(1).max(200),
@@ -134,6 +135,7 @@ export const EVENT_CATALOG = {
         businessDate: isoDate,
         totalUzs: moneyUzs,
         channelCount: count.max(3),
+        editReason: z.string().trim().min(1).max(500),
         // A day may be corrected more than once.
         replacedAt: isoDateTime,
       })
@@ -251,7 +253,11 @@ export const EVENT_CATALOG = {
     // The role code identifies which matrix row moved; the permission list
     // itself is not duplicated into notification history.
     payload: z
-      .object({ roleCode: z.string().min(1).max(64), permissionCount: count, changedAt: isoDateTime })
+      .object({
+        roleCode: z.string().min(1).max(64),
+        permissionCount: count,
+        changedAt: isoDateTime,
+      })
       .strict(),
     dedupe: (p) => `role.permissions_changed:${p.roleCode}:${p.changedAt}`,
   }),

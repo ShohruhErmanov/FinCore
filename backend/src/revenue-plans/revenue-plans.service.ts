@@ -4,6 +4,7 @@ import { toIsoDateTime, toMoneyUzs } from '@/common/serialization/financial';
 import { ActorContextService, PrismaService } from '@/database';
 import { MONTHS_UZ, daysInMonth, percentageValue, toBigInt } from '@/reports/report-math';
 import type { RevenuePlanLineInputDto } from './dto/revenue-plan.dto';
+import { buildRevenuePlanYear, type RevenuePlanYear } from './revenue-plan-year';
 
 /** Mirrors RevenuePlanLine / RevenuePlanBoard (src/shared/types/domain.ts:257-277). */
 export interface RevenuePlanLineDto {
@@ -45,6 +46,37 @@ export class RevenuePlansService {
   async get(periodId: string): Promise<RevenuePlanBoardDto> {
     const period = await this.requirePeriod(periodId);
     return this.build(period);
+  }
+
+  /**
+   * The whole year at once. Same view as the monthly board, so a month here and
+   * the board for that month can never disagree; months whose period has not
+   * been opened simply have no rows and come back empty.
+   */
+  async year(year: number): Promise<RevenuePlanYear> {
+    const rows = await this.prisma.db.$queryRaw<
+      Array<PlanVsActualRow & { period_id: string; month: number }>
+    >`
+      SELECT period_id, month, branch_id, branch_name, planned_amount_uzs, actual_uzs
+      FROM fincore.v_revenue_plan_vs_actual
+      WHERE year = ${year}
+      ORDER BY branch_name, month
+    `;
+
+    return buildRevenuePlanYear(
+      year,
+      rows.map((row) => ({
+        month: Number(row.month),
+        periodId: row.period_id,
+        branchId: row.branch_id,
+        branchName: row.branch_name,
+        plannedUzs:
+          row.planned_amount_uzs === null || row.planned_amount_uzs === undefined
+            ? null
+            : toBigInt(row.planned_amount_uzs),
+        actualUzs: toBigInt(row.actual_uzs),
+      })),
+    );
   }
 
   /**
@@ -212,7 +244,9 @@ export class RevenuePlansService {
     const message = error instanceof Error ? error.message : String(error);
     if (/period is closed/i.test(message))
       return new ApiException(409, 'PERIOD_CLOSED', 'Yopiq davrdagi tushum rejasi tahrirlanmaydi.');
-    if (/only draft revenue plans may be deleted|immutable outside a recognized state/i.test(message))
+    if (
+      /only draft revenue plans may be deleted|immutable outside a recognized state/i.test(message)
+    )
       return new ApiException(
         409,
         'REVENUE_PLAN_LOCKED',
@@ -221,7 +255,11 @@ export class RevenuePlansService {
     if (/foreign key|violates/i.test(message))
       return new ApiException(422, 'REFERENCE_INVALID', 'Filial yoki davr topilmadi.');
     if (/actor context|signing key/i.test(message))
-      return new ApiException(500, 'ACTOR_CONTEXT_INVALID', 'Server identifikatsiya konteksti noto‘g‘ri.');
+      return new ApiException(
+        500,
+        'ACTOR_CONTEXT_INVALID',
+        'Server identifikatsiya konteksti noto‘g‘ri.',
+      );
     return error;
   }
 }

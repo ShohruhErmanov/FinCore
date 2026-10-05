@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
@@ -11,13 +12,19 @@ import { PrismaService } from '@/database';
 
 async function bootstrap(): Promise<void> {
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule, { bufferLogs: false });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: false });
   const env = app.get<AppEnv>(APP_ENV);
+
+  // Express answers with its name unless told not to; nothing gains from knowing it.
+  app.disable('x-powered-by');
+  if (env.TRUST_PROXY_HOPS > 0) app.set('trust proxy', env.TRUST_PROXY_HOPS);
 
   app.setGlobalPrefix('api');
 
   // The API serves JSON to a separate SPA origin; it never renders HTML itself.
-  app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: { policy: 'same-site' } }));
+  app.use(
+    helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: { policy: 'same-site' } }),
+  );
   app.use(cookieParser(env.SESSION_SECRET));
 
   // Credentials require an explicit origin — a wildcard is rejected by browsers
@@ -39,8 +46,7 @@ async function bootstrap(): Promise<void> {
     }),
   );
   app.useGlobalFilters(new AllExceptionsFilter());
-  if (env.NODE_ENV !== 'production')
-    app.useGlobalInterceptors(new FinancialPayloadInterceptor());
+  if (env.NODE_ENV !== 'production') app.useGlobalInterceptors(new FinancialPayloadInterceptor());
 
   if (env.SWAGGER_ENABLED) {
     const document = SwaggerModule.createDocument(
@@ -58,9 +64,11 @@ async function bootstrap(): Promise<void> {
 
   app.enableShutdownHooks();
 
-  await app.listen(env.PORT);
+  await app.listen(env.PORT, env.HOST);
   const database = app.get(PrismaService).status;
-  logger.log(`FinCore API ${env.NODE_ENV} rejimida http://localhost:${env.PORT}/api da ishlamoqda`);
+  logger.log(
+    `FinCore API ${env.NODE_ENV} rejimida http://${env.HOST}:${env.PORT}/api da ishlamoqda`,
+  );
   logger.log(`Database: ${database} | CORS origin: ${env.FRONTEND_URL}`);
 }
 

@@ -1,9 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { ApiException, type AuthenticatedUser } from '@/common';
+import { ApiException, cashierEditReason, hasCashierRole, type AuthenticatedUser } from '@/common';
 import { toIsoDateTime } from '@/common/serialization/financial';
 import { ActorContextService, PrismaService, type PrismaTransaction } from '@/database';
-import type { DailyRevenueCreateDto, DailyRevenueListQueryDto, DailyRevenueUpdateDto } from './dto/daily-revenue.dto';
+import { NotificationEventsService } from '@/notification-events/notification-events.service';
+import type {
+  DailyRevenueCreateDto,
+  DailyRevenueListQueryDto,
+  DailyRevenueUpdateDto,
+} from './dto/daily-revenue.dto';
 
 /** Mirrors DailyRevenue (src/shared/types/domain.ts:229). */
 export interface DailyRevenueDto {
@@ -115,6 +120,7 @@ export class DailyRevenuesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly actor: ActorContextService,
+    private readonly events: NotificationEventsService,
   ) {}
 
   // ---------------------------------------------------------------- reads --
@@ -181,10 +187,7 @@ export class DailyRevenuesService {
    * A branch with no entry yields null — "0 so'm entered" and "nothing entered"
    * are different states and the contract keeps them apart.
    */
-  async totalsByBranch(
-    businessDate: string,
-    branchIds: string[],
-  ): Promise<Map<string, string>> {
+  async totalsByBranch(businessDate: string, branchIds: string[]): Promise<Map<string, string>> {
     this.assertBusinessDate(businessDate);
     if (branchIds.length === 0) return new Map();
     const rows = await this.prisma.db.$queryRaw<Array<{ branch_id: string; total_uzs: string }>>`
@@ -308,6 +311,9 @@ export class DailyRevenuesService {
     if (!allowed.some((code) => user.permissions.includes(code)))
       throw ApiException.forbidden(undefined, { missingPermissions: allowed });
 
+    const cashierEdit = hasCashierRole(user);
+    const editReason = cashierEditReason(user, input.editReason);
+
     const key = this.parseId(id);
     const current = await this.loadAggregate(key.branchId, key.businessDate);
     if (!current) throw new ApiException(404, 'REVENUE_NOT_FOUND', 'Kunlik tushum topilmadi.');
@@ -335,7 +341,7 @@ export class DailyRevenuesService {
         // An empty comment keeps the stored one, exactly as the mock does.
         const comment = input.comment?.trim() || lockedCurrent.comment;
         const reversalReason =
-          'Kunlik tushum tahrirlandi — yangi qiymatlar bilan qayta kiritildi.';
+          editReason ?? 'Kunlik tushum tahrirlandi — yangi qiymatlar bilan qayta kiritildi.';
 
         const reversals = await tx.$queryRaw<Array<{ original_transaction_id: string }>>`
           WITH reversed AS (
@@ -379,7 +385,25 @@ export class DailyRevenuesService {
         // As with POST, prepare the response inside the transaction so an
         // edit-only actor cannot commit successfully and then receive a 403
         // from the public read endpoint.
-        return this.loadWriteResult(key.branchId, key.businessDate, tx);
+        const result = await this.loadWriteResult(key.branchId, key.businessDate, tx);
+        if (cashierEdit && editReason) {
+          await this.events.createForActiveDirectorsInTransaction(tx, {
+            eventType: 'daily_revenue.replaced',
+            aggregateId: id,
+            branchId: key.branchId,
+            actorIdentityId: user.id,
+            payload: {
+              dailyRevenueId: id,
+              branchId: key.branchId,
+              businessDate: key.businessDate,
+              totalUzs: result.totalUzs,
+              channelCount: CHANNELS.filter((channel) => amounts[channel.field] > 0n).length,
+              editReason,
+              replacedAt: result.updatedAt,
+            },
+          });
+        }
+        return result;
       })
       .catch((error: unknown) => {
         throw this.translateWriteError(error);
@@ -511,7 +535,11 @@ export class DailyRevenuesService {
         );
       parsed[channel.field] = BigInt(raw);
       if (parsed[channel.field] > MAX_UZS)
-        throw new ApiException(422, 'AMOUNT_INVALID', 'Summa PostgreSQL BIGINT chegarasidan oshdi.');
+        throw new ApiException(
+          422,
+          'AMOUNT_INVALID',
+          'Summa PostgreSQL BIGINT chegarasidan oshdi.',
+        );
     }
     const total = CHANNELS.reduce((sum, channel) => sum + parsed[channel.field], 0n);
     if (total <= 0n)
@@ -534,8 +562,7 @@ export class DailyRevenuesService {
       where: { id: branchId },
       select: { is_active: true },
     });
-    if (!branch?.is_active)
-      throw new ApiException(422, 'REFERENCE_INVALID', 'Filial topilmadi.');
+    if (!branch?.is_active) throw new ApiException(422, 'REFERENCE_INVALID', 'Filial topilmadi.');
   }
 
   /**
@@ -708,11 +735,7 @@ export class DailyRevenuesService {
         'Tushum yozuvi o‘zgarmas — faqat bekor qilish orqali tahrirlanadi.',
       );
     if (/idempotency_key/i.test(message))
-      return new ApiException(
-        409,
-        'REVENUE_DAY_EXISTS',
-        'Bu so‘rov allaqachon qayta ishlangan.',
-      );
+      return new ApiException(409, 'REVENUE_DAY_EXISTS', 'Bu so‘rov allaqachon qayta ishlangan.');
     if (/bigint.*range|out of range/i.test(message))
       return new ApiException(422, 'AMOUNT_INVALID', 'Summa ruxsat etilgan chegaradan oshdi.');
     if (/actor context|signing key/i.test(message))
