@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppShell } from '@/app/layout/app-shell';
 import { notificationApi, referenceApi } from '@/shared/api/contracts';
+import { routes } from '@/shared/config/routes';
 import type { AccountingPeriod } from '@/shared/types/domain';
 import { ToastProvider } from '@/shared/ui';
 
@@ -135,10 +136,27 @@ describe('global accounting year selector', () => {
         occurredAt: '2026-10-05T05:54:06.170Z',
         telegramStatus: 'permanently_failed',
       },
+      {
+        id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        eventType: 'expense.updated',
+        message: 'Kassir xarajatni tahrirladi',
+        occurredAt: '2026-10-05T05:55:06.170Z',
+        telegramStatus: 'pending',
+      },
     ]);
 
     renderShell([period(2026, 8)]);
 
-    expect(await screen.findByLabelText('1 ta yangi kassir tahriri')).toBeInTheDocument();
+    expect(await screen.findByLabelText('2 ta yangi kassir tahriri')).toHaveTextContent('2');
+    expect(
+      within(screen.getByRole('banner')).getByRole('link', {
+        name: 'Bildirishnomalar — 2 ta yangi xabar',
+      }),
+    ).toHaveAttribute('href', routes.notifications);
+    expect(
+      within(screen.getByRole('navigation', { name: 'Asosiy navigatsiya' })).queryByText(
+        'Bildirishnoma',
+      ),
+    ).not.toBeInTheDocument();
   });
 });

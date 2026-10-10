@@ -23,7 +23,12 @@ import { queryKeys } from '@/shared/api/query-keys';
 import { routes } from '@/shared/config/routes';
 import { getActiveWritableBranches } from '@/shared/lib/branch-scopes';
 import { downloadCsv } from '@/shared/lib/csv';
-import { formatDate, formatDateTime } from '@/shared/lib/format';
+import {
+  accountingPeriodDateRange,
+  formatDate,
+  formatDateTime,
+  tashkentBusinessDate,
+} from '@/shared/lib/format';
 import type { Expense, ExpenseType } from '@/shared/types/domain';
 import { downloadJournalXlsx, journalCsvRows, loadAllJournalExpenses } from './journal-export';
 import {
@@ -37,6 +42,7 @@ import {
   ErrorState,
   FormField,
   Input,
+  KpiCard,
   LoadingState,
   LockedNotice,
   MoneyText,
@@ -105,10 +111,28 @@ export function ExpenseLedgerPage() {
   const selectedPeriod = periodsQuery.data?.find((period) => period.id === selectedPeriodId);
   const year = selectedPeriod?.year?.toString();
   const month = selectedPeriod?.month?.toString();
+  const automaticRange = selectedPeriod
+    ? accountingPeriodDateRange(selectedPeriod.year, selectedPeriod.month)
+    : null;
+  const explicitDateFrom = searchParams.get('dateFrom');
+  const explicitDateTo = searchParams.get('dateTo');
+  const dateFrom = explicitDateFrom ?? automaticRange?.from ?? '';
+  const dateTo = explicitDateTo ?? automaticRange?.to ?? '';
+
+  useEffect(() => {
+    if (!selectedPeriod || !automaticRange) return;
+    const monthPrefix = `${selectedPeriod.year}-${String(selectedPeriod.month).padStart(2, '0')}-`;
+    if (explicitDateFrom?.startsWith(monthPrefix) && explicitDateTo?.startsWith(monthPrefix)) return;
+    const next = new URLSearchParams(searchParams);
+    next.set('dateFrom', automaticRange.from);
+    next.set('dateTo', automaticRange.to);
+    next.delete('page');
+    setSearchParams(next, { replace: true });
+  }, [automaticRange, explicitDateFrom, explicitDateTo, searchParams, selectedPeriod, setSearchParams]);
 
   const listFilters = {
-    dateFrom: searchParams.get('dateFrom') ?? undefined,
-    dateTo: searchParams.get('dateTo') ?? undefined,
+    dateFrom: dateFrom || undefined,
+    dateTo: dateTo || undefined,
     year,
     month,
     branch,
@@ -239,11 +263,30 @@ export function ExpenseLedgerPage() {
     const selectedBranch = searchParams.get('branch');
     if (period) next.set('period', period);
     if (selectedBranch) next.set('branch', selectedBranch);
+    if (automaticRange) {
+      next.set('dateFrom', automaticRange.from);
+      next.set('dateTo', automaticRange.to);
+    }
     setSearchParams(next, { replace: true });
   };
-  const hasFilters = [...searchParams.keys()].some(
-    (key) => !['page', 'pageSize', 'sort', 'period', 'branch'].includes(key),
-  );
+  const hasFilters =
+    [...searchParams.keys()].some(
+      (key) =>
+        !['page', 'pageSize', 'sort', 'period', 'branch', 'dateFrom', 'dateTo'].includes(key),
+    ) ||
+    (automaticRange !== null &&
+      (searchParams.get('dateFrom') !== automaticRange.from ||
+        searchParams.get('dateTo') !== automaticRange.to));
+  const pageSummary = useMemo(() => {
+    const amounts = (query.data?.items ?? []).map((row) => BigInt(row.amountUzs));
+    const total = amounts.reduce((sum, amount) => sum + amount, 0n);
+    const largest = amounts.reduce((maximum, amount) => (amount > maximum ? amount : maximum), 0n);
+    return {
+      total,
+      largest,
+      average: amounts.length > 0 ? total / BigInt(amounts.length) : 0n,
+    };
+  }, [query.data?.items]);
 
   return (
     <div>
@@ -304,7 +347,7 @@ export function ExpenseLedgerPage() {
             <Input
               id="expense-date-from"
               type="date"
-              value={searchParams.get('dateFrom') ?? ''}
+              value={dateFrom}
               onChange={(event) =>
                 updateQueryParam(searchParams, setSearchParams, 'dateFrom', event.target.value)
               }
@@ -314,7 +357,7 @@ export function ExpenseLedgerPage() {
             <Input
               id="expense-date-to"
               type="date"
-              value={searchParams.get('dateTo') ?? ''}
+              value={dateTo}
               onChange={(event) =>
                 updateQueryParam(searchParams, setSearchParams, 'dateTo', event.target.value)
               }
@@ -447,30 +490,62 @@ export function ExpenseLedgerPage() {
         />
       ) : null}
       {query.data ? (
-        <Card
-          className="overflow-hidden"
-          title={`${query.data.total} ta xarajat`}
-          description={
-            query.isFetching ? 'Natijalar yangilanmoqda…' : 'Ruxsat doirasidagi natijalar'
-          }
-        >
-          <div className="-m-5">
-            <DataTable
-              columns={columns}
-              rows={query.data.items}
-              caption="Filtrlangan umumiy Jurnal"
-              onRowClick={(row) => navigate(routes.expenseDetail(row.id))}
+        <>
+          <section
+            aria-label="Jurnal ko‘rsatkichlari"
+            className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+          >
+            <KpiCard
+              label="Jami xarajat"
+              value={<MoneyText value={pageSummary.total.toString()} />}
+              helper={`${query.data.items.length} ta yozuv · joriy sahifa`}
+              tone="warning"
             />
-            <Pagination
-              page={page}
-              pageSize={pageSize}
-              total={query.data.total}
-              onPageChange={(nextPage) =>
-                updateQueryParam(searchParams, setSearchParams, 'page', String(nextPage))
-              }
+            <KpiCard
+              label="Filtrlangan yozuvlar"
+              value={query.data.total}
+              helper="Tanlangan davr va filtrlar bo‘yicha"
+              tone="info"
             />
-          </div>
-        </Card>
+            <KpiCard
+              label="O‘rtacha xarajat"
+              value={<MoneyText value={pageSummary.average.toString()} />}
+              helper="Joriy sahifadagi bitta yozuv hisobida"
+              tone="neutral"
+            />
+            <KpiCard
+              label="Eng katta xarajat"
+              value={<MoneyText value={pageSummary.largest.toString()} />}
+              helper="Joriy sahifadagi eng yuqori summa"
+              tone="neutral"
+            />
+          </section>
+
+          <Card
+            className="overflow-hidden"
+            title={`${query.data.total} ta xarajat`}
+            description={
+              query.isFetching ? 'Natijalar yangilanmoqda…' : 'Batafsil xarajat yozuvlari'
+            }
+          >
+            <div className="-m-5">
+              <DataTable
+                columns={columns}
+                rows={query.data.items}
+                caption="Filtrlangan umumiy Jurnal"
+                onRowClick={(row) => navigate(routes.expenseDetail(row.id))}
+              />
+              <Pagination
+                page={page}
+                pageSize={pageSize}
+                total={query.data.total}
+                onPageChange={(nextPage) =>
+                  updateQueryParam(searchParams, setSearchParams, 'page', String(nextPage))
+                }
+              />
+            </div>
+          </Card>
+        </>
       ) : null}
     </div>
   );
@@ -526,7 +601,7 @@ export function ExpenseCreatePage() {
   } = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
     defaultValues: {
-      transactionDate: '',
+      transactionDate: tashkentBusinessDate(),
       branchId: '',
       categoryId: '',
       description: '',

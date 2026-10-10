@@ -32,7 +32,7 @@ import { notificationApi, referenceApi } from '@/shared/api/contracts';
 import { queryKeys } from '@/shared/api/query-keys';
 import { isNavItemActive, navigation, routes, type NavigationItem } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/cn';
-import { monthNameUz } from '@/shared/lib/format';
+import { monthNameUz, tashkentBusinessDate } from '@/shared/lib/format';
 import type { AccountingPeriod } from '@/shared/types/domain';
 import {
   BrandMark,
@@ -67,12 +67,10 @@ const iconByPath: Record<string, typeof LayoutDashboard> = {
 function NavigationLink({
   item,
   collapsed,
-  notificationCount = 0,
   onClick,
 }: {
   item: NavigationItem;
   collapsed: boolean;
-  notificationCount?: number;
   onClick?: () => void;
 }) {
   const Icon = iconByPath[item.to] ?? BookOpenCheck;
@@ -100,20 +98,6 @@ function NavigationLink({
         aria-hidden="true"
       />
       {!collapsed ? <span>{item.label}</span> : <span className="sr-only">{item.label}</span>}
-      {notificationCount > 0 ? (
-        <span
-          aria-label={`${notificationCount} ta yangi kassir tahriri`}
-          title={`${notificationCount} ta yangi xabar`}
-          className={cn(
-            'grid shrink-0 place-items-center rounded-full bg-red-500 font-bold text-white shadow-[0_0_0_3px_rgba(239,68,68,0.16)]',
-            collapsed
-              ? 'absolute right-2 top-2 h-2.5 w-2.5 text-[0px]'
-              : 'ml-auto min-h-5 min-w-5 px-1.5 text-[10px]',
-          )}
-        >
-          {notificationCount > 9 ? '9+' : notificationCount}
-        </span>
-      ) : null}
     </NavLink>
   );
 }
@@ -121,13 +105,11 @@ function NavigationLink({
 function Sidebar({
   collapsed,
   mobile,
-  notificationCount,
   onClose,
   onToggle,
 }: {
   collapsed: boolean;
   mobile?: boolean;
-  notificationCount: number;
   onClose?: () => void;
   onToggle?: () => void;
 }) {
@@ -137,7 +119,9 @@ function Sidebar({
       navigation
         .map((group) => ({
           ...group,
-          items: group.items.filter((item) => hasPermission(item.permission)),
+          items: group.items.filter(
+            (item) => item.to !== routes.notifications && hasPermission(item.permission),
+          ),
         }))
         .filter((group) => group.items.length > 0),
     [hasPermission],
@@ -197,7 +181,6 @@ function Sidebar({
                   key={`${item.to}:${item.label}`}
                   item={item}
                   collapsed={collapsed}
-                  notificationCount={item.to === routes.notifications ? notificationCount : 0}
                   {...(mobile && onClose ? { onClick: onClose } : {})}
                 />
               ))}
@@ -231,7 +214,13 @@ function Sidebar({
   );
 }
 
-function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
+function TopBar({
+  onOpenMenu,
+  notificationCount,
+}: {
+  onOpenMenu: () => void;
+  notificationCount: number;
+}) {
   const { user, logout, hasPermission } = useAuth();
   const queryClient = useQueryClient();
   const { notify } = useToast();
@@ -266,12 +255,14 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
 
   // Default to the month we are actually in. Every month of the year now exists
   // as an open period, so "the first open one" would land on December.
-  const today = new Date();
+  const todayDate = tashkentBusinessDate();
+  const todayYear = Number(todayDate.slice(0, 4));
+  const todayMonth = Number(todayDate.slice(5, 7));
   const selectedPeriod =
     searchParams.get('period') ??
     rememberedPeriod ??
     periods.find(
-      (period) => period.year === today.getFullYear() && period.month === today.getMonth() + 1,
+      (period) => period.year === todayYear && period.month === todayMonth,
     )?.id ??
     periods.find((period) => period.status === 'open')?.id ??
     '';
@@ -330,7 +321,7 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
           (a, b) => b.year - a.year || b.month - a.month,
         ),
       );
-      const preferredMonth = currentPeriod?.month ?? new Date().getMonth() + 1;
+      const preferredMonth = currentPeriod?.month ?? todayMonth;
       const next =
         createdPeriods.find((period) => period.month === preferredMonth) ?? createdPeriods[0];
       if (next) updateFilter('period', next.id);
@@ -353,7 +344,7 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
   });
 
   function openYearModal() {
-    const suggested = Math.min((years[0] ?? new Date().getFullYear()) + 1, 2100);
+    const suggested = Math.min((years[0] ?? todayYear) + 1, 2100);
     setNewYear(String(suggested));
     setYearError(undefined);
     setYearModalOpen(true);
@@ -468,6 +459,40 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
             {globalScopeLabel}
           </p>
         </div>
+        {hasPermission('notification.manage') ? (
+          <NavLink
+            to={routes.notifications}
+            end
+            aria-label={
+              notificationCount > 0
+                ? `Bildirishnomalar — ${notificationCount} ta yangi xabar`
+                : 'Bildirishnomalar'
+            }
+            title={
+              notificationCount > 0
+                ? `${notificationCount} ta yangi bildirishnoma`
+                : 'Bildirishnomalar'
+            }
+            className={({ isActive }) =>
+              cn(
+                'relative grid h-11 w-11 shrink-0 place-items-center rounded-xl border text-slate-600 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:bg-white hover:text-primary hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400',
+                isActive
+                  ? 'border-blue-200 bg-blue-50 text-primary ring-1 ring-blue-100'
+                  : 'border-slate-200/80 bg-white/80',
+              )
+            }
+          >
+            <Bell className="h-5 w-5" aria-hidden="true" />
+            {notificationCount > 0 ? (
+              <span
+                aria-label={`${notificationCount} ta yangi kassir tahriri`}
+                className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white shadow-[0_0_0_3px_rgba(255,255,255,0.95)]"
+              >
+                {notificationCount > 9 ? '9+' : notificationCount}
+              </span>
+            ) : null}
+          </NavLink>
+        ) : null}
         <div className="relative">
           <button
             type="button"
@@ -685,7 +710,6 @@ export function AppShell() {
       <div className="fixed inset-y-0 left-0 z-40 hidden lg:block">
         <Sidebar
           collapsed={collapsed}
-          notificationCount={unreadNotificationCount}
           onToggle={() => setCollapsed((value) => !value)}
         />
       </div>
@@ -701,7 +725,6 @@ export function AppShell() {
             <Sidebar
               collapsed={false}
               mobile
-              notificationCount={unreadNotificationCount}
               onClose={() => setMobileOpen(false)}
             />
           </div>
@@ -713,7 +736,10 @@ export function AppShell() {
           collapsed ? 'lg:ml-[76px]' : 'lg:ml-[252px]',
         )}
       >
-        <TopBar onOpenMenu={() => setMobileOpen(true)} />
+        <TopBar
+          onOpenMenu={() => setMobileOpen(true)}
+          notificationCount={unreadNotificationCount}
+        />
         <main
           id="main-content"
           className="premium-enter mx-auto w-full max-w-[1600px] px-4 py-7 pb-24 sm:px-6 lg:pb-10 xl:px-8"

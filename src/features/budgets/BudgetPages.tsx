@@ -6,7 +6,12 @@ import { authApi, budgetApi, referenceApi, reportApi } from '@/shared/api/contra
 import { invalidatePlanningAggregates } from '@/shared/api/invalidation';
 import { downloadCsv } from '@/shared/lib/csv';
 import { queryKeys } from '@/shared/api/query-keys';
-import { formatDateTime, formatMoney, formatPercent } from '@/shared/lib/format';
+import {
+  formatDateTime,
+  formatMoney,
+  formatPercent,
+  tashkentBusinessDate,
+} from '@/shared/lib/format';
 import type { BudgetLine, BudgetPlan } from '@/shared/types/domain';
 import {
   Alert,
@@ -266,8 +271,14 @@ export function BudgetPage() {
     queryFn: ({ signal }) => referenceApi.periods(signal),
     staleTime: 60_000,
   });
+  const currentBusinessDate = tashkentBusinessDate();
+  const currentYear = Number(currentBusinessDate.slice(0, 4));
+  const currentMonth = Number(currentBusinessDate.slice(5, 7));
   const selectedPeriodId =
     searchParams.get('period') ??
+    periodsQuery.data?.find(
+      (period) => period.year === currentYear && period.month === currentMonth,
+    )?.id ??
     periodsQuery.data?.find((period) => period.status === 'open')?.id ??
     periodsQuery.data?.[0]?.id ??
     '';

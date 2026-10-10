@@ -12,7 +12,14 @@ import { queryKeys } from '@/shared/api/query-keys';
 import { routes } from '@/shared/config/routes';
 import { downloadCsv } from '@/shared/lib/csv';
 import { getActiveWritableBranches } from '@/shared/lib/branch-scopes';
-import { formatDate, formatDateLong, formatDateTime, formatMoney } from '@/shared/lib/format';
+import {
+  accountingPeriodDateRange,
+  formatDate,
+  formatDateLong,
+  formatDateTime,
+  formatMoney,
+  tashkentBusinessDate,
+} from '@/shared/lib/format';
 import type { DailyRevenue, RevenuePlanBoard } from '@/shared/types/domain';
 import {
   Alert,
@@ -25,6 +32,7 @@ import {
   ErrorState,
   FormField,
   Input,
+  KpiCard,
   LoadingState,
   LockedNotice,
   MoneyText,
@@ -120,6 +128,28 @@ export function RevenueLedgerPage() {
   const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1);
   const branch = searchParams.get('branch') ?? 'all';
   const references = useRevenueReferences();
+  const selectedPeriod = references.periods.data?.find(
+    (period) => period.id === searchParams.get('period'),
+  );
+  const automaticRange = selectedPeriod
+    ? accountingPeriodDateRange(selectedPeriod.year, selectedPeriod.month)
+    : null;
+  const explicitDateFrom = searchParams.get('dateFrom');
+  const explicitDateTo = searchParams.get('dateTo');
+  const dateFrom = explicitDateFrom ?? automaticRange?.from ?? '';
+  const dateTo = explicitDateTo ?? automaticRange?.to ?? '';
+
+  useEffect(() => {
+    if (!selectedPeriod || !automaticRange) return;
+    const monthPrefix = `${selectedPeriod.year}-${String(selectedPeriod.month).padStart(2, '0')}-`;
+    if (explicitDateFrom?.startsWith(monthPrefix) && explicitDateTo?.startsWith(monthPrefix)) return;
+    const next = new URLSearchParams(searchParams);
+    next.set('dateFrom', automaticRange.from);
+    next.set('dateTo', automaticRange.to);
+    next.delete('page');
+    setSearchParams(next, { replace: true });
+  }, [automaticRange, explicitDateFrom, explicitDateTo, searchParams, selectedPeriod, setSearchParams]);
+
   const queryString = searchParams.toString();
   const query = useQuery({
     queryKey: queryKeys.revenues(queryString),
@@ -128,8 +158,8 @@ export function RevenueLedgerPage() {
         {
           branch,
           periodId: searchParams.get('period') ?? undefined,
-          dateFrom: searchParams.get('dateFrom') ?? undefined,
-          dateTo: searchParams.get('dateTo') ?? undefined,
+          dateFrom: dateFrom || undefined,
+          dateTo: dateTo || undefined,
           sort: searchParams.get('sort') ?? 'businessDate:desc',
           page,
           pageSize: 31,
@@ -181,20 +211,37 @@ export function RevenueLedgerPage() {
     [],
   );
 
-  const hasFilters = [...searchParams.keys()].some(
-    (key) => !['page', 'sort', 'period', 'branch'].includes(key),
-  );
+  const hasFilters =
+    [...searchParams.keys()].some(
+      (key) => !['page', 'sort', 'period', 'branch', 'dateFrom', 'dateTo'].includes(key),
+    ) ||
+    (automaticRange !== null &&
+      (searchParams.get('dateFrom') !== automaticRange.from ||
+        searchParams.get('dateTo') !== automaticRange.to));
   const clearLocalFilters = () => {
     const next = new URLSearchParams();
     const period = searchParams.get('period');
     const selectedBranch = searchParams.get('branch');
     if (period) next.set('period', period);
     if (selectedBranch) next.set('branch', selectedBranch);
+    if (automaticRange) {
+      next.set('dateFrom', automaticRange.from);
+      next.set('dateTo', automaticRange.to);
+    }
     setSearchParams(next, { replace: true });
   };
-  const pageTotal = (query.data?.items ?? []).reduce(
-    (total, row) => total + BigInt(row.totalUzs),
-    0n,
+  const pageSummary = useMemo(
+    () =>
+      (query.data?.items ?? []).reduce(
+        (summary, row) => ({
+          cash: summary.cash + BigInt(row.cashUzs),
+          card: summary.card + BigInt(row.cardUzs),
+          transfer: summary.transfer + BigInt(row.transferUzs),
+          total: summary.total + BigInt(row.totalUzs),
+        }),
+        { cash: 0n, card: 0n, transfer: 0n, total: 0n },
+      ),
+    [query.data?.items],
   );
 
   return (
@@ -232,7 +279,7 @@ export function RevenueLedgerPage() {
             <Input
               id="revenue-date-from"
               type="date"
-              value={searchParams.get('dateFrom') ?? ''}
+              value={dateFrom}
               onChange={(event) =>
                 updateQueryParam(searchParams, setSearchParams, 'dateFrom', event.target.value)
               }
@@ -242,7 +289,7 @@ export function RevenueLedgerPage() {
             <Input
               id="revenue-date-to"
               type="date"
-              value={searchParams.get('dateTo') ?? ''}
+              value={dateTo}
               onChange={(event) =>
                 updateQueryParam(searchParams, setSearchParams, 'dateTo', event.target.value)
               }
@@ -269,28 +316,60 @@ export function RevenueLedgerPage() {
         />
       ) : null}
       {query.data ? (
-        <Card
-          className="overflow-hidden"
-          title={`${query.data.total} ta kunlik yozuv`}
-          description={`Ushbu sahifadagi jami: ${formatMoney(pageTotal.toString())}`}
-        >
-          <div className="-m-5">
-            <DataTable
-              columns={columns}
-              rows={query.data.items}
-              caption="Kunlik tushum jurnali"
-              onRowClick={(row) => navigate(routes.revenueDetail(row.id))}
+        <>
+          <section
+            aria-label="Kunlik tushum ko‘rsatkichlari"
+            className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+          >
+            <KpiCard
+              label="Jami tushum"
+              value={<MoneyText value={pageSummary.total.toString()} />}
+              helper={`${query.data.items.length} ta yozuv · joriy sahifa`}
+              tone="info"
             />
-            <Pagination
-              page={page}
-              pageSize={31}
-              total={query.data.total}
-              onPageChange={(nextPage) =>
-                updateQueryParam(searchParams, setSearchParams, 'page', String(nextPage))
-              }
+            <KpiCard
+              label="Naqd tushum"
+              value={<MoneyText value={pageSummary.cash.toString()} />}
+              helper="Joriy sahifadagi naqd tushum"
+              tone="success"
             />
-          </div>
-        </Card>
+            <KpiCard
+              label="Karta tushumi"
+              value={<MoneyText value={pageSummary.card.toString()} />}
+              helper="Joriy sahifadagi karta tushumi"
+              tone="neutral"
+            />
+            <KpiCard
+              label="Bank o‘tkazmasi"
+              value={<MoneyText value={pageSummary.transfer.toString()} />}
+              helper="Joriy sahifadagi bank tushumi"
+              tone="neutral"
+            />
+          </section>
+
+          <Card
+            className="overflow-hidden"
+            title={`${query.data.total} ta kunlik yozuv`}
+            description="Tanlangan davr va filtrlar bo‘yicha batafsil yozuvlar"
+          >
+            <div className="-m-5">
+              <DataTable
+                columns={columns}
+                rows={query.data.items}
+                caption="Kunlik tushum jurnali"
+                onRowClick={(row) => navigate(routes.revenueDetail(row.id))}
+              />
+              <Pagination
+                page={page}
+                pageSize={31}
+                total={query.data.total}
+                onPageChange={(nextPage) =>
+                  updateQueryParam(searchParams, setSearchParams, 'page', String(nextPage))
+                }
+              />
+            </div>
+          </Card>
+        </>
       ) : null}
     </div>
   );
@@ -359,7 +438,7 @@ export function RevenueCreatePage() {
   } = useForm<RevenueFormValues>({
     resolver: zodResolver(revenueFormSchema),
     defaultValues: {
-      businessDate: '',
+      businessDate: tashkentBusinessDate(),
       branchId: '',
       cashUzs: '0',
       cardUzs: '0',
@@ -794,8 +873,14 @@ export function RevenuePlanPage() {
     queryFn: ({ signal }) => referenceApi.periods(signal),
     staleTime: 60_000,
   });
+  const currentBusinessDate = tashkentBusinessDate();
+  const currentYear = Number(currentBusinessDate.slice(0, 4));
+  const currentMonth = Number(currentBusinessDate.slice(5, 7));
   const selectedPeriodId =
     searchParams.get('period') ??
+    periodsQuery.data?.find(
+      (period) => period.year === currentYear && period.month === currentMonth,
+    )?.id ??
     periodsQuery.data?.find((period) => period.status === 'open')?.id ??
     periodsQuery.data?.[0]?.id ??
     '';

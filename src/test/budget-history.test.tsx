@@ -7,7 +7,7 @@ import { BudgetPage } from '@/features/budgets/BudgetPages';
 import { authApi, budgetApi, referenceApi, reportApi } from '@/shared/api/contracts';
 import type { AuthenticatedUser, BudgetHistory, BudgetPlan } from '@/shared/types/domain';
 import { summarizeBudget } from '@/features/budgets/budget-summary';
-import { formatMoney as formatMoneyUzs } from '@/shared/lib/format';
+import { formatMoney as formatMoneyUzs, tashkentBusinessDate } from '@/shared/lib/format';
 
 const formatMoney = (value: string) => formatMoneyUzs(value).replace(/\u00a0/g, ' ');
 
@@ -199,6 +199,51 @@ describe('Budjet sahifasi', () => {
     vi.mocked(budgetApi.get).mockResolvedValue(plan);
     vi.mocked(budgetApi.history).mockResolvedValue(history);
     vi.mocked(budgetApi.saveLines).mockResolvedValue(plan);
+  });
+
+  it('kelajak davri ro‘yxatda birinchi bo‘lsa ham joriy Toshkent oyini tanlaydi', async () => {
+    const businessDate = tashkentBusinessDate();
+    const currentYear = Number(businessDate.slice(0, 4));
+    const currentMonth = Number(businessDate.slice(5, 7));
+    const currentPeriodId = '20000000-0000-4000-8000-000000000010';
+    const futurePeriodId = '20000000-0000-4000-8000-000000000011';
+
+    vi.mocked(referenceApi.periods).mockResolvedValue([
+      {
+        id: futurePeriodId,
+        year: currentYear + 1,
+        month: 12,
+        label: `Dekabr ${currentYear + 1}`,
+        status: 'open',
+        closedAt: null,
+        closedByName: null,
+      },
+      {
+        id: currentPeriodId,
+        year: currentYear,
+        month: currentMonth,
+        label: `${currentMonth} / ${currentYear}`,
+        status: 'open',
+        closedAt: null,
+        closedByName: null,
+      },
+    ]);
+
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/budgets?branch=all']}>
+          <BudgetPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() =>
+      expect(budgetApi.get).toHaveBeenCalledWith(currentPeriodId, expect.anything()),
+    );
+    expect(budgetApi.get).not.toHaveBeenCalledWith(futurePeriodId, expect.anything());
   });
 
   it('Budjet tarixi sectionini render qilmaydi va navbar davri ishlashda davom etadi', async () => {
