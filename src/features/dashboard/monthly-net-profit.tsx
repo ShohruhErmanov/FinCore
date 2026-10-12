@@ -63,17 +63,15 @@ export function MonthlyNetProfit({
   return (
     <section
       aria-label="Oylik sof foyda"
-      className="relative mb-5 overflow-hidden rounded-[24px] border border-blue-400/20 bg-[linear-gradient(140deg,#061634_0%,#0a2a5e_58%,#0f47a8_100%)] p-6 text-white shadow-[0_28px_70px_-36px_rgba(30,64,175,0.85)] sm:p-7"
+      className="relative mb-5 overflow-hidden rounded-[24px] border border-navy-400/30 brand-navy-panel p-6 text-white shadow-[0_28px_70px_-36px_rgba(15,27,45,0.85)] sm:p-7"
     >
-      <div className="pointer-events-none absolute -left-24 -top-28 h-72 w-72 rounded-full bg-cyan-300/15 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-20 right-1/4 h-40 w-80 rounded-full bg-blue-400/15 blur-3xl" />
 
       <header className="relative flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-bold tracking-[-0.02em] sm:text-xl">
             {data.year}-yil oylik sof foyda
           </h2>
-          <p className="mt-1 text-sm text-blue-100/85">
+          <p className="mt-1 text-sm text-navy-100/85">
             Har bir oy bo‘yicha sof foyda ko‘rsatkichi
           </p>
         </div>
@@ -103,13 +101,13 @@ export function MonthlyNetProfit({
 
       <div className="relative mt-5 grid gap-3 lg:grid-cols-[1.15fr_2fr]">
         <div className="rounded-2xl border border-cyan-200/20 bg-white/[0.1] p-5 backdrop-blur-md">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-blue-100">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-navy-100">
             Yillik sof foyda
           </p>
           <p className="mt-2 break-words text-2xl font-bold tracking-[-0.03em] tabular-nums text-white sm:text-3xl">
             {formatMoney(data.totalNetProfitUzs)}
           </p>
-          <p className="mt-2 text-xs leading-5 text-blue-100/70">
+          <p className="mt-2 text-xs leading-5 text-navy-100/70">
             Fakt tushumdan fakt xarajat ayrilgan yillik natija
           </p>
         </div>
@@ -137,7 +135,7 @@ export function MonthlyNetProfit({
         </ul>
 
         <div className="flex min-w-0 flex-col rounded-2xl border border-white/15 bg-white/[0.07] p-4 backdrop-blur-md">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-blue-100">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-navy-100">
             12 oylik sof foyda dinamikasi
           </p>
           {/* Stretched to the tiles' height beside them. The chart sits in an
@@ -150,22 +148,22 @@ export function MonthlyNetProfit({
                   <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
                   <XAxis
                     dataKey="name"
-                    tick={{ fill: 'rgba(219,234,254,0.75)', fontSize: 11 }}
+                    tick={{ fill: 'rgba(211,222,234,0.75)', fontSize: 11 }}
                     axisLine={false}
                     tickLine={false}
                   />
                   <YAxis
-                    tick={{ fill: 'rgba(219,234,254,0.6)', fontSize: 10 }}
+                    tick={{ fill: 'rgba(211,222,234,0.6)', fontSize: 10 }}
                     axisLine={false}
                     tickLine={false}
                     width={64}
                     tickFormatter={(value: number) => formatMoneyCompact(String(Math.trunc(value)))}
                   />
                   <Tooltip
-                    cursor={{ stroke: 'rgba(103,232,249,0.35)' }}
+                    cursor={{ stroke: 'rgba(255,184,0,0.35)' }}
                     contentStyle={{
-                      background: '#071a3b',
-                      border: '1px solid rgba(147,197,253,0.25)',
+                      background: '#0F1B2D',
+                      border: '1px solid rgba(122,157,192,0.3)',
                       borderRadius: 12,
                       color: '#fff',
                     }}
@@ -180,9 +178,9 @@ export function MonthlyNetProfit({
                     type="monotone"
                     dataKey="total"
                     name="total"
-                    stroke="#67e8f9"
+                    stroke="#FFB800"
                     strokeWidth={3}
-                    dot={{ r: 2.5, fill: '#67e8f9', strokeWidth: 0 }}
+                    dot={{ r: 2.5, fill: '#FFB800', strokeWidth: 0 }}
                     activeDot={{ r: 4 }}
                   />
                   {paymentMethods.map((method, index) => (
@@ -202,8 +200,8 @@ export function MonthlyNetProfit({
               </ResponsiveContainer>
             </div>
           </div>
-          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-medium text-blue-100/75">
-            <ChartLegend color="#67e8f9" label="Jami sof foyda" />
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-medium text-navy-100/75">
+            <ChartLegend color="#FFB800" label="Jami sof foyda" />
             {paymentMethods.map((method, index) => (
               <ChartLegend
                 key={method.paymentMethodId}
@@ -218,13 +216,13 @@ export function MonthlyNetProfit({
 
       <div className="relative mt-4 overflow-hidden rounded-xl border border-white/15 bg-white/[0.07] backdrop-blur-md">
         <div className="border-b border-white/10 px-3 py-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-blue-100">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-100">
             12 oylik to‘lov usullari tahlili
           </p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[560px] border-collapse text-left text-xs">
-            <thead className="text-[10px] uppercase tracking-[0.08em] text-blue-100/65">
+            <thead className="text-[10px] uppercase tracking-[0.08em] text-navy-100/65">
               <tr>
                 <th className="px-3 py-1.5 font-semibold">Oy</th>
                 {paymentMethods.map((method) => (
@@ -250,7 +248,7 @@ export function MonthlyNetProfit({
                           'px-3 py-1 text-right tabular-nums',
                           // Most of a young year is zeros; dimming them lets
                           // the months that moved stand out.
-                          amount === '0' ? 'text-blue-100/30' : 'text-blue-100/80',
+                          amount === '0' ? 'text-navy-100/30' : 'text-navy-100/80',
                         )}
                       >
                         {formatMoney(amount)}
@@ -260,7 +258,7 @@ export function MonthlyNetProfit({
                   <td
                     className={cn(
                       'px-3 py-1 text-right font-semibold tabular-nums',
-                      month.totalNetProfitUzs === '0' ? 'text-blue-100/30' : 'text-white',
+                      month.totalNetProfitUzs === '0' ? 'text-navy-100/30' : 'text-white',
                     )}
                   >
                     {formatMoney(month.totalNetProfitUzs)}
@@ -303,7 +301,7 @@ export function MonthlyNetProfit({
 }
 
 const CORE_PAYMENT_METHODS = new Set(['CASH', 'CARD', 'BANK_TRANSFER']);
-const METHOD_COLORS = ['#34d399', '#a78bfa', '#fbbf24'];
+const METHOD_COLORS = ['#34d399', '#7A9DC0', '#FF8050'];
 
 function PaymentMethodCard({ method }: { method: AnnualNetProfit['paymentMethods'][number] }) {
   const Icon = paymentMethodIcon(method.code);
@@ -312,7 +310,7 @@ function PaymentMethodCard({ method }: { method: AnnualNetProfit['paymentMethods
     <article className="rounded-2xl border border-white/15 bg-white/[0.07] p-4 backdrop-blur-md">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold text-blue-100/80">{method.name}</p>
+          <p className="text-xs font-semibold text-navy-100/80">{method.name}</p>
           <p
             className={cn(
               'mt-1 break-words text-lg font-bold tabular-nums',
@@ -329,7 +327,7 @@ function PaymentMethodCard({ method }: { method: AnnualNetProfit['paymentMethods
       <p className="mt-2 text-xs font-semibold text-cyan-200">
         Jami natijaning {formatPercent(method.sharePct, 2)}
       </p>
-      <p className="mt-1 text-[11px] leading-4 text-blue-100/55">
+      <p className="mt-1 text-[11px] leading-4 text-navy-100/55">
         Tushum {formatMoney(method.revenueUzs)} · Xarajat {formatMoney(method.expenseUzs)}
       </p>
     </article>
@@ -375,10 +373,10 @@ function MonthTile({ row }: { row: NetProfitMonth }) {
         'rounded-lg border px-2 py-1.5 backdrop-blur-md transition-colors',
         row.hasData
           ? 'border-white/15 bg-white/[0.08]'
-          : 'border-white/[0.06] bg-white/[0.02] text-blue-100/45',
+          : 'border-white/[0.06] bg-white/[0.02] text-navy-100/45',
       )}
     >
-      <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-blue-100/80">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-navy-100/80">
         {row.label}
       </p>
 
@@ -398,7 +396,7 @@ function MonthTile({ row }: { row: NetProfitMonth }) {
             {formatMoney(row.netProfitUzs)}
           </p>
           {row.changePct === null ? (
-            <p className="text-[10px] text-blue-100/50">—</p>
+            <p className="text-[10px] text-navy-100/50">—</p>
           ) : (
             <p
               className={cn(
@@ -421,7 +419,7 @@ function MonthTile({ row }: { row: NetProfitMonth }) {
                   exact figure and the month it is measured against. */}
               {Math.abs(row.changePct) >= 1000 ? '>999%' : formatPercent(row.changePct, 1)}
               {row.comparedToLabel ? (
-                <span className="font-normal text-blue-100/60">· {row.comparedToLabel}</span>
+                <span className="font-normal text-navy-100/60">· {row.comparedToLabel}</span>
               ) : null}
             </p>
           )}
@@ -449,7 +447,7 @@ function SummaryChip({
 }) {
   return (
     <div className="rounded-xl border border-white/15 bg-white/[0.07] px-3 py-2 backdrop-blur-md">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-blue-100">{label}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-navy-100">{label}</p>
       <p
         className={cn(
           'mt-0.5 text-[15px] font-bold tabular-nums',
@@ -460,7 +458,7 @@ function SummaryChip({
       >
         {value}
       </p>
-      {helper ? <p className="text-[10px] text-blue-100/70">{helper}</p> : null}
+      {helper ? <p className="text-[10px] text-navy-100/70">{helper}</p> : null}
     </div>
   );
 }

@@ -107,7 +107,7 @@ export function RevenuePlanYearOverview({
                 <span className="h-2.5 w-2.5 rounded-sm bg-slate-300" /> Reja
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm bg-blue-600" /> Amalda
+                <span className="h-2.5 w-2.5 rounded-sm bg-navy-700" /> Amalda
               </span>
             </div>
           </div>
@@ -124,22 +124,22 @@ export function RevenuePlanYearOverview({
                 margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
                 barGap={2}
               >
-                <CartesianGrid stroke="#e2e8f0" vertical={false} />
+                <CartesianGrid stroke="#E9E3DE" vertical={false} />
                 <XAxis
                   dataKey="name"
-                  tick={{ fill: '#64748b', fontSize: 11 }}
+                  tick={{ fill: '#77706B', fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fill: '#94a3b8', fontSize: 10 }}
+                  tick={{ fill: '#B8B0AA', fontSize: 10 }}
                   axisLine={false}
                   tickLine={false}
                   width={64}
                   tickFormatter={(value: number) => formatMoneyCompact(String(Math.trunc(value)))}
                 />
                 <Tooltip
-                  cursor={{ fill: 'rgba(148,163,184,0.12)' }}
+                  cursor={{ fill: 'rgba(184,176,170,0.16)' }}
                   formatter={(value, name) => [
                     formatMoney(String(Math.trunc(Number(value)))),
                     name === 'plan' ? 'Reja' : 'Amalda',
@@ -148,14 +148,14 @@ export function RevenuePlanYearOverview({
                 <Bar
                   dataKey="plan"
                   name="plan"
-                  fill="#cbd5e1"
+                  fill="#D9D1CB"
                   radius={[4, 4, 0, 0]}
                   maxBarSize={22}
                 />
                 <Bar
                   dataKey="actual"
                   name="actual"
-                  fill="#2563eb"
+                  fill="#1E3A5C"
                   radius={[4, 4, 0, 0]}
                   maxBarSize={22}
                 />
@@ -370,7 +370,7 @@ function Completion({ value }: { value: number | null }) {
         <span
           className={cn(
             'block h-full rounded-full',
-            value >= 100 ? 'bg-emerald-500' : value >= 80 ? 'bg-blue-500' : 'bg-amber-500',
+            value >= 100 ? 'bg-emerald-500' : value >= 80 ? 'bg-navy-500' : 'bg-amber-500',
           )}
           style={{ width: `${width}%` }}
         />

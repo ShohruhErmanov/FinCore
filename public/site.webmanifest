@@ -5,17 +5,17 @@
   "lang": "uz",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f5f8fc",
-  "theme_color": "#06142c",
+  "background_color": "#F5F1EE",
+  "theme_color": "#0F1B2D",
   "icons": [
     {
-      "src": "/brand/fincore-mark-v3-192.png",
+      "src": "/brand/fincore-mark-v4-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/brand/fincore-mark-v3-512.png",
+      "src": "/brand/fincore-mark-v4-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"

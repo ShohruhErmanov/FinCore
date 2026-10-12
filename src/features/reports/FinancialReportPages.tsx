@@ -575,8 +575,8 @@ function BranchMonthInsights({ report }: { report: BranchComparisonReport }) {
                 />
                 <Tooltip formatter={(value) => formatMoney(String(value))} />
                 <Legend />
-                <Bar dataKey="plan" name="Reja" fill="#94a3b8" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="actual" name="Fakt" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="plan" name="Reja" fill="#B8B0AA" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="actual" name="Fakt" fill="#1E3A5C" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -599,7 +599,7 @@ function BranchComparisonContent({ report }: { report: BranchComparisonReport })
   const chartSeries = reportBranches.map((item, index) => ({
     dataKey: `branch${index + 1}`,
     branch: item.branch,
-    color: ['#2563eb', '#14b8a6', '#f97316', '#8b5cf6'][index % 4]!,
+    color: ['#1E3A5C', '#FF2B00', '#FFB800', '#7A9DC0'][index % 4]!,
   }));
   const expenseChart = report.months.map((item) => ({
     month: monthNames[item.month - 1],
@@ -682,8 +682,8 @@ function BranchComparisonContent({ report }: { report: BranchComparisonReport })
                 />
                 <Tooltip formatter={(value) => formatMoney(String(value))} />
                 <Legend />
-                <Bar dataKey="plan" name="Reja" fill="#94a3b8" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="actual" name="Fakt" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="plan" name="Reja" fill="#B8B0AA" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="actual" name="Fakt" fill="#1E3A5C" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

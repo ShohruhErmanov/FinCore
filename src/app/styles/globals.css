@@ -2,22 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/* IT Live identity — see tailwind.config.ts for the full scales. */
 :root {
-  --canvas: 245 248 252;
+  --canvas: 245 241 238; /* Krem oq #F5F1EE */
   --surface: 255 255 255;
-  --border: 219 227 239;
-  --ink: 10 20 37;
-  --muted: 91 107 128;
-  --primary: 26 91 246;
-  --navy: 5 17 38;
+  --border: 233 227 222; /* warm grey between the cream steps */
+  --ink: 15 27 45; /* Tech navy #0F1B2D */
+  --muted: 107 100 96; /* #6B6460 */
+  --primary: 230 38 0; /* brand red, AA-safe under white text */
+  --navy: 15 27 45;
   --success: 15 139 86;
-  --warning: 190 92 8;
-  --danger: 200 38 47;
-  --info: 2 119 189;
+  --warning: 153 102 0; /* gold, deepened for text */
+  --danger: 184 31 0;
+  --info: 43 77 115; /* steel blue */
   color: rgb(var(--ink));
   background: rgb(var(--canvas));
   font-family:
-    Inter,
+    Roboto,
     ui-sans-serif,
     system-ui,
     -apple-system,
@@ -39,8 +40,8 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: radial-gradient(circle at 15% -10%, rgba(59, 130, 246, 0.08), transparent 30rem),
-    radial-gradient(circle at 90% 5%, rgba(14, 165, 233, 0.055), transparent 26rem),
+  background: radial-gradient(circle at 15% -10%, rgba(255, 43, 0, 0.05), transparent 30rem),
+    radial-gradient(circle at 90% 5%, rgba(255, 184, 0, 0.05), transparent 26rem),
     rgb(var(--canvas));
 }
 button,
@@ -64,13 +65,23 @@ table {
   border-collapse: collapse;
 }
 ::selection {
-  background: rgba(37, 99, 235, 0.18);
+  background: rgba(255, 43, 0, 0.18);
   color: rgb(var(--ink));
 }
+/*
+ * IT Live dark surfaces use only the identity's navies. Coloured glows are
+ * deliberately absent: red or gold blurred over navy mixes into browns and
+ * olives that are not in the palette.
+ */
 .fincore-sidebar {
-  background: radial-gradient(circle at 10% 0%, rgba(59, 130, 246, 0.2), transparent 16rem),
-    linear-gradient(180deg, rgb(6 20 44) 0%, rgb(var(--navy)) 58%, rgb(3 13 30) 100%);
-  box-shadow: 20px 0 60px -42px rgba(2, 8, 23, 0.9);
+  background: linear-gradient(180deg, #0f1b2d 0%, #0f1b2d 62%, #060d16 100%);
+  box-shadow: 20px 0 60px -42px rgba(6, 13, 22, 0.9);
+}
+/* Tech navy deepening to navy 700, under a whisper of the >/< pattern. */
+.brand-navy-panel {
+  background-color: #0f1b2d;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='88' height='80' viewBox='0 0 88 80'%3E%3Cg fill='none' stroke='%231E3A5C' stroke-width='3.2' stroke-linecap='square' stroke-linejoin='miter' stroke-opacity='0.55'%3E%3Cg transform='translate(0 0)'%3E%3Cpath d='M10 12 L20 20 L10 28'/%3E%3Cpath d='M28 29 L36 11'/%3E%3Cpath d='M54 12 L44 20 L54 28'/%3E%3C/g%3E%3Cg transform='translate(44 40)'%3E%3Cpath d='M10 12 L20 20 L10 28'/%3E%3Cpath d='M28 29 L36 11'/%3E%3Cpath d='M54 12 L44 20 L54 28'/%3E%3C/g%3E%3Cg transform='translate(-44 40)'%3E%3Cpath d='M10 12 L20 20 L10 28'/%3E%3Cpath d='M28 29 L36 11'/%3E%3Cpath d='M54 12 L44 20 L54 28'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"),
+    linear-gradient(150deg, #0f1b2d 0%, #0f1b2d 55%, #1e3a5c 100%);
 }
 .fincore-sidebar nav {
   scrollbar-width: none;
@@ -82,8 +93,8 @@ table {
 .fincore-topbar {
   background: rgba(255, 255, 255, 0.82);
   box-shadow:
-    0 1px 0 rgba(148, 163, 184, 0.1),
-    0 14px 40px -34px rgba(15, 23, 42, 0.5);
+    0 1px 0 rgba(184, 176, 170, 0.14),
+    0 14px 40px -34px rgba(15, 27, 45, 0.5);
   backdrop-filter: blur(20px) saturate(160%);
 }
 .premium-enter {
@@ -107,7 +118,7 @@ table {
 }
 .scrollbar-thin {
   scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-color: #d9d1cb transparent;
 }
 
 @supports not (backdrop-filter: blur(1px)) {

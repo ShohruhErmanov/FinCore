@@ -105,15 +105,15 @@ function PlanComparison({ data }: { data: ExpenseAnalytics['planComparison'] }) 
   const progress = Math.max(0, Math.min(data.completionPct ?? 0, 100));
 
   return (
-    <section className="mb-6 overflow-hidden rounded-[1.5rem] bg-gradient-to-br from-slate-950 via-blue-950 to-blue-700 p-6 text-white shadow-elevated sm:p-7">
+    <section className="mb-6 overflow-hidden rounded-[1.5rem] brand-navy-panel p-6 text-white shadow-elevated sm:p-7">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-blue-100">
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-navy-100">
             <Target className="h-4 w-4" aria-hidden="true" />
             Reja va fakt
           </div>
           <h2 className="mt-4 text-xl font-bold">Jami xarajatlar holati</h2>
-          <p className="mt-1 text-sm text-blue-100">
+          <p className="mt-1 text-sm text-navy-100">
             {data.periodLabel} uchun kiritilgan xarajat rejasi va amaldagi natija
           </p>
         </div>
@@ -123,14 +123,14 @@ function PlanComparison({ data }: { data: ExpenseAnalytics['planComparison'] }) 
       </div>
 
       {!data.hasPlan ? (
-        <div className="mt-6 rounded-2xl border border-white/15 bg-white/10 p-4 text-sm text-blue-50">
+        <div className="mt-6 rounded-2xl border border-white/15 bg-white/10 p-4 text-sm text-navy-50">
           Tanlangan davr uchun xarajat rejasi kiritilmagan.
         </div>
       ) : (
         <>
           <dl className="mt-7 grid gap-4 sm:grid-cols-3">
             <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
-              <dt className="text-xs font-semibold uppercase tracking-wide text-blue-200">
+              <dt className="text-xs font-semibold uppercase tracking-wide text-navy-200">
                 Xarajat rejasi
               </dt>
               <dd className="mt-2 text-xl font-bold tabular-nums">
@@ -138,7 +138,7 @@ function PlanComparison({ data }: { data: ExpenseAnalytics['planComparison'] }) 
               </dd>
             </div>
             <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
-              <dt className="text-xs font-semibold uppercase tracking-wide text-blue-200">
+              <dt className="text-xs font-semibold uppercase tracking-wide text-navy-200">
                 Jami xarajat
               </dt>
               <dd className="mt-2 text-xl font-bold tabular-nums">
@@ -146,7 +146,7 @@ function PlanComparison({ data }: { data: ExpenseAnalytics['planComparison'] }) 
               </dd>
             </div>
             <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
-              <dt className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-blue-200">
+              <dt className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-navy-200">
                 {isUnderPlan ? (
                   <TrendingDown className="h-4 w-4" aria-hidden="true" />
                 ) : (
@@ -160,7 +160,7 @@ function PlanComparison({ data }: { data: ExpenseAnalytics['planComparison'] }) 
             </div>
           </dl>
           <div className="mt-5">
-            <div className="mb-2 flex justify-between text-xs font-semibold text-blue-100">
+            <div className="mb-2 flex justify-between text-xs font-semibold text-navy-100">
               <span>Reja bajarilishi</span>
               <span>{formatPercent(data.completionPct)}</span>
             </div>

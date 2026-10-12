@@ -88,7 +88,7 @@ function NavigationLink({
         cn(
           'group relative flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium text-slate-300 transition-all duration-200 hover:translate-x-0.5 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400',
           isActive &&
-            'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-[0_12px_28px_-16px_rgba(37,99,235,0.95)] ring-1 ring-white/10',
+            'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-[0_12px_28px_-16px_rgba(230,38,0,0.7)] ring-1 ring-white/10',
           collapsed && 'justify-center px-2',
         )
       }
@@ -143,7 +143,7 @@ function Sidebar({
           to={routes.dashboard}
           className="flex items-center gap-3 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400"
         >
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white shadow-[0_12px_28px_-14px_rgba(59,130,246,0.95)] ring-1 ring-white/30">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white shadow-[0_12px_28px_-14px_rgba(6,13,22,0.6)] ring-1 ring-white/30">
             <BrandMark className="h-8 w-8" />
           </div>
           {!collapsed ? (
@@ -504,7 +504,7 @@ function TopBar({
             aria-expanded={accountOpen}
             aria-haspopup="menu"
           >
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-blue-100 to-sky-100 text-sm font-bold text-blue-700 ring-1 ring-blue-200/70">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-navy-50 to-navy-100 text-sm font-bold text-navy-700 ring-1 ring-navy-200/70">
               {user?.fullName
                 .split(' ')
                 .map((part) => part[0])

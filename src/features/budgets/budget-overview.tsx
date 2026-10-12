@@ -58,7 +58,7 @@ function Progress({
       className="h-2 overflow-hidden rounded-full bg-slate-100"
     >
       <div
-        className={`h-full rounded-full transition-[width] duration-200 motion-reduce:transition-none ${danger ? 'bg-red-500' : 'bg-blue-600'}`}
+        className={`h-full rounded-full transition-[width] duration-200 motion-reduce:transition-none ${danger ? 'bg-red-500' : 'bg-navy-700'}`}
         style={{ width: `${Math.min(100, Math.max(0, value ?? 0))}%` }}
       />
     </div>
@@ -445,7 +445,7 @@ export function BudgetTrend({
                     label="Sarflangan"
                     value={actual}
                     max={max}
-                    barClassName="bg-blue-600"
+                    barClassName="bg-navy-700"
                   />
                   <BudgetVariance budget={value} actual={actual} />
                 </>
