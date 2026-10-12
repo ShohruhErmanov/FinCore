@@ -95,7 +95,7 @@ function TrendChart({
   const totalActual = points.reduce((sum, point) => sum + BigInt(point.actualUzs), 0n);
   const completion = percentOf(totalActual.toString(), totalPlan.toString());
   const hasData = totalPlan !== 0n || totalActual !== 0n;
-  const actualColor = tone === 'revenue' ? '#55e6f7' : '#60a5fa';
+  const actualColor = tone === 'revenue' ? '#FFB800' : '#FF8050';
   const gradientId = `actual-${tone}-gradient`;
 
   return (
@@ -155,7 +155,7 @@ function TrendChart({
         </dl>
 
         {hasData ? (
-          <div className="mt-5 h-[280px] w-full overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#0b2349_0%,#173f79_55%,#1f58a8_100%)] px-2 pb-1 pt-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] sm:h-[320px] sm:px-4">
+          <div className="mt-5 h-[280px] w-full overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#060D16_0%,#0F1B2D_55%,#1E3A5C_100%)] px-2 pb-1 pt-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] sm:h-[320px] sm:px-4">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <defs>
@@ -168,14 +168,14 @@ function TrendChart({
                 <CartesianGrid
                   strokeDasharray="0"
                   vertical={false}
-                  stroke="rgba(203, 213, 225, 0.16)"
+                  stroke="rgba(211, 222, 234, 0.16)"
                 />
                 <XAxis
                   dataKey="label"
                   tickLine={false}
-                  axisLine={{ stroke: 'rgba(203, 213, 225, 0.2)' }}
+                  axisLine={{ stroke: 'rgba(211, 222, 234, 0.2)' }}
                   fontSize={11}
-                  tick={{ fill: '#cbd5e1' }}
+                  tick={{ fill: '#D3DEEA' }}
                   interval="preserveStartEnd"
                   tickMargin={10}
                 />
@@ -186,7 +186,7 @@ function TrendChart({
                   tickLine={false}
                   axisLine={false}
                   fontSize={10}
-                  tick={{ fill: '#a5b4cc' }}
+                  tick={{ fill: '#A9BED5' }}
                   width={66}
                   tickMargin={6}
                 />
@@ -198,24 +198,24 @@ function TrendChart({
                   labelStyle={{ color: '#f8fafc', fontWeight: 700, marginBottom: 6 }}
                   itemStyle={{ paddingTop: 2, paddingBottom: 2 }}
                   contentStyle={{
-                    background: 'rgba(8, 28, 61, 0.96)',
-                    color: '#e2e8f0',
+                    background: 'rgba(15, 27, 45, 0.96)',
+                    color: '#E8EEF5',
                     borderRadius: 14,
-                    border: '1px solid rgba(148, 163, 184, 0.28)',
-                    boxShadow: '0 18px 42px -22px rgba(2, 6, 23, 0.8)',
+                    border: '1px solid rgba(122, 157, 192, 0.28)',
+                    boxShadow: '0 18px 42px -22px rgba(6, 13, 22, 0.8)',
                     padding: '10px 12px',
                   }}
-                  cursor={{ stroke: 'rgba(226, 232, 240, 0.32)', strokeWidth: 1 }}
+                  cursor={{ stroke: 'rgba(232, 238, 245, 0.32)', strokeWidth: 1 }}
                 />
                 <Line
                   type="monotone"
                   dataKey="plan"
                   name="Reja"
-                  stroke="#cbd5e1"
+                  stroke="#D3DEEA"
                   strokeWidth={2}
                   strokeDasharray="7 6"
                   dot={false}
-                  activeDot={{ r: 4, fill: '#e2e8f0', stroke: '#173f79', strokeWidth: 2 }}
+                  activeDot={{ r: 4, fill: '#E8EEF5', stroke: '#16293F', strokeWidth: 2 }}
                 />
                 <Area
                   type="monotone"
@@ -224,7 +224,7 @@ function TrendChart({
                   stroke={actualColor}
                   strokeWidth={3}
                   fill={`url(#${gradientId})`}
-                  dot={{ r: 2.7, fill: actualColor, stroke: '#173f79', strokeWidth: 1.5 }}
+                  dot={{ r: 2.7, fill: actualColor, stroke: '#16293F', strokeWidth: 1.5 }}
                   activeDot={{ r: 5, fill: actualColor, stroke: '#f8fafc', strokeWidth: 2 }}
                 />
               </AreaChart>
@@ -301,8 +301,8 @@ function AnnualCompositionCharts({ data }: { data: AnnualExpenseSummary }) {
     variable: toChartNumber(row.variableUzs),
   }));
   const composition = [
-    { name: 'Doimiy', value: toChartNumber(data.fixedActualUzs), color: '#2563eb' },
-    { name: 'O‘zgaruvchan', value: toChartNumber(data.variableActualUzs), color: '#f59e0b' },
+    { name: 'Doimiy', value: toChartNumber(data.fixedActualUzs), color: '#1E3A5C' },
+    { name: 'O‘zgaruvchan', value: toChartNumber(data.variableActualUzs), color: '#FFB800' },
   ];
   const hasComposition = composition.some((item) => item.value > 0);
 
@@ -318,7 +318,7 @@ function AnnualCompositionCharts({ data }: { data: AnnualExpenseSummary }) {
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={monthly} margin={{ top: 10, right: 10, left: 2, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E9E3DE" />
               <XAxis
                 dataKey="label"
                 tickLine={false}
@@ -335,11 +335,11 @@ function AnnualCompositionCharts({ data }: { data: AnnualExpenseSummary }) {
               />
               <Tooltip
                 formatter={(value: number) => formatMoney(String(value))}
-                cursor={{ fill: '#eff6ff' }}
+                cursor={{ fill: '#FAF8F6' }}
               />
               <Legend />
-              <Bar dataKey="fixed" name="Doimiy" fill="#2563eb" radius={[5, 5, 0, 0]} />
-              <Bar dataKey="variable" name="O‘zgaruvchan" fill="#f59e0b" radius={[5, 5, 0, 0]} />
+              <Bar dataKey="fixed" name="Doimiy" fill="#1E3A5C" radius={[5, 5, 0, 0]} />
+              <Bar dataKey="variable" name="O‘zgaruvchan" fill="#FFB800" radius={[5, 5, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -675,17 +675,15 @@ export function DashboardPage() {
 
       <section
         aria-label="FinCore Pulse"
-        className="relative mb-5 overflow-hidden rounded-[24px] border border-blue-400/20 bg-[linear-gradient(120deg,#071a3b_0%,#0b2f68_55%,#1259d6_100%)] p-6 text-white shadow-[0_28px_70px_-36px_rgba(30,64,175,0.85)] sm:p-7"
+        className="relative mb-5 overflow-hidden rounded-[24px] border border-navy-400/30 brand-navy-panel p-6 text-white shadow-[0_28px_70px_-36px_rgba(15,27,45,0.85)] sm:p-7"
       >
-        <div className="pointer-events-none absolute -right-24 -top-32 h-80 w-80 rounded-full bg-cyan-300/20 blur-3xl" />
-        <div className="pointer-events-none absolute bottom-0 left-1/3 h-28 w-72 rounded-full bg-blue-400/20 blur-3xl" />
         <div className="relative grid gap-7 lg:grid-cols-[1.35fr_0.65fr] lg:items-end">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-blue-100 backdrop-blur">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-navy-100 backdrop-blur">
               <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
               FinCore Pulse
             </div>
-            <p className="mt-5 max-w-2xl text-sm font-medium text-blue-100">
+            <p className="mt-5 max-w-2xl text-sm font-medium text-navy-100">
               {netResult === null
                 ? `${data.period.label} uchun amaldagi tushum`
                 : `${data.period.label} uchun tushum va xarajatning tezkor operatsion natijasi`}
@@ -693,7 +691,7 @@ export function DashboardPage() {
             <div className="mt-2 text-3xl font-bold tracking-[-0.04em] sm:text-4xl">
               <MoneyText value={heroAmountUzs} compact />
             </div>
-            <p className="mt-2 text-sm text-blue-100/85">
+            <p className="mt-2 text-sm text-navy-100/85">
               {netResult === null
                 ? 'Tanlangan davr bo‘yicha qayd etilgan amaldagi tushum.'
                 : netResult > 0n
@@ -706,7 +704,7 @@ export function DashboardPage() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
             <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-md">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-xs font-semibold text-blue-100">Tushum rejasi</span>
+                <span className="text-xs font-semibold text-navy-100">Tushum rejasi</span>
                 <Activity className="h-4 w-4 text-cyan-300" aria-hidden="true" />
               </div>
               <p className="mt-2 text-2xl font-bold tabular-nums">
@@ -722,7 +720,7 @@ export function DashboardPage() {
               </div>
             </div>
             <div className="flex items-center justify-between rounded-2xl border border-white/15 bg-slate-950/15 px-4 py-3 text-xs backdrop-blur-md">
-              <span className="text-blue-100">Ma’lumot holati</span>
+              <span className="text-navy-100">Ma’lumot holati</span>
               <span className="inline-flex items-center gap-2 font-bold text-white">
                 <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.9)]" />
                 Server agregati

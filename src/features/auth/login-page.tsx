@@ -60,13 +60,11 @@ export function LoginPage() {
   return (
     <main className="min-h-screen bg-navy lg:grid lg:grid-cols-[1.05fr_0.95fr]">
       <section
-        className="relative hidden overflow-hidden bg-[linear-gradient(145deg,#041126_0%,#071a3a_58%,#0b2f68_100%)] p-12 text-white lg:flex lg:flex-col lg:justify-between"
+        className="relative hidden overflow-hidden brand-navy-panel p-12 text-white lg:flex lg:flex-col lg:justify-between"
         aria-label="FINCORE haqida"
       >
-        <div className="absolute -left-40 top-1/3 h-96 w-96 rounded-full bg-blue-500/20 blur-3xl" />
-        <div className="absolute -right-32 -top-24 h-80 w-80 rounded-full bg-cyan-300/10 blur-3xl" />
         <div className="relative flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-xl bg-white shadow-[0_16px_34px_-16px_rgba(59,130,246,0.9)] ring-1 ring-white/30">
+          <div className="grid h-11 w-11 place-items-center rounded-xl bg-white shadow-[0_16px_34px_-16px_rgba(6,13,22,0.7)] ring-1 ring-white/30">
             <BrandMark className="h-9 w-9" />
           </div>
           <div>
@@ -75,7 +73,7 @@ export function LoginPage() {
           </div>
         </div>
         <div className="relative max-w-xl">
-          <p className="inline-flex rounded-full border border-blue-300/20 bg-blue-400/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-blue-200 backdrop-blur">
+          <p className="inline-flex rounded-full border border-navy-300/25 bg-navy-400/15 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-navy-200 backdrop-blur">
             Financial operating system
           </p>
           <h1 className="mt-6 text-5xl font-bold leading-[1.08] tracking-[-0.045em]">
@@ -91,7 +89,7 @@ export function LoginPage() {
             Role va filial scope
           </span>
           <span className="inline-flex items-center gap-2">
-            <LockKeyhole className="h-5 w-5 text-blue-300" />
+            <LockKeyhole className="h-5 w-5 text-navy-300" />
             Audit qilinadigan oqim
           </span>
         </div>
@@ -110,7 +108,7 @@ export function LoginPage() {
               <p className="text-xs text-muted">Moliya platformasi</p>
             </div>
           </div>
-          <div className="relative rounded-[28px] border border-white/80 bg-white/90 p-6 shadow-[0_32px_80px_-38px_rgba(15,23,42,0.4)] ring-1 ring-slate-200/70 backdrop-blur-xl sm:p-8">
+          <div className="relative rounded-[28px] border border-white/80 bg-white/90 p-6 shadow-[0_32px_80px_-38px_rgba(15,27,45,0.4)] ring-1 ring-slate-200/70 backdrop-blur-xl sm:p-8">
             <h2 className="text-2xl font-bold tracking-tight text-ink">Tizimga kirish</h2>
             <p className="mt-2 text-sm text-muted">Telefon raqamingiz va parolingizni kiriting.</p>
             {serverError ? (

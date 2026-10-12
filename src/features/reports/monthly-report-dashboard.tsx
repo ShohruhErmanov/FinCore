@@ -7,7 +7,7 @@ import { EmptyState, MoneyText, PercentText } from '@/shared/ui';
 import { buildMonthlyExecutiveSummary, type MonthlyExecutiveSummary } from './monthly-report';
 
 const surface =
-  'rounded-[1.5rem] border border-slate-200/80 bg-white shadow-[0_18px_48px_-40px_rgba(15,23,42,0.38)]';
+  'rounded-[1.5rem] border border-slate-200/80 bg-white shadow-[0_18px_48px_-40px_rgba(15,27,45,0.38)]';
 const shortMonths = [
   'Yan',
   'Fev',
@@ -182,8 +182,8 @@ function RevenueProfitBar({ data }: { data: MonthlyFinancial }) {
         data.revenueCompletionPercent === null
           ? 'Tushum rejasi mavjud emas'
           : `Reja bajarilishi ${formatPercent(data.revenueCompletionPercent)}`,
-      bar: 'bg-blue-600',
-      valueClass: 'text-blue-700',
+      bar: 'bg-navy-700',
+      valueClass: 'text-navy-700',
     },
     {
       key: 'profit',
@@ -384,11 +384,11 @@ function Trend({
       />
       <div className="mb-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-600">
         <span className="inline-flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-sm bg-[#b9c5d7]" />
+          <span className="h-2.5 w-2.5 rounded-sm bg-sand-300" />
           Reja
         </span>
         <span className="inline-flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-sm bg-blue-600" />
+          <span className="h-2.5 w-2.5 rounded-sm bg-navy-700" />
           Fakt
         </span>
       </div>
@@ -414,10 +414,10 @@ function Trend({
                   }))}
                   margin={{ top: 8, right: 4, left: 0, bottom: 0 }}
                 >
-                  <CartesianGrid stroke="#e9eef5" strokeDasharray="3 3" vertical={false} />
+                  <CartesianGrid stroke="#ECE6E1" strokeDasharray="3 3" vertical={false} />
                   <XAxis
                     dataKey="name"
-                    tick={{ fill: '#64748b', fontSize: 11 }}
+                    tick={{ fill: '#77706B', fontSize: 11 }}
                     axisLine={false}
                     tickLine={false}
                   />
@@ -425,7 +425,7 @@ function Trend({
                     // A no-break space: recharts wraps a tick at an ordinary
                     // one, which split "200 mln" over two lines.
                     tickFormatter={(value: number) => `${Math.round(value / 1_000_000)}\u00a0mln`}
-                    tick={{ fill: '#64748b', fontSize: 10 }}
+                    tick={{ fill: '#77706B', fontSize: 10 }}
                     axisLine={false}
                     tickLine={false}
                     width={52}
@@ -437,14 +437,14 @@ function Trend({
                   <Bar
                     dataKey="planValue"
                     name="Reja"
-                    fill="#b9c5d7"
+                    fill="#D9D1CB"
                     radius={[3, 3, 0, 0]}
                     maxBarSize={14}
                   />
                   <Bar
                     dataKey="actualValue"
                     name="Fakt"
-                    fill="#2563eb"
+                    fill="#1E3A5C"
                     radius={[3, 3, 0, 0]}
                     maxBarSize={14}
                   />
@@ -473,8 +473,8 @@ function Trend({
               )}
             >
               <p className="font-semibold">{monthNameUz(row.month)}</p>
-              <TrendFigure label="Reja" swatch="bg-[#b9c5d7]" value={row.plan} />
-              <TrendFigure label="Fakt" swatch="bg-blue-600" value={row.actual} />
+              <TrendFigure label="Reja" swatch="bg-sand-300" value={row.plan} />
+              <TrendFigure label="Fakt" swatch="bg-navy-700" value={row.actual} />
             </li>
           ))}
         </ul>
@@ -625,7 +625,7 @@ function CompletionCell({ data }: { data: PlanActual }) {
         className="hidden h-1 w-12 overflow-hidden rounded-full bg-slate-100 lg:block"
       >
         <span
-          className={cn('block h-full rounded-full', percent > 100 ? 'bg-rose-500' : 'bg-blue-500')}
+          className={cn('block h-full rounded-full', percent > 100 ? 'bg-rose-500' : 'bg-navy-500')}
           style={{ width: `${Math.max(0, Math.min(100, percent))}%` }}
         />
       </span>
@@ -751,7 +751,7 @@ function DeviationRow({
         >
           {/* Filled share = what was spent of the plan; the grey rest is what was saved. */}
           <div
-            className={cn('h-full rounded-full', tone === 'rose' ? 'bg-rose-500' : 'bg-blue-500')}
+            className={cn('h-full rounded-full', tone === 'rose' ? 'bg-rose-500' : 'bg-navy-500')}
             style={{ width: `${Math.max(0, Math.min(100, percent))}%` }}
           />
         </div>

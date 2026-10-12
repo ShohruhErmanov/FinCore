@@ -127,6 +127,24 @@ export function tashkentBusinessDate(date = new Date()): IsoDate {
   return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
 }
 
+/**
+ * Navbar hisob davri uchun avtomatik sana oralig‘i.
+ * Joriy oy oy boshidan bugungacha, boshqa oy esa to‘liq oy bo‘ladi.
+ */
+export function accountingPeriodDateRange(
+  year: number,
+  month: number,
+  today: IsoDate = tashkentBusinessDate(),
+): { from: IsoDate; to: IsoDate } {
+  const monthText = String(month).padStart(2, '0');
+  const prefix = `${year}-${monthText}`;
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return {
+    from: `${prefix}-01`,
+    to: today.startsWith(`${prefix}-`) ? today : `${prefix}-${String(lastDay).padStart(2, '0')}`,
+  };
+}
+
 /** Jadval uchun qisqa sana: 20.08.2026 */
 export function formatDate(value: IsoDate): string {
   const [year, month, day] = value.split('-').map(Number);
