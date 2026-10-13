@@ -29,7 +29,7 @@ import { HEADER_ROWS, readKassaSheets } from './read-workbook';
 
 function KpiTile({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
-    <div className="rounded-card border border-border bg-white p-4">
+    <div className="neu-raised rounded-card p-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
       <p className={`mt-2 text-2xl font-bold ${tone ?? 'text-ink'}`}>{value}</p>
     </div>
@@ -104,14 +104,14 @@ export function ImportPage() {
       }
       setPreview(
         mergeResults(
-          sheets.map((sheet) =>
-            normalizeKassaRows(sheet.name, sheet.rows, refs, HEADER_ROWS + 1),
-          ),
+          sheets.map((sheet) => normalizeKassaRows(sheet.name, sheet.rows, refs, HEADER_ROWS + 1)),
         ),
       );
     } catch (error) {
       setParseError(
-        error instanceof Error ? error.message : 'Faylni o‘qib bo‘lmadi. Format .xlsx ekanini tekshiring.',
+        error instanceof Error
+          ? error.message
+          : 'Faylni o‘qib bo‘lmadi. Format .xlsx ekanini tekshiring.',
       );
     } finally {
       setParsing(false);
@@ -131,25 +131,25 @@ export function ImportPage() {
       />
 
       <Alert title="Qanday ishlaydi" tone="info" className="mb-5">
-        Fayldagi <strong>Sayxun_kassa</strong> va <strong>Xalqlar_kassa</strong> varaqlari
-        o‘qiladi — Jurnal emas, chunki Jurnal QUERY formulasi orqali yig‘iladi va matn
-        formatidagi sanalarni tashlab ketadi. Import avval faqat ko‘rib chiqish uchun
-        ko‘rsatiladi; tasdiqlamaguningizcha hech narsa saqlanmaydi.
+        Fayldagi <strong>Sayxun_kassa</strong> va <strong>Xalqlar_kassa</strong> varaqlari o‘qiladi
+        — Jurnal emas, chunki Jurnal QUERY formulasi orqali yig‘iladi va matn formatidagi sanalarni
+        tashlab ketadi. Import avval faqat ko‘rib chiqish uchun ko‘rsatiladi; tasdiqlamaguningizcha
+        hech narsa saqlanmaydi.
       </Alert>
 
-      {!referencesReady && !referenceError ? <LoadingState label="Ma’lumotnomalar yuklanmoqda…" /> : null}
+      {!referencesReady && !referenceError ? (
+        <LoadingState label="Ma’lumotnomalar yuklanmoqda…" />
+      ) : null}
       {referenceError ? <ErrorState message={getApiErrorMessage(referenceError)} /> : null}
 
       {referencesReady ? (
         <Card title="1-qadam · Faylni tanlang" className="mb-5">
-          <label className="flex cursor-pointer flex-col items-center gap-3 rounded-card border-2 border-dashed border-border p-8 text-center hover:border-blue-300 hover:bg-blue-50/40">
+          <label className="neu-inset flex cursor-pointer flex-col items-center gap-3 rounded-card border-2 border-dashed border-border/80 p-8 text-center hover:border-blue-300 hover:bg-blue-50/40">
             <FileSpreadsheet className="h-8 w-8 text-primary" />
             <span className="text-sm font-semibold text-ink">
               .xlsx faylni tanlash uchun bosing
             </span>
-            <span className="text-xs text-muted">
-              {fileName ?? 'Masalan: Moliya reja .xlsx'}
-            </span>
+            <span className="text-xs text-muted">{fileName ?? 'Masalan: Moliya reja .xlsx'}</span>
             <input
               type="file"
               accept=".xlsx"
@@ -202,8 +202,8 @@ export function ImportPage() {
 
           {preview.recoveredCount > 0 ? (
             <Alert title="Excel yo‘qotgan yozuvlar topildi" tone="success" className="mt-5">
-              <strong>{preview.recoveredCount} ta</strong> yozuvning sanasi matn formatida
-              saqlangan — Excel’dagi Jurnal ularni tashlab ketgan. Import ularni ham qo‘shadi.
+              <strong>{preview.recoveredCount} ta</strong> yozuvning sanasi matn formatida saqlangan
+              — Excel’dagi Jurnal ularni tashlab ketgan. Import ularni ham qo‘shadi.
             </Alert>
           ) : null}
 
@@ -217,7 +217,7 @@ export function ImportPage() {
             <table className="w-full min-w-[900px] text-sm">
               <caption className="sr-only">Import qilinadigan yozuvlar</caption>
               <thead>
-                <tr className="border-y border-border bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                <tr className="border-y border-border bg-canvas/70 text-xs font-semibold uppercase tracking-wide text-slate-600">
                   <th className="px-4 py-3 text-left">Manba</th>
                   <th className="px-4 py-3 text-left">Sana</th>
                   <th className="px-4 py-3 text-left">Filial</th>
@@ -265,8 +265,7 @@ export function ImportPage() {
             <div className="mt-6 rounded-card border border-amber-200 bg-amber-50/60 p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="inline-flex items-center gap-2 text-sm font-semibold text-amber-900">
-                  <ShieldAlert className="h-4 w-4" /> {errors.length} ta qator import
-                  qilinmaydi
+                  <ShieldAlert className="h-4 w-4" /> {errors.length} ta qator import qilinmaydi
                 </p>
                 <Button
                   size="sm"
@@ -318,16 +317,16 @@ export function ImportPage() {
       {summary ? (
         <Card title="3-qadam · Natija">
           <div className="grid gap-4 sm:grid-cols-3">
-            <KpiTile
-              label="Import qilindi"
-              value={String(summary.imported)}
-              tone="text-success"
-            />
+            <KpiTile label="Import qilindi" value={String(summary.imported)} tone="text-success" />
             <KpiTile label="Takroriy — o‘tkazib yuborildi" value={String(summary.skipped)} />
             <KpiTile label="Jami summa" value={formatMoney(summary.totalUzs, true)} />
           </div>
           {summary.rejected.length > 0 ? (
-            <Alert title={`${summary.rejected.length} ta yozuv qabul qilinmadi`} tone="warning" className="mt-5">
+            <Alert
+              title={`${summary.rejected.length} ta yozuv qabul qilinmadi`}
+              tone="warning"
+              className="mt-5"
+            >
               <ul className="space-y-1">
                 {summary.rejected.slice(0, 8).map((item) => (
                   <li key={`${item.sourceSheet}-${item.sourceRow}`}>

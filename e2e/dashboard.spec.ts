@@ -11,13 +11,13 @@ test.describe('Rahbariyat dashboardi', () => {
 
     // Qiymat serverdan keladi — bu yerda formati va drill-down muhim,
     // fixture arifmetikasi emas.
-    await expect(expenseCard).toContainText(/\d[\d.,]* mln so'm/);
-    await expect(expenseCard).toContainText(/Budjet bajarilishi \d+([.,]\d+)?%/);
+    await expect(expenseCard).toContainText(/\d[\d\s]* so‘m/);
+    await expect(expenseCard).toContainText(/Bajarilish \d+([.,]\d+)?%/);
 
     await expenseCard.click();
     await expect(page).toHaveURL((url) => {
       return (
-        url.pathname === '/expenses' &&
+        url.pathname === '/dashboard/expenses' &&
         url.searchParams.get('period') === fixtureIds.periodAug &&
         url.searchParams.get('branch') === 'all'
       );
@@ -32,5 +32,28 @@ test.describe('Rahbariyat dashboardi', () => {
     await page.getByRole('button', { name: 'Kunlik' }).click();
     await expect(page.getByText('Avgust 2026, kunlar kesimi').first()).toBeVisible();
     await expect(page).toHaveURL(/granularity=daily/);
+
+    const revenueChart = page.getByRole('region', {
+      name: 'Tushum reja va amalda diagrammasi',
+    });
+    await revenueChart.locator('.recharts-area-dots .recharts-dot').nth(22).hover({ force: true });
+    await expect(revenueChart.getByText(/^Reja:/)).toBeVisible();
+    await expect(revenueChart.getByText(/^Amalda:/)).toBeVisible();
+  });
+
+  test('yillik xarajat tarkibi tooltipi summani premium kartada ko‘rsatadi', async ({ page }) => {
+    await login(page);
+    await page.goto(`/dashboard?period=${fixtureIds.periodAug}&branch=all`);
+
+    const compositionChart = page.getByLabel(
+      'Yillik doimiy va o‘zgaruvchan xarajatlar diagrammasi',
+    );
+    await compositionChart.locator('.recharts-sector').first().hover({ force: true });
+
+    const tooltip = compositionChart.locator('.neu-chart-tooltip');
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toContainText('Doimiy');
+    await expect(tooltip).toContainText(/\d[\d\s]* so‘m/);
+    await expect(tooltip).toContainText(/Jami xarajatning \d+([.,]\d+)?% qismi/);
   });
 });

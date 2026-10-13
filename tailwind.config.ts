@@ -1,102 +1,75 @@
 import type { Config } from 'tailwindcss';
 
-/**
- * IT Live identity (docs: "IT iydenty.pdf").
- *
- *   01 Primary     Brand qizil   #FF2B00
- *   02 Secondary   Oltin sariq   #FFB800
- *   03 Dark        Tech navy     #0F1B2D
- *   04 Accent      Issiq to‘q    #FF8050
- *   05 Background  Krem oq       #F5F1EE
- *
- * Each scale keeps the identity's own steps where the sheet gives them and
- * fills the gaps between. Brand red 600 (#E62600) is the shade used under white
- * text: the pure #FF2B00 reaches only 3.7:1 against white, 600 clears 4.5:1.
- */
-const brand = {
-  50: '#FFF1ED',
-  100: '#FFE1D8',
-  200: '#FFBBA8',
-  300: '#FF8C70',
-  400: '#FF5C36',
-  500: '#FF2B00',
-  600: '#E62600',
-  700: '#B81F00',
-  800: '#8A1700',
-  900: '#5C0F00',
-  950: '#3D0A00',
+/** FinCore Deep Navy Soft UI tokens. Existing utility aliases are intentionally
+ * retained so every route migrates without changing component behaviour. */
+const navyNeutral = {
+  50: '#1C2C44',
+  100: '#213149',
+  200: '#2B3E58',
+  300: '#3F5571',
+  400: '#7890AE',
+  500: '#96ABC4',
+  600: '#B3C4DB',
+  700: '#CEDDF0',
+  800: '#EDF4FF',
+  900: '#F5F8FF',
+  950: '#FFFFFF',
 };
-const navy = {
-  50: '#E8EEF5',
-  100: '#D3DEEA',
-  200: '#A9BED5',
-  300: '#7A9DC0',
-  400: '#4F7AA3',
-  500: '#345D86',
-  600: '#284B70',
-  700: '#1E3A5C',
-  800: '#16293F',
-  900: '#0F1B2D',
-  950: '#060D16',
+
+const softAccent = {
+  50: '#1A2F4D',
+  100: '#203B60',
+  200: '#294D7A',
+  300: '#38659D',
+  400: '#527FCA',
+  500: '#6F9FFF',
+  600: '#6393EE',
+  700: '#82ADFF',
+  800: '#A4C2FF',
+  900: '#C8DAFF',
+  950: '#EDF4FF',
 };
-const gold = {
-  50: '#FFF8E0',
-  100: '#FFF0BF',
-  200: '#FFE180',
-  300: '#FFD24D',
-  400: '#FFC526',
-  500: '#FFB800',
-  600: '#CC8C00',
-  // Darker than the sheet's #CC8C00 so warning text stays legible on gold-50.
-  700: '#996600',
-  800: '#7A5200',
-  900: '#664400',
-  950: '#3D2900',
+
+const softSuccess = {
+  50: '#19382E',
+  100: '#21483A',
+  200: '#315F4E',
+  300: '#477B65',
+  400: '#5FA683',
+  500: '#6EE3AE',
+  600: '#7DE7B8',
+  700: '#92ECC5',
+  800: '#B5F3D5',
+  900: '#D7FAE8',
+  950: '#ECFFF5',
 };
-const accent = {
-  50: '#FFF2EC',
-  100: '#FFE3D6',
-  200: '#FFC4A8',
-  300: '#FFA27C',
-  400: '#FF9066',
-  500: '#FF8050',
-  600: '#E86A3A',
-  700: '#D45828',
-  800: '#A6401A',
-  900: '#7A2800',
-  950: '#4D1900',
+
+const softDanger = {
+  50: '#472733',
+  100: '#572B39',
+  200: '#71394A',
+  300: '#954B60',
+  400: '#CA6579',
+  500: '#FF8C9C',
+  600: '#FF98A6',
+  700: '#FFAAB5',
+  800: '#FFC1C9',
+  900: '#FFE1E5',
+  950: '#FFF1F3',
 };
-/**
- * Warm greys from the background column (#F5F1EE, #B8B0AA, #6B6460), deepening
- * into Tech navy, so headings set in the darkest step read as the brand's ink.
- * 500 is a touch darker than the sheet's grey to keep small text at 4.5:1.
- */
-const sand = {
-  50: '#FAF8F6',
-  100: '#F5F1EE',
-  200: '#E9E3DE',
-  300: '#D9D1CB',
-  400: '#B8B0AA',
-  500: '#77706B',
-  600: '#6B6460',
-  700: '#4A4541',
-  800: '#1E3A5C',
-  900: '#0F1B2D',
-  950: '#060D16',
-};
-/** Steel blue from the navy column, for informational (not branded) accents. */
-const steel = {
-  50: '#EEF3F8',
-  100: '#E8EEF5',
-  200: '#C9D7E6',
-  300: '#A3BCD5',
-  400: '#7A9DC0',
-  500: '#4F7AA3',
-  600: '#3A6290',
-  700: '#2B4D73',
-  800: '#1E3A5C',
-  900: '#0F1B2D',
-  950: '#060D16',
+
+const softWarning = {
+  50: '#403421',
+  100: '#513F25',
+  200: '#6A512D',
+  300: '#8A683A',
+  400: '#BB8E51',
+  500: '#F2BE73',
+  600: '#F4C680',
+  700: '#F5CB8D',
+  800: '#F8DCB1',
+  900: '#FCECD5',
+  950: '#FFF7E8',
 };
 
 export default {
@@ -105,7 +78,9 @@ export default {
     extend: {
       colors: {
         canvas: 'rgb(var(--canvas) / <alpha-value>)',
+        sidebar: 'rgb(var(--sidebar) / <alpha-value>)',
         surface: 'rgb(var(--surface) / <alpha-value>)',
+        raised: 'rgb(var(--raised) / <alpha-value>)',
         border: 'rgb(var(--border) / <alpha-value>)',
         ink: 'rgb(var(--ink) / <alpha-value>)',
         muted: 'rgb(var(--muted) / <alpha-value>)',
@@ -114,45 +89,29 @@ export default {
         warning: 'rgb(var(--warning) / <alpha-value>)',
         danger: 'rgb(var(--danger) / <alpha-value>)',
         info: 'rgb(var(--info) / <alpha-value>)',
-
-        // Brand scales — prefer these names in new code.
-        brand,
-        navy: { DEFAULT: 'rgb(var(--navy) / <alpha-value>)', ...navy },
-        gold,
-        accent,
-        sand,
-        steel,
-
-        /*
-         * The screens were built on Tailwind's default palette (~500 class
-         * names). Rather than rename them all, the defaults they use are
-         * re-pointed at the identity: neutrals become the warm sand-to-navy
-         * ramp, blue (the old primary) becomes brand red, sky (info) steel,
-         * amber (warning) gold, red/rose (danger) the brand red, cyan (the
-         * highlight on navy panels) gold and orange the warm accent. Green
-         * stays green: profit and success need a colour the brand lacks.
-         */
-        slate: sand,
-        blue: brand,
-        sky: steel,
-        cyan: gold,
-        amber: gold,
-        yellow: gold,
-        orange: accent,
-        red: brand,
-        rose: brand,
+        pearl: navyNeutral,
+        accent: softAccent,
+        brand: softAccent,
+        navy: softAccent,
+        steel: softAccent,
+        sand: navyNeutral,
+        slate: navyNeutral,
+        blue: softAccent,
+        sky: softAccent,
+        cyan: softAccent,
+        green: softSuccess,
+        emerald: softSuccess,
+        red: softDanger,
+        rose: softDanger,
+        amber: softWarning,
+        yellow: softWarning,
       },
-      borderRadius: { card: '18px' },
+      borderRadius: { card: '22px' },
       boxShadow: {
-        card: '0 1px 2px rgba(15, 27, 45, 0.04), 0 18px 42px -32px rgba(15, 27, 45, 0.28)',
-        elevated: '0 2px 4px rgba(15, 27, 45, 0.04), 0 24px 60px -28px rgba(15, 27, 45, 0.32)',
+        card: '8px 8px 18px rgb(10 20 37 / 0.85), -8px -8px 18px rgb(43 62 88 / 0.7)',
+        elevated: '14px 14px 34px rgb(10 20 37 / 0.88), -10px -10px 26px rgb(43 62 88 / 0.72)',
       },
       fontFamily: { sans: ['Roboto', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
-      /*
-       * The identity sets Roboto in Light, Regular, Medium and Bold only.
-       * Semibold (600) would make the browser fall through to Bold, so it is
-       * pinned to Medium — the weight the identity uses for emphasis.
-       */
       fontWeight: { semibold: '500' },
     },
   },

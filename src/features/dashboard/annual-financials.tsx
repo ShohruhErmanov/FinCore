@@ -41,7 +41,7 @@ function Tile({
   tone?: 'neutral' | 'revenue' | 'expense' | 'profit' | 'loss';
 }) {
   return (
-    <div className="rounded-card border border-border bg-white p-4 shadow-card">
+    <div className="neu-raised rounded-card p-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
       <p
         className={cn(
@@ -257,7 +257,7 @@ export function AnnualFinancialOverview({
   ];
 
   return (
-    <div className="mt-4 rounded-card border border-border bg-white p-5 shadow-card">
+    <div className="neu-raised mt-4 rounded-card p-5">
       <h3 className="text-base font-bold text-ink">Yillik moliyaviy ko‘rsatkichlar</h3>
       <p className="mt-0.5 text-xs text-muted">
         Tushum − Xarajat = Sof foyda. Ustunlar eng katta ko‘rsatkichga nisbatan o‘lchangan.
@@ -265,7 +265,7 @@ export function AnnualFinancialOverview({
 
       <dl className="mt-5 grid gap-4 sm:grid-cols-3">
         {rows.map((row) => (
-          <div key={row.key} className="rounded-xl border border-border/70 bg-slate-50/60 p-4">
+          <div key={row.key} className="neu-raised-sm rounded-xl p-4">
             <dt className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
               <span
                 className={cn('h-2 w-2 rounded-full', ACCENT[row.key].dot)}
@@ -293,7 +293,7 @@ export function AnnualFinancialOverview({
               <span className="tabular-nums text-muted">{formatMoney(row.raw)}</span>
             </div>
             <div
-              className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-slate-100"
+              className="mt-1.5 h-2.5 overflow-hidden rounded-full neu-track"
               role="img"
               aria-label={`${row.label}: ${formatMoney(row.raw)}`}
             >

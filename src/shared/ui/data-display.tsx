@@ -29,7 +29,7 @@ export function StatusBadge({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold shadow-sm [&_svg]:h-3.5 [&_svg]:w-3.5',
+        'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold shadow-[var(--neu-shadow-xs)] [&_svg]:h-3.5 [&_svg]:w-3.5',
         toneClass[item.tone],
       )}
     >
@@ -86,18 +86,13 @@ export function KpiCard({ label, value, helper, tone = 'neutral', to, demo }: Kp
     </>
   );
   const className = cn(
-    'relative block overflow-hidden rounded-card border bg-surface/95 p-5 text-left shadow-card backdrop-blur-sm transition-all duration-200 before:absolute before:inset-x-0 before:top-0 before:h-1',
+    'neu-raised relative block overflow-hidden rounded-card p-5 text-left before:absolute before:inset-x-0 before:top-0 before:h-1',
     tone === 'neutral' && 'border-border/90 before:bg-slate-300',
-    tone === 'success' &&
-      'border-green-200/80 bg-gradient-to-br from-white via-white to-green-50/45 before:bg-gradient-to-r before:from-emerald-400 before:to-green-500',
-    tone === 'warning' &&
-      'border-amber-200/80 bg-gradient-to-br from-white via-white to-amber-50/50 before:bg-gradient-to-r before:from-amber-400 before:to-orange-500',
-    tone === 'danger' &&
-      'border-red-200/80 bg-gradient-to-br from-white via-white to-red-50/45 before:bg-gradient-to-r before:from-rose-400 before:to-red-500',
-    tone === 'info' &&
-      'border-sky-200/80 bg-gradient-to-br from-white via-white to-blue-50/50 before:bg-gradient-to-r before:from-sky-400 before:to-blue-600',
-    to &&
-      'hover:-translate-y-1 hover:border-blue-300 hover:shadow-elevated focus-visible:outline focus-visible:outline-2',
+    tone === 'success' && 'border-green-200/80 before:bg-green-600',
+    tone === 'warning' && 'border-amber-200/80 before:bg-amber-600',
+    tone === 'danger' && 'border-red-200/80 before:bg-red-600',
+    tone === 'info' && 'border-blue-200/80 before:bg-primary',
+    to && 'neu-interactive hover:border-blue-300 focus-visible:outline focus-visible:outline-2',
   );
   return to ? (
     <Link to={to} className={className}>

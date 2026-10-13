@@ -6,8 +6,7 @@ import type { BranchComparisonReport, MonthlyReport, PlanActual } from '@/shared
 import { EmptyState, MoneyText, PercentText } from '@/shared/ui';
 import { buildMonthlyExecutiveSummary, type MonthlyExecutiveSummary } from './monthly-report';
 
-const surface =
-  'rounded-[1.5rem] border border-slate-200/80 bg-white shadow-[0_18px_48px_-40px_rgba(15,27,45,0.38)]';
+const surface = 'neu-raised rounded-[1.5rem]';
 const shortMonths = [
   'Yan',
   'Fev',
@@ -224,10 +223,7 @@ function RevenueProfitBar({ data }: { data: MonthlyFinancial }) {
                 {row.valueUzs === null ? 'Reja mavjud emas' : <Amount value={row.valueUzs} />}
               </p>
             </div>
-            <div
-              className="mt-2 h-2.5 overflow-hidden rounded-full bg-slate-100"
-              aria-hidden="true"
-            >
+            <div className="mt-2 h-2.5 overflow-hidden rounded-full neu-track" aria-hidden="true">
               <div
                 className={cn('h-full rounded-full transition-[width] duration-300', row.bar)}
                 style={{ width: `${financialBarWidth(row.value ?? 0n, max)}%` }}
@@ -341,10 +337,7 @@ function Branches({ comparison }: { comparison: BranchComparisonReport }) {
           ))}
           {branches.length > 1 ? (
             <article
-              className={cn(
-                surface,
-                'min-w-0 border-slate-300 bg-slate-50/70 p-5 sm:p-6 lg:col-span-2',
-              )}
+              className={cn('neu-inset rounded-[1.5rem]', 'min-w-0 p-5 sm:p-6 lg:col-span-2')}
             >
               <h3 className="mb-5 text-lg font-semibold text-slate-950">Barcha filiallar jami</h3>
               <ResultGrid data={comparison.selectedMonth.total.expense} />
@@ -414,10 +407,10 @@ function Trend({
                   }))}
                   margin={{ top: 8, right: 4, left: 0, bottom: 0 }}
                 >
-                  <CartesianGrid stroke="#ECE6E1" strokeDasharray="3 3" vertical={false} />
+                  <CartesianGrid stroke="#2B3E58" strokeDasharray="3 3" vertical={false} />
                   <XAxis
                     dataKey="name"
-                    tick={{ fill: '#77706B', fontSize: 11 }}
+                    tick={{ fill: '#B3C4DB', fontSize: 11 }}
                     axisLine={false}
                     tickLine={false}
                   />
@@ -425,7 +418,7 @@ function Trend({
                     // A no-break space: recharts wraps a tick at an ordinary
                     // one, which split "200 mln" over two lines.
                     tickFormatter={(value: number) => `${Math.round(value / 1_000_000)}\u00a0mln`}
-                    tick={{ fill: '#77706B', fontSize: 10 }}
+                    tick={{ fill: '#B3C4DB', fontSize: 10 }}
                     axisLine={false}
                     tickLine={false}
                     width={52}
@@ -437,14 +430,14 @@ function Trend({
                   <Bar
                     dataKey="planValue"
                     name="Reja"
-                    fill="#D9D1CB"
+                    fill="#3F5571"
                     radius={[3, 3, 0, 0]}
                     maxBarSize={14}
                   />
                   <Bar
                     dataKey="actualValue"
                     name="Fakt"
-                    fill="#1E3A5C"
+                    fill="#6F9FFF"
                     radius={[3, 3, 0, 0]}
                     maxBarSize={14}
                   />
@@ -468,8 +461,8 @@ function Trend({
               className={cn(
                 'min-w-0 rounded-lg px-2.5 py-1.5 text-[11px] leading-4',
                 row.month === selectedMonth
-                  ? 'bg-blue-50 text-blue-900 ring-1 ring-blue-100'
-                  : 'bg-slate-50 text-slate-600',
+                  ? 'neu-inset text-blue-900 ring-1 ring-blue-200/70'
+                  : 'neu-raised-sm text-slate-600',
               )}
             >
               <p className="font-semibold">{monthNameUz(row.month)}</p>
@@ -513,7 +506,7 @@ function CategoryTable({ categories }: { categories: Category[] }) {
     return <p className="text-sm text-slate-500">Bu oy uchun kategoriya ma’lumoti mavjud emas.</p>;
   return (
     <>
-      <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-100 md:hidden">
+      <ul className="neu-inset divide-y divide-border/70 overflow-hidden rounded-xl md:hidden">
         {categories.map((item) => (
           <li key={item.id} className="px-3 py-2">
             <div className="flex items-start justify-between gap-3">
@@ -530,9 +523,9 @@ function CategoryTable({ categories }: { categories: Category[] }) {
           </li>
         ))}
       </ul>
-      <div className="hidden max-h-[30rem] overflow-auto rounded-xl border border-slate-100 md:block">
+      <div className="hidden neu-inset max-h-[30rem] overflow-auto rounded-xl md:block">
         <table className="w-full min-w-[640px] text-[13px]">
-          <thead className="sticky top-0 z-10 bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          <thead className="sticky top-0 z-10 bg-canvas text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-3 py-2">Kategoriya</th>
               <th className="px-3 py-2 text-right" title="Tasdiqlangan oylik xarajat rejasi">
@@ -551,7 +544,7 @@ function CategoryTable({ categories }: { categories: Category[] }) {
           </thead>
           <tbody>
             {categories.map((item) => (
-              <tr key={item.id} className="border-t border-slate-100 hover:bg-slate-50/70">
+              <tr key={item.id} className="border-t border-border/60 hover:bg-canvas/60">
                 <th scope="row" className="px-3 py-1.5 text-left font-medium text-slate-900">
                   {item.name} <TypeBadge type={item.type} />
                 </th>
@@ -622,7 +615,7 @@ function CompletionCell({ data }: { data: PlanActual }) {
     <span className="inline-flex items-center justify-end gap-2">
       <span
         aria-hidden="true"
-        className="hidden h-1 w-12 overflow-hidden rounded-full bg-slate-100 lg:block"
+        className="hidden h-1 w-12 overflow-hidden rounded-full neu-track lg:block"
       >
         <span
           className={cn('block h-full rounded-full', percent > 100 ? 'bg-rose-500' : 'bg-navy-500')}
@@ -678,7 +671,7 @@ function Exceptions({ categories }: { categories: Category[] }) {
             ) : null}
           </div>
           {group.rows.length ? (
-            <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-100">
+            <ul className="neu-inset divide-y divide-border/70 overflow-hidden rounded-xl">
               {group.rows.map((item) => (
                 <DeviationRow
                   key={item.id}
@@ -713,7 +706,7 @@ function DeviationRow({
 }) {
   const percent = data.completionPercent;
   return (
-    <li className="bg-slate-50/50 px-3 py-2">
+    <li className="px-3 py-2">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="break-words text-sm font-semibold text-slate-900 sm:truncate">{name}</p>
@@ -747,7 +740,7 @@ function DeviationRow({
           role="img"
           aria-label={`Bajarilish ${formatPercent(percent)}`}
           title={`Bajarilish ${formatPercent(percent)}`}
-          className="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-200/70"
+          className="mt-1.5 h-1 overflow-hidden rounded-full neu-track"
         >
           {/* Filled share = what was spent of the plan; the grey rest is what was saved. */}
           <div
@@ -882,15 +875,15 @@ export function MonthlyReportSkeleton() {
   return (
     <div role="status" aria-label="Oylik hisobot yuklanmoqda" className="animate-pulse space-y-5">
       <span className="sr-only">Oylik hisobot yuklanmoqda…</span>
-      <div className="h-72 rounded-[1.5rem] bg-slate-200/70" />
+      <div className="h-72 neu-inset rounded-[1.5rem]" />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }, (_, index) => (
-          <div key={index} className="h-36 rounded-[1.5rem] bg-slate-200/70" />
+          <div key={index} className="h-36 neu-inset rounded-[1.5rem]" />
         ))}
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="h-52 rounded-[1.5rem] bg-slate-200/70" />
-        <div className="h-52 rounded-[1.5rem] bg-slate-200/70" />
+        <div className="h-52 neu-inset rounded-[1.5rem]" />
+        <div className="h-52 neu-inset rounded-[1.5rem]" />
       </div>
     </div>
   );

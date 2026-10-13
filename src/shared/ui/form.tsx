@@ -1,10 +1,6 @@
-import {
-  forwardRef,
-  type InputHTMLAttributes,
-  type SelectHTMLAttributes,
-  type TextareaHTMLAttributes,
-} from 'react';
+import { forwardRef, type InputHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { cn } from '@/shared/lib/cn';
+import { DateInput } from './date-input';
 
 export interface FieldProps {
   label: string;
@@ -38,17 +34,14 @@ export function FormField({ label, htmlFor, required, hint, error, children }: F
 }
 
 const fieldClass =
-  'min-h-11 w-full rounded-xl border border-border bg-white/90 px-3 text-sm text-ink shadow-sm shadow-slate-900/[0.02] transition-all placeholder:text-slate-400 hover:border-slate-300 focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-100/70 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:shadow-none';
+  'neu-inset min-h-11 w-full rounded-xl border border-border/70 px-3 text-sm text-ink transition-[border-color,background-color,box-shadow] duration-200 placeholder:text-slate-400 hover:border-slate-300 focus:border-blue-400 focus:bg-raised focus:ring-4 focus:ring-blue-100/70 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:shadow-none';
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
-  function Input({ className, ...props }, ref) {
-    return <input ref={ref} className={cn(fieldClass, className)} {...props} />;
-  },
-);
-
-export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(
-  function Select({ className, ...props }, ref) {
-    return <select ref={ref} className={cn(fieldClass, className)} {...props} />;
+  function Input({ className, type, ...props }, ref) {
+    if (type === 'date') {
+      return <DateInput ref={ref} className={className} {...props} />;
+    }
+    return <input ref={ref} type={type} className={cn(fieldClass, className)} {...props} />;
   },
 );
 

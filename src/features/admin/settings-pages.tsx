@@ -132,7 +132,7 @@ function SettingsPage({ kind }: { kind: SettingKind }) {
       key: 'code',
       header: 'Kod',
       cell: (row) => (
-        <code className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-700">{row.code}</code>
+        <code className="neu-inset rounded px-2 py-1 text-xs text-slate-700">{row.code}</code>
       ),
     },
     {
@@ -398,7 +398,7 @@ function CategoryBaselineGrid() {
           <table className="w-full min-w-[760px] text-left text-sm">
             <caption className="sr-only">Boshlang‘ich oylik reja</caption>
             <thead>
-              <tr className="border-b border-border bg-slate-50">
+              <tr className="border-b border-border bg-canvas/70">
                 <th
                   scope="col"
                   className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600"
@@ -484,7 +484,7 @@ function CategoryBaselineGrid() {
               ))}
             </tbody>
             <tfoot>
-              <tr className="border-t-2 border-border bg-slate-50">
+              <tr className="border-t-2 border-border bg-canvas/70">
                 <th scope="row" colSpan={2} className="px-4 py-3 text-left font-semibold text-ink">
                   {showInactive ? 'Nofaol kategoriyalar jami:' : 'Jami faol oylik reja:'}
                 </th>
@@ -556,12 +556,12 @@ function CategoryActions({
   return (
     <div className="flex shrink-0 flex-col items-end gap-1">
       {row.isActive ? (
-        <div className="inline-flex items-center gap-0.5 rounded-xl border border-slate-200 bg-slate-50/80 p-1 shadow-sm shadow-slate-900/[0.03]">
+        <div className="neu-inset inline-flex items-center gap-0.5 rounded-xl p-1">
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            className="h-9 min-h-9 w-9 rounded-lg px-0 text-slate-500 hover:bg-white hover:text-blue-700 hover:shadow-sm"
+            className="h-9 min-h-9 w-9 rounded-lg px-0 text-slate-500 hover:bg-raised hover:text-blue-700 hover:shadow-[var(--neu-shadow-xs)] active:shadow-[var(--neu-pressed)]"
             onClick={() => {
               setName(row.name);
               setExpenseType(row.expenseType);
@@ -593,7 +593,7 @@ function CategoryActions({
           type="button"
           variant="ghost"
           size="sm"
-          className="h-9 min-h-9 rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-slate-600 hover:bg-white hover:text-blue-700"
+          className="h-9 min-h-9 rounded-lg neu-raised-sm px-2 text-slate-600 hover:bg-raised hover:text-blue-700"
           loading={mutation.isPending}
           onClick={() => mutation.mutate({ isActive: true })}
           aria-label={`${row.name} kategoriyasini qayta faollashtirish`}

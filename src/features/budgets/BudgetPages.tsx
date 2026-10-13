@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, Download, MessageSquareText, Save } from 'lucide-react';
+import { Download, MessageSquareText, Save } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { authApi, budgetApi, referenceApi, reportApi } from '@/shared/api/contracts';
@@ -23,6 +23,7 @@ import {
   LockedNotice,
   MoneyText,
   PageHeader,
+  Select,
   Textarea,
   VarianceText,
 } from '@/shared/ui';
@@ -664,7 +665,7 @@ function BudgetPageContent({
                   <p>Reja kiritish uchun kategoriyani tanlang</p>
                 </div>
                 <div className="budget-category-select-wrap">
-                  <select
+                  <Select
                     id="budget-category-select"
                     aria-label="Budjet kategoriyasi"
                     value={activeCategoryId}
@@ -694,8 +695,7 @@ function BudgetPageContent({
                         })}
                       </optgroup>
                     ) : null}
-                  </select>
-                  <ChevronDown aria-hidden="true" />
+                  </Select>
                 </div>
               </div>
               {selectedCategoryLines ? (

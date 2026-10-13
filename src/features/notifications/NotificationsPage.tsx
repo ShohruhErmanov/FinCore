@@ -24,7 +24,7 @@ const settingsKey = ['notifications', 'telegram'] as const;
 
 function MessagePreview({ text }: { text: string }) {
   return (
-    <pre className="overflow-x-auto whitespace-pre-wrap rounded-card bg-slate-900 p-4 text-xs leading-relaxed text-slate-100">
+    <pre className="overflow-x-auto whitespace-pre-wrap rounded-card bg-sidebar p-4 text-xs leading-relaxed text-slate-700">
       {text}
     </pre>
   );
@@ -54,8 +54,7 @@ export function NotificationsPage() {
     queryFn: ({ signal }) => referenceApi.periods(signal),
   });
   const [periodId, setPeriodId] = useState('');
-  const selectedPeriod =
-    periodId || periods.data?.find((item) => item.status === 'open')?.id || '';
+  const selectedPeriod = periodId || periods.data?.find((item) => item.status === 'open')?.id || '';
 
   const reminder = useQuery({
     queryKey: ['notifications', 'reminder', previewDate],
@@ -107,7 +106,8 @@ export function NotificationsPage() {
   });
   const test = useMutation({ mutationFn: () => notificationApi.sendTest() });
 
-  if (settings.isLoading || users.isLoading) return <LoadingState label="Sozlamalar yuklanmoqda…" />;
+  if (settings.isLoading || users.isLoading)
+    return <LoadingState label="Sozlamalar yuklanmoqda…" />;
   if (settings.isError)
     return (
       <ErrorState
@@ -117,8 +117,7 @@ export function NotificationsPage() {
     );
   if (!draft) return <LoadingState label="Sozlamalar tayyorlanmoqda…" />;
 
-  const isChosen = (userId: string) =>
-    draft.recipients.some((item) => item.userId === userId);
+  const isChosen = (userId: string) => draft.recipients.some((item) => item.userId === userId);
   // A recipient is only a choice of employee. Whether a message can actually
   // reach them comes from their own verified link, which the server decides.
   const toggleRecipient = (user: { id: string; fullName: string }, chosen: boolean) =>
@@ -168,10 +167,7 @@ export function NotificationsPage() {
         {inbox.data && inbox.data.length > 0 ? (
           <div className="space-y-3" data-testid="notification-inbox">
             {inbox.data.map((item) => (
-              <article
-                key={item.id}
-                className="rounded-card border border-border bg-white px-4 py-3 shadow-soft"
-              >
+              <article key={item.id} className="neu-raised rounded-card px-4 py-3">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                   <span className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
                     <Bell className="h-4 w-4 text-primary" /> Bildirishnoma
@@ -193,10 +189,10 @@ export function NotificationsPage() {
       </Card>
 
       <Alert title="Yuborish uchun server kerak" tone="warning" className="mb-5">
-        Sozlamalar, qabul qiluvchilar va xabar matnlari shu yerda tayyorlanadi va saqlanadi.
-        Lekin xabarni <strong>belgilangan vaqtda avtomatik yuborish</strong> uchun doimiy
-        ishlaydigan server kerak — brauzer yopiq bo‘lganda sahifa hech narsa yubora olmaydi.
-        Bot tokenini ham faqat server saqlashi mumkin.
+        Sozlamalar, qabul qiluvchilar va xabar matnlari shu yerda tayyorlanadi va saqlanadi. Lekin
+        xabarni <strong>belgilangan vaqtda avtomatik yuborish</strong> uchun doimiy ishlaydigan
+        server kerak — brauzer yopiq bo‘lganda sahifa hech narsa yubora olmaydi. Bot tokenini ham
+        faqat server saqlashi mumkin.
       </Alert>
 
       <Card
@@ -281,20 +277,18 @@ export function NotificationsPage() {
       <div className="grid gap-5 xl:grid-cols-2">
         <Card title="Bot va jadval">
           <div className="space-y-4">
-            <label className="flex min-h-11 items-center gap-3 rounded-lg border border-border px-3">
+            <label className="neu-raised-sm flex min-h-11 items-center gap-3 rounded-lg px-3 transition-[box-shadow,border-color] duration-200 has-[:checked]:border-primary/40 has-[:checked]:shadow-[var(--neu-pressed)]">
               <input
                 type="checkbox"
                 className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
                 checked={draft.enabled}
-                onChange={(event) =>
-                  setDraft({ ...draft, enabled: event.target.checked })
-                }
+                onChange={(event) => setDraft({ ...draft, enabled: event.target.checked })}
               />
               <span className="text-sm font-semibold text-ink">Bildirishnomalar yoqilgan</span>
             </label>
 
             {/* The token is deployment configuration; it is never typed here. */}
-            <div className="rounded-lg border border-border px-3 py-2 text-sm">
+            <div className="neu-inset rounded-lg px-3 py-2 text-sm">
               <span className="font-semibold text-ink">Bot ulanishi: </span>
               {draft.botTokenSet ? (
                 <span className="text-emerald-700">server sozlamalarida tayyor</span>
@@ -305,7 +299,7 @@ export function NotificationsPage() {
               )}
             </div>
 
-            <label className="flex min-h-11 items-center gap-3 rounded-lg border border-border px-3">
+            <label className="neu-raised-sm flex min-h-11 items-center gap-3 rounded-lg px-3 transition-[box-shadow,border-color] duration-200 has-[:checked]:border-primary/40 has-[:checked]:shadow-[var(--neu-pressed)]">
               <input
                 type="checkbox"
                 className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
@@ -325,13 +319,11 @@ export function NotificationsPage() {
                 id="tg-time"
                 type="time"
                 value={draft.reminderTimeLocal}
-                onChange={(event) =>
-                  setDraft({ ...draft, reminderTimeLocal: event.target.value })
-                }
+                onChange={(event) => setDraft({ ...draft, reminderTimeLocal: event.target.value })}
               />
             </FormField>
 
-            <label className="flex min-h-11 items-center gap-3 rounded-lg border border-border px-3">
+            <label className="neu-raised-sm flex min-h-11 items-center gap-3 rounded-lg px-3 transition-[box-shadow,border-color] duration-200 has-[:checked]:border-primary/40 has-[:checked]:shadow-[var(--neu-pressed)]">
               <input
                 type="checkbox"
                 className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
@@ -372,21 +364,17 @@ export function NotificationsPage() {
             {(users.data ?? [])
               .filter((user) => user.status === 'active')
               .map((user) => {
-                const reachable = draft.recipients.find(
-                  (item) => item.userId === user.id,
-                )?.linked;
+                const reachable = draft.recipients.find((item) => item.userId === user.id)?.linked;
                 return (
                   <label
                     key={user.id}
-                    className="flex min-h-11 items-center gap-3 rounded-lg border border-border px-3"
+                    className="neu-raised-sm flex min-h-11 items-center gap-3 rounded-lg px-3 transition-[box-shadow,border-color] duration-200 has-[:checked]:border-primary/40 has-[:checked]:shadow-[var(--neu-pressed)]"
                   >
                     <input
                       type="checkbox"
                       className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
                       checked={isChosen(user.id)}
-                      onChange={(event) =>
-                        toggleRecipient(user, event.target.checked)
-                      }
+                      onChange={(event) => toggleRecipient(user, event.target.checked)}
                     />
                     <span className="text-sm font-semibold text-ink">{user.fullName}</span>
                     {isChosen(user.id) ? (
@@ -402,11 +390,7 @@ export function NotificationsPage() {
           </div>
           <div className="mt-5 border-t border-border pt-4">
             {/* No destination field: the test always goes to your own chat. */}
-            <Button
-              variant="secondary"
-              loading={test.isPending}
-              onClick={() => test.mutate()}
-            >
+            <Button variant="secondary" loading={test.isPending} onClick={() => test.mutate()}>
               <Send className="h-4 w-4" /> O‘zimga sinov xabari
             </Button>
             {test.isError ? (
@@ -444,7 +428,7 @@ export function NotificationsPage() {
               {reminder.data.branches.map((branch) => (
                 <div
                   key={branch.branchId}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-4 py-3"
+                  className="flex flex-wrap items-center justify-between gap-3 neu-raised-sm rounded-lg px-4 py-3"
                 >
                   <span className="font-semibold text-ink">{branch.branchName}</span>
                   {branch.totalUzs === null ? (

@@ -252,7 +252,7 @@ export function RolesPage() {
                 role="tab"
                 aria-selected={selectedRole === role}
                 onClick={() => setSelectedRole(role)}
-                className={`flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-sm font-semibold ${selectedRole === role ? 'bg-blue-50 text-primary' : 'text-slate-700 hover:bg-slate-50'}`}
+                className={`flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-sm font-semibold ${selectedRole === role ? 'neu-inset text-primary' : 'text-slate-700 transition hover:bg-surface hover:shadow-[var(--neu-shadow-1)]'}`}
               >
                 <span className="inline-flex items-center gap-2">
                   <ShieldCheck className="h-4 w-4" />
@@ -277,7 +277,7 @@ export function RolesPage() {
                   {group.items.map((permission) => (
                     <label
                       key={permission.code}
-                      className="flex min-h-11 items-center gap-3 rounded-lg border border-border px-3 py-2 hover:bg-slate-50"
+                      className="neu-raised-sm flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 transition-[background-color,box-shadow,border-color] duration-200 has-[:checked]:border-primary/40 has-[:checked]:shadow-[var(--neu-pressed)]"
                     >
                       <input
                         type="checkbox"

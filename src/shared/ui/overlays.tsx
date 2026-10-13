@@ -82,7 +82,7 @@ export function Modal({
       <button
         type="button"
         aria-label="Oynani yopish"
-        className="absolute inset-0 bg-slate-950/50"
+        className="neu-scrim absolute inset-0"
         onClick={onClose}
       />
       <div
@@ -92,9 +92,9 @@ export function Modal({
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
-        className="relative z-10 max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-card border border-border bg-white shadow-xl focus:outline-none"
+        className="neu-elevated neu-pop relative z-10 max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-card focus:outline-none"
       >
-        <header className="flex items-start justify-between gap-4 border-b border-border p-5">
+        <header className="flex items-start justify-between gap-4 border-b border-border/70 p-5">
           <div>
             <h2 id={titleId} className="text-lg font-bold text-ink">
               {title}
@@ -116,7 +116,7 @@ export function Modal({
           </Button>
         </header>
         <div className="p-5">{children}</div>
-        {footer ? <footer className="border-t border-border p-5">{footer}</footer> : null}
+        {footer ? <footer className="border-t border-border/70 p-5">{footer}</footer> : null}
       </div>
     </div>,
     document.body,
@@ -142,7 +142,7 @@ export function Drawer({
       <button
         type="button"
         aria-label="Panelni yopish"
-        className="absolute inset-0 bg-slate-950/50"
+        className="neu-scrim absolute inset-0"
         onClick={onClose}
       />
       <aside
@@ -151,7 +151,7 @@ export function Drawer({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="absolute inset-y-0 right-0 w-full max-w-md overflow-y-auto bg-white p-5 shadow-xl focus:outline-none"
+        className="neu-elevated absolute inset-y-0 right-0 w-full max-w-md overflow-y-auto border-y-0 border-r-0 p-5 focus:outline-none"
       >
         <div className="mb-5 flex items-center justify-between gap-4">
           <h2 id={titleId} className="text-lg font-bold text-ink">
@@ -245,7 +245,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               key={item.id}
               role={item.tone === 'danger' ? 'alert' : 'status'}
               className={cn(
-                'flex gap-3 rounded-card border bg-white p-4 shadow-xl',
+                'neu-elevated neu-pop flex gap-3 rounded-card p-4',
                 item.tone === 'success' && 'border-green-300',
                 item.tone === 'danger' && 'border-red-300',
                 item.tone === 'info' && 'border-sky-300',

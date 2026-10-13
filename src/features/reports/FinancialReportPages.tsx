@@ -107,7 +107,7 @@ function PlanActualSummary({
 }) {
   const meta = reportStatusMeta(data.status);
   return (
-    <div className="rounded-card border border-border bg-white p-4 shadow-card">
+    <div className="neu-raised rounded-card p-4">
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm font-semibold text-slate-600">{title}</p>
         <span className={cn('rounded-full px-2 py-1 text-[11px] font-semibold', meta.className)}>
@@ -167,7 +167,7 @@ const insightToneClass: Record<InsightTone, string> = {
   danger: 'border-red-200 bg-red-50/70',
   warning: 'border-amber-200 bg-amber-50/70',
   success: 'border-green-200 bg-green-50/70',
-  neutral: 'border-slate-200 bg-slate-50',
+  neutral: 'border-border/70 bg-canvas',
 };
 
 function planActualInsight(key: string, subject: string, data: PlanActual): ReportInsight | null {
@@ -228,7 +228,10 @@ function InsightList({
           {visible.map((insight) => (
             <div
               key={insight.key}
-              className={cn('rounded-xl border p-4', insightToneClass[insight.tone])}
+              className={cn(
+                'rounded-xl border p-4 shadow-[var(--neu-shadow-1)]',
+                insightToneClass[insight.tone],
+              )}
             >
               <p className="font-semibold leading-6 text-ink">{insight.text}</p>
               <p className="mt-1 text-xs text-muted">{insight.detail}</p>
@@ -575,8 +578,8 @@ function BranchMonthInsights({ report }: { report: BranchComparisonReport }) {
                 />
                 <Tooltip formatter={(value) => formatMoney(String(value))} />
                 <Legend />
-                <Bar dataKey="plan" name="Reja" fill="#B8B0AA" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="actual" name="Fakt" fill="#1E3A5C" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="plan" name="Reja" fill="#3F5571" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="actual" name="Fakt" fill="#6F9FFF" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -599,7 +602,7 @@ function BranchComparisonContent({ report }: { report: BranchComparisonReport })
   const chartSeries = reportBranches.map((item, index) => ({
     dataKey: `branch${index + 1}`,
     branch: item.branch,
-    color: ['#1E3A5C', '#FF2B00', '#FFB800', '#7A9DC0'][index % 4]!,
+    color: ['#6F9FFF', '#FF8C9C', '#F2BE73', '#6EE3AE'][index % 4]!,
   }));
   const expenseChart = report.months.map((item) => ({
     month: monthNames[item.month - 1],
@@ -682,8 +685,8 @@ function BranchComparisonContent({ report }: { report: BranchComparisonReport })
                 />
                 <Tooltip formatter={(value) => formatMoney(String(value))} />
                 <Legend />
-                <Bar dataKey="plan" name="Reja" fill="#B8B0AA" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="actual" name="Fakt" fill="#1E3A5C" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="plan" name="Reja" fill="#3F5571" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="actual" name="Fakt" fill="#6F9FFF" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

@@ -55,7 +55,7 @@ function Progress({
     <div
       role="img"
       aria-label={`${label}: ${formatPercent(value)}`}
-      className="h-2 overflow-hidden rounded-full bg-slate-100"
+      className="h-2 overflow-hidden rounded-full neu-track"
     >
       <div
         className={`h-full rounded-full transition-[width] duration-200 motion-reduce:transition-none ${danger ? 'bg-red-500' : 'bg-navy-700'}`}
@@ -94,19 +94,19 @@ function CompactSummaryMetrics({ summary }: { summary: Summary }) {
         : summary.remaining;
 
   return (
-    <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+    <dl className="mt-3 grid grid-cols-2 gap-2">
       {[
         ['Budjet', money(summary.budget)],
         ['Sarflangan', money(summary.actual)],
         [remainingLabel, money(remaining)],
         ['Bajarilish', formatPercent(summary.percent)],
       ].map(([label, value]) => (
-        <div
-          key={label}
-          className="min-w-0 rounded-xl bg-white px-3 py-2.5 ring-1 ring-slate-200/80"
-        >
+        <div key={label} className="neu-inset min-w-0 rounded-xl px-3 py-2.5">
           <dt className="text-[11px] font-medium text-muted">{label}</dt>
-          <dd className="budget-value mt-1 truncate text-sm font-semibold text-ink" title={value}>
+          <dd
+            className="budget-value mt-1 break-words text-sm font-semibold text-ink"
+            title={value}
+          >
             {value}
           </dd>
         </div>
@@ -157,7 +157,7 @@ export function BudgetOverview({ lines, context }: { lines: BudgetLine[]; contex
           <Status summary={summary} />
         </div>
         <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(15rem,0.85fr)_minmax(0,1.65fr)]">
-          <div className="rounded-2xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200/80">
+          <div className="neu-inset rounded-2xl px-4 py-3">
             <p className="text-xs font-medium text-muted">Jami budjet</p>
             <p className="budget-value mt-1 text-2xl font-semibold tracking-[-0.03em] text-ink sm:text-3xl">
               {money(summary.budget)}
@@ -165,13 +165,13 @@ export function BudgetOverview({ lines, context }: { lines: BudgetLine[]; contex
             <p className="mt-1 text-xs text-muted">Saqlangan xarajat rejasi</p>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            <div className="rounded-xl bg-white px-3 py-3 ring-1 ring-slate-200/80">
+            <div className="neu-inset rounded-xl px-3 py-3">
               <p className="text-[11px] font-medium text-muted">Sarflangan</p>
               <p className="budget-value mt-1 truncate text-base font-semibold text-ink">
                 {money(summary.actual)}
               </p>
             </div>
-            <div className="rounded-xl bg-white px-3 py-3 ring-1 ring-slate-200/80">
+            <div className="neu-inset rounded-xl px-3 py-3">
               <p className="text-[11px] font-medium text-muted">
                 {summary.remaining !== null && summary.remaining < 0n
                   ? 'Budjetdan oshgan'
@@ -189,7 +189,7 @@ export function BudgetOverview({ lines, context }: { lines: BudgetLine[]; contex
                 )}
               </p>
             </div>
-            <div className="col-span-2 rounded-xl bg-white px-3 py-3 ring-1 ring-slate-200/80 sm:col-span-1">
+            <div className="col-span-2 neu-inset rounded-xl px-3 py-3 sm:col-span-1">
               <p className="text-[11px] font-medium text-muted">Bajarilish</p>
               <p className="mt-1 text-base font-semibold tabular-nums text-ink">
                 {formatPercent(summary.percent)}
@@ -306,7 +306,7 @@ export function BudgetOverview({ lines, context }: { lines: BudgetLine[]; contex
             <section
               aria-label={item.label}
               key={item.type}
-              className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/60 p-3.5"
+              className="neu-raised-sm min-w-0 rounded-2xl p-3.5"
             >
               <div className="flex items-center justify-between gap-3">
                 <h3 className="text-sm font-semibold text-ink">{item.label}</h3>
@@ -326,7 +326,7 @@ export function BudgetOverview({ lines, context }: { lines: BudgetLine[]; contex
                       <article
                         key={branch.id}
                         aria-label={`${item.label} — ${branch.name}`}
-                        className="min-w-0 rounded-xl border border-slate-200 bg-white p-3"
+                        className="neu-inset min-w-0 rounded-xl p-3"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <h4 className="truncate text-sm font-semibold text-ink">{branch.name}</h4>
@@ -437,7 +437,7 @@ export function BudgetTrend({
                 label="Budjet"
                 value={value}
                 max={max}
-                barClassName={number === month ? 'bg-slate-800' : 'bg-slate-400'}
+                barClassName={number === month ? 'bg-primary' : 'bg-slate-400'}
               />
               {withActual ? (
                 <>
@@ -516,7 +516,7 @@ function TrendCell({
       >
         {value === null ? '—' : money(value)}
       </span>
-      <div aria-hidden="true" className="mt-1 h-1 rounded-full bg-slate-100">
+      <div aria-hidden="true" className="mt-1 h-1 rounded-full neu-track">
         <div
           className={`h-full rounded-full ${barClassName}`}
           style={{ width: `${width(value ?? 0n, max)}%` }}
@@ -531,13 +531,13 @@ export function BudgetSkeleton() {
     <div role="status" aria-label="Budjet yuklanmoqda" className="space-y-6">
       <span className="sr-only">Budjet yuklanmoqda…</span>
       <div className="budget-surface h-80 p-8">
-        <div className="h-4 w-32 animate-pulse rounded bg-slate-100 motion-reduce:animate-none" />
-        <div className="mt-8 h-14 w-3/4 animate-pulse rounded-xl bg-slate-100 motion-reduce:animate-none" />
+        <div className="h-4 w-32 animate-pulse rounded neu-inset motion-reduce:animate-none" />
+        <div className="mt-8 h-14 w-3/4 animate-pulse rounded-xl neu-inset motion-reduce:animate-none" />
         <div className="mt-10 grid grid-cols-3 gap-5">
           {[0, 1, 2].map((key) => (
             <div
               key={key}
-              className="h-16 animate-pulse rounded-xl bg-slate-100 motion-reduce:animate-none"
+              className="h-16 animate-pulse rounded-xl neu-inset motion-reduce:animate-none"
             />
           ))}
         </div>

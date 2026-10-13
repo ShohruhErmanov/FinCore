@@ -23,11 +23,11 @@ export function DataTable<T extends { id: string }>({
   if (rows.length === 0)
     return <EmptyState description="Tanlangan filtrlar bo‘yicha satr topilmadi." />;
   return (
-    <div className="overflow-x-auto scrollbar-thin">
+    <div className="relative overflow-x-auto scrollbar-thin">
       <table className="w-full min-w-[760px] text-left text-sm">
         <caption className="sr-only">{caption}</caption>
         <thead>
-          <tr className="border-b border-border bg-slate-50/80">
+          <tr className="border-b border-border bg-canvas/70">
             {columns.map((column) => (
               <th
                 key={column.key}
@@ -53,8 +53,8 @@ export function DataTable<T extends { id: string }>({
               }}
               className={
                 onRowClick
-                  ? 'cursor-pointer border-b border-border/80 transition-colors last:border-0 hover:bg-blue-50/55 focus:bg-blue-50/55'
-                  : 'border-b border-border/80 transition-colors last:border-0 hover:bg-slate-50/60'
+                  ? 'cursor-pointer border-b border-border/70 transition-colors duration-150 last:border-0 hover:bg-blue-50/55 focus:bg-blue-50/55'
+                  : 'border-b border-border/70 transition-colors duration-150 last:border-0 hover:bg-canvas/60'
               }
             >
               {columns.map((column) => (

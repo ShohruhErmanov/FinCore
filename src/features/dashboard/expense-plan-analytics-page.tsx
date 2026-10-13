@@ -110,7 +110,7 @@ export function ExpensePlanAnalyticsPage() {
             {data.branches.map((item) => (
               <Card key={item.branchId} className="h-full">
                 <div className="flex items-center gap-3">
-                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-50 text-primary">
+                  <span className="grid h-10 w-10 place-items-center neu-raised-sm rounded-xl text-primary">
                     <Building2 className="h-5 w-5" aria-hidden="true" />
                   </span>
                   <div>
