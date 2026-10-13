@@ -2,18 +2,19 @@
   <title>FinCore</title>
   <defs>
     <linearGradient id="fincoreTileBg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#1E3A5C"/>
-      <stop offset="1" stop-color="#0F1B2D"/>
+      <stop offset="0" stop-color="#213149"/>
+      <stop offset="1" stop-color="#101C2F"/>
+    </linearGradient>
+    <linearGradient id="fincoreTileStem" x1="16" y1="10" x2="29" y2="54" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8DB4FF"/>
+      <stop offset="1" stop-color="#6F9FFF"/>
     </linearGradient>
   </defs>
   <rect width="64" height="64" rx="14" fill="url(#fincoreTileBg)"/>
-  <!-- Tones lifted for the dark ground; scaled about its own centre so padding
-       stays even at every export size. -->
-  <g transform="translate(32 32) scale(0.8) translate(-32 -32)">
-    <g fill="#FF2B00">
-      <rect x="20" y="12" width="9" height="40" rx="2.5"/>
-      <rect x="23" y="12" width="21" height="9" rx="2.5"/>
-    </g>
-    <rect x="23" y="30" width="18" height="9" rx="2.5" fill="#FFB800"/>
+  <g transform="translate(32 32) scale(0.76) translate(-32 -32)">
+    <rect x="16" y="10" width="12" height="44" rx="6" fill="url(#fincoreTileStem)"/>
+    <rect x="22" y="10" width="28" height="11" rx="5.5" fill="#EDF4FF"/>
+    <rect x="22" y="28" width="22" height="10" rx="5" fill="#6F9FFF"/>
+    <circle cx="46" cy="33" r="3" fill="#6EE3AE"/>
   </g>
 </svg>

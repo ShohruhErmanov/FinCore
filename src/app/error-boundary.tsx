@@ -18,8 +18,8 @@ export class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBo
   render() {
     if (this.state.failed) {
       return (
-        <main className="grid min-h-screen place-items-center bg-slate-50 p-6">
-          <section className="w-full max-w-lg rounded-2xl border border-red-200 bg-white p-6 shadow-sm">
+        <main className="grid min-h-screen place-items-center bg-canvas p-6">
+          <section className="neu-elevated w-full max-w-lg rounded-2xl border-red-200 p-6">
             <p className="text-sm font-semibold text-red-700">Kutilmagan xato</p>
             <h1 className="mt-2 text-2xl font-bold text-slate-950">Sahifani ko‘rsatib bo‘lmadi</h1>
             <p className="mt-3 text-sm leading-6 text-slate-600">
@@ -28,7 +28,7 @@ export class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBo
             </p>
             <button
               type="button"
-              className="mt-6 min-h-11 rounded-lg bg-blue-700 px-4 text-sm font-semibold text-white hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+              className="mt-6 min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-[#101C2F] hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
               onClick={() => window.location.reload()}
             >
               Sahifani qayta yuklash

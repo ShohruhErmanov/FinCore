@@ -22,6 +22,7 @@ vi.mock('recharts', () => {
   return {
     ResponsiveContainer: Container,
     AreaChart: Container,
+    ComposedChart: Container,
     Area: Container,
     BarChart: Container,
     CartesianGrid: Container,

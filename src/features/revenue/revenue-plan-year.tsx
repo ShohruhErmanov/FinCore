@@ -97,7 +97,7 @@ export function RevenuePlanYearOverview({
       </section>
 
       <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(360px,0.8fr)_minmax(0,1.45fr)] xl:items-start">
-        <div className="rounded-xl border border-border/80 bg-white p-4 xl:sticky xl:top-24">
+        <div className="neu-inset rounded-xl p-4 xl:sticky xl:top-24">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
               Oylar bo‘yicha reja va amalda
@@ -124,22 +124,22 @@ export function RevenuePlanYearOverview({
                 margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
                 barGap={2}
               >
-                <CartesianGrid stroke="#E9E3DE" vertical={false} />
+                <CartesianGrid stroke="#2B3E58" vertical={false} />
                 <XAxis
                   dataKey="name"
-                  tick={{ fill: '#77706B', fontSize: 11 }}
+                  tick={{ fill: '#B3C4DB', fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fill: '#B8B0AA', fontSize: 10 }}
+                  tick={{ fill: '#B3C4DB', fontSize: 10 }}
                   axisLine={false}
                   tickLine={false}
                   width={64}
                   tickFormatter={(value: number) => formatMoneyCompact(String(Math.trunc(value)))}
                 />
                 <Tooltip
-                  cursor={{ fill: 'rgba(184,176,170,0.16)' }}
+                  cursor={{ fill: 'rgba(111,159,255,0.12)' }}
                   formatter={(value, name) => [
                     formatMoney(String(Math.trunc(Number(value)))),
                     name === 'plan' ? 'Reja' : 'Amalda',
@@ -148,14 +148,14 @@ export function RevenuePlanYearOverview({
                 <Bar
                   dataKey="plan"
                   name="plan"
-                  fill="#D9D1CB"
+                  fill="#3F5571"
                   radius={[4, 4, 0, 0]}
                   maxBarSize={22}
                 />
                 <Bar
                   dataKey="actual"
                   name="actual"
-                  fill="#1E3A5C"
+                  fill="#6F9FFF"
                   radius={[4, 4, 0, 0]}
                   maxBarSize={22}
                 />
@@ -164,12 +164,12 @@ export function RevenuePlanYearOverview({
           </div>
         </div>
 
-        <div className="min-w-0 overflow-hidden rounded-xl border border-border/80 bg-white">
+        <div className="neu-inset min-w-0 overflow-hidden rounded-xl">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] text-left text-sm">
               <caption className="sr-only">{year}-yil oylar bo‘yicha tushum rejasi</caption>
               <thead>
-                <tr className="border-b border-border bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                <tr className="border-b border-border bg-canvas/70 text-xs font-semibold uppercase tracking-wide text-slate-600">
                   <th className="px-4 py-2.5">Oy</th>
                   {view.branchColumns.map((column) => (
                     <th key={column.branchId} className="px-4 py-2.5 text-right">
@@ -231,7 +231,7 @@ export function RevenuePlanYearOverview({
                 })}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-border bg-slate-50 font-bold text-ink">
+                <tr className="border-t-2 border-border bg-canvas/70 font-bold text-ink">
                   <th scope="row" className="px-4 py-2.5">
                     Jami
                   </th>
@@ -364,7 +364,7 @@ function Completion({ value }: { value: number | null }) {
   return (
     <span className="inline-flex items-center justify-end gap-2">
       <span
-        className="hidden h-1.5 w-16 overflow-hidden rounded-full bg-slate-100 sm:block"
+        className="hidden h-1.5 w-16 overflow-hidden rounded-full neu-track sm:block"
         aria-hidden="true"
       >
         <span

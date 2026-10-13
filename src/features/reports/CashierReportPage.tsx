@@ -82,7 +82,7 @@ function exportCashierReport(report: CashierReport) {
 
 function Tile({ label, value, helper }: { label: string; value: React.ReactNode; helper: string }) {
   return (
-    <div className="rounded-card border border-border bg-white p-4 shadow-card">
+    <div className="neu-raised rounded-card p-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
       <p className="mt-2 text-xl font-bold text-ink">{value}</p>
       <p className="mt-1 text-xs leading-5 text-muted">{helper}</p>
@@ -207,7 +207,7 @@ function OwnPerformance({ report }: { report: CashierReport }) {
           />
         </div>
 
-        <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
+        <div className="mt-4 h-3 overflow-hidden rounded-full neu-track">
           <div
             className={`h-full rounded-full ${ahead ? 'bg-success' : 'bg-primary'}`}
             style={{ width: `${Math.max(0, Math.min(row.completionPct ?? 0, 100))}%` }}
@@ -303,7 +303,7 @@ function CashierReportContent({ report }: { report: CashierReport }) {
             <table className="w-full min-w-[980px] text-sm">
               <caption className="sr-only">{group.branchName} kassirlari</caption>
               <thead>
-                <tr className="border-b border-border bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                <tr className="border-b border-border bg-canvas/70 text-xs font-semibold uppercase tracking-wide text-slate-600">
                   <th className="px-4 py-3 text-left">Kassir</th>
                   <th className="px-4 py-3 text-right">Fix oylik</th>
                   <th className="px-4 py-3 text-right">Reja (ulush)</th>
@@ -352,7 +352,7 @@ function CashierReportContent({ report }: { report: CashierReport }) {
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-border bg-slate-50 font-bold text-ink">
+                <tr className="border-t-2 border-border bg-canvas/70 font-bold text-ink">
                   <th scope="row" className="px-4 py-3 text-left">
                     JAMI
                   </th>

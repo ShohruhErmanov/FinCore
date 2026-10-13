@@ -122,13 +122,21 @@ export function ExpenseLedgerPage() {
   useEffect(() => {
     if (!selectedPeriod || !automaticRange) return;
     const monthPrefix = `${selectedPeriod.year}-${String(selectedPeriod.month).padStart(2, '0')}-`;
-    if (explicitDateFrom?.startsWith(monthPrefix) && explicitDateTo?.startsWith(monthPrefix)) return;
+    if (explicitDateFrom?.startsWith(monthPrefix) && explicitDateTo?.startsWith(monthPrefix))
+      return;
     const next = new URLSearchParams(searchParams);
     next.set('dateFrom', automaticRange.from);
     next.set('dateTo', automaticRange.to);
     next.delete('page');
     setSearchParams(next, { replace: true });
-  }, [automaticRange, explicitDateFrom, explicitDateTo, searchParams, selectedPeriod, setSearchParams]);
+  }, [
+    automaticRange,
+    explicitDateFrom,
+    explicitDateTo,
+    searchParams,
+    selectedPeriod,
+    setSearchParams,
+  ]);
 
   const listFilters = {
     dateFrom: dateFrom || undefined,
@@ -314,7 +322,7 @@ export function ExpenseLedgerPage() {
             {hasPermission('import.run') ? (
               <Link
                 to={routes.imports}
-                className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className="inline-flex min-h-11 items-center gap-2 neu-raised-sm neu-interactive rounded-lg px-4 text-sm font-semibold text-slate-700 hover:bg-raised"
               >
                 <Upload className="h-4 w-4" /> Excel’dan import
               </Link>
@@ -322,7 +330,7 @@ export function ExpenseLedgerPage() {
             {hasPermission('expense.create') ? (
               <Link
                 to={routes.expenseNew}
-                className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-blue-700"
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-[#101C2F] hover:bg-blue-700"
               >
                 <FilePlus2 className="h-4 w-4" /> Yangi xarajat
               </Link>
@@ -1206,7 +1214,7 @@ export function ExpenseDetailPage() {
           <>
             <Link
               to={routes.expenses}
-              className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-semibold text-ink hover:bg-slate-50"
+              className="inline-flex min-h-11 items-center gap-2 neu-raised-sm neu-interactive rounded-lg px-4 text-sm font-semibold text-ink hover:bg-raised"
             >
               <ArrowLeft className="h-4 w-4" /> Jurnalga qaytish
             </Link>

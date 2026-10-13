@@ -83,14 +83,14 @@ function MetricCard({
   icon: React.ReactNode;
 }) {
   return (
-    <div className="rounded-card border border-border/90 bg-white p-5 shadow-card">
+    <div className="neu-raised rounded-card p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-slate-600">{title}</p>
           <p className="mt-3 text-xl font-bold tracking-tight text-ink sm:text-2xl">{value}</p>
           <p className="mt-2 text-xs leading-5 text-muted">{helper}</p>
         </div>
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-primary">
+        <span className="grid h-10 w-10 shrink-0 place-items-center neu-raised-sm rounded-xl text-primary">
           {icon}
         </span>
       </div>
@@ -105,48 +105,48 @@ function PlanComparison({ data }: { data: ExpenseAnalytics['planComparison'] }) 
   const progress = Math.max(0, Math.min(data.completionPct ?? 0, 100));
 
   return (
-    <section className="mb-6 overflow-hidden rounded-[1.5rem] brand-navy-panel p-6 text-white shadow-elevated sm:p-7">
+    <section className="neu-hero mb-6 overflow-hidden rounded-[1.5rem] border border-border/70 p-6 text-ink sm:p-7">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-navy-100">
+          <div className="neu-inset inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-primary">
             <Target className="h-4 w-4" aria-hidden="true" />
             Reja va fakt
           </div>
           <h2 className="mt-4 text-xl font-bold">Jami xarajatlar holati</h2>
-          <p className="mt-1 text-sm text-navy-100">
+          <p className="mt-1 text-sm text-muted">
             {data.periodLabel} uchun kiritilgan xarajat rejasi va amaldagi natija
           </p>
         </div>
-        <span className="rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-sm font-bold">
+        <span className="neu-inset rounded-xl px-4 py-2 text-sm font-bold">
           Bajarilish {formatPercent(data.completionPct)}
         </span>
       </div>
 
       {!data.hasPlan ? (
-        <div className="mt-6 rounded-2xl border border-white/15 bg-white/10 p-4 text-sm text-navy-50">
+        <div className="neu-inset mt-6 rounded-2xl p-4 text-sm text-muted">
           Tanlangan davr uchun xarajat rejasi kiritilmagan.
         </div>
       ) : (
         <>
           <dl className="mt-7 grid gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
-              <dt className="text-xs font-semibold uppercase tracking-wide text-navy-200">
+            <div className="neu-inset rounded-2xl p-4">
+              <dt className="text-xs font-semibold uppercase tracking-wide text-muted">
                 Xarajat rejasi
               </dt>
               <dd className="mt-2 text-xl font-bold tabular-nums">
                 <MoneyText value={data.plannedAmountUzs} />
               </dd>
             </div>
-            <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
-              <dt className="text-xs font-semibold uppercase tracking-wide text-navy-200">
+            <div className="neu-inset rounded-2xl p-4">
+              <dt className="text-xs font-semibold uppercase tracking-wide text-muted">
                 Jami xarajat
               </dt>
               <dd className="mt-2 text-xl font-bold tabular-nums">
                 <MoneyText value={data.actualAmountUzs} />
               </dd>
             </div>
-            <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
-              <dt className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-navy-200">
+            <div className="neu-inset rounded-2xl p-4">
+              <dt className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
                 {isUnderPlan ? (
                   <TrendingDown className="h-4 w-4" aria-hidden="true" />
                 ) : (
@@ -160,15 +160,12 @@ function PlanComparison({ data }: { data: ExpenseAnalytics['planComparison'] }) 
             </div>
           </dl>
           <div className="mt-5">
-            <div className="mb-2 flex justify-between text-xs font-semibold text-navy-100">
+            <div className="mb-2 flex justify-between text-xs font-semibold text-muted">
               <span>Reja bajarilishi</span>
               <span>{formatPercent(data.completionPct)}</span>
             </div>
-            <div className="h-2.5 overflow-hidden rounded-full bg-white/15">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-cyan-300 to-emerald-300"
-                style={{ width: `${progress}%` }}
-              />
+            <div className="neu-track h-2.5 overflow-hidden rounded-full">
+              <div className="h-full rounded-full bg-primary" style={{ width: `${progress}%` }} />
             </div>
           </div>
         </>
@@ -230,7 +227,7 @@ function AnalyticsContent({ data }: { data: ExpenseAnalytics }) {
         {data.branches.map((branch) => (
           <Card key={branch.branchId} className="h-full">
             <div className="flex items-center gap-3">
-              <span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-50 text-primary">
+              <span className="grid h-10 w-10 place-items-center neu-raised-sm rounded-xl text-primary">
                 <Building2 className="h-5 w-5" />
               </span>
               <div>
@@ -293,7 +290,7 @@ function AnalyticsContent({ data }: { data: ExpenseAnalytics }) {
                   </span>
                   <span>{formatPercent(category.sharePct)}</span>
                 </div>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full neu-track">
                   <div
                     className="h-full rounded-full bg-primary"
                     style={{ width: `${Math.min(category.sharePct ?? 0, 100)}%` }}
@@ -311,7 +308,7 @@ function AnalyticsContent({ data }: { data: ExpenseAnalytics }) {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-left text-sm">
               <thead>
-                <tr className="border-b border-border bg-slate-50">
+                <tr className="border-b border-border bg-canvas/70">
                   <th className="px-3 py-3">Sana</th>
                   <th className="px-3 py-3">Xarajat</th>
                   <th className="px-3 py-3">Kategoriya</th>

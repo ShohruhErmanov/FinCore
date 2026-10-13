@@ -43,11 +43,9 @@ export function Card({
   className?: string;
 }) {
   return (
-    <section
-      className={`overflow-hidden rounded-card border border-border/90 bg-surface/95 shadow-card backdrop-blur-sm ${className}`}
-    >
+    <section className={`neu-raised relative overflow-hidden rounded-card ${className}`}>
       {title || actions ? (
-        <div className="flex flex-col justify-between gap-3 border-b border-border/80 bg-gradient-to-r from-white to-slate-50/50 px-5 py-4 sm:flex-row sm:items-center">
+        <div className="flex flex-col justify-between gap-3 border-b border-border/70 px-5 py-4 sm:flex-row sm:items-center">
           <div>
             {title ? <h2 className="font-bold tracking-[-0.01em] text-ink">{title}</h2> : null}
             {description ? <p className="mt-0.5 text-xs text-muted">{description}</p> : null}

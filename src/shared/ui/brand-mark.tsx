@@ -8,8 +8,7 @@ import { cn } from '@/shared/lib/cn';
 export function BrandMark({ className }: { className?: string }) {
   return (
     <img
-      src="/brand/fincore-mark-v4-64.png"
-      srcSet="/brand/fincore-mark-v4-64.png 1x, /brand/fincore-mark-v4-128.png 2x"
+      src="/brand/fincore-mark.svg"
       width="64"
       height="64"
       alt=""

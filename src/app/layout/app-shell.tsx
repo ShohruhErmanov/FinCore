@@ -86,9 +86,8 @@ function NavigationLink({
       {...(isActive ? { 'aria-current': 'page' as const } : {})}
       className={() =>
         cn(
-          'group relative flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium text-slate-300 transition-all duration-200 hover:translate-x-0.5 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400',
-          isActive &&
-            'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-[0_12px_28px_-16px_rgba(230,38,0,0.7)] ring-1 ring-white/10',
+          'sidebar-nav-item group relative flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium text-slate-600 transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary',
+          isActive && 'sidebar-nav-item-active text-primary',
           collapsed && 'justify-center px-2',
         )
       }
@@ -129,21 +128,21 @@ function Sidebar({
   return (
     <aside
       className={cn(
-        'fincore-sidebar flex h-full flex-col text-white',
+        'fincore-sidebar flex h-full flex-col p-2 text-ink',
         mobile ? 'w-[286px]' : collapsed ? 'w-[76px]' : 'w-[252px]',
       )}
     >
       <div
         className={cn(
-          'flex h-[72px] items-center border-b border-white/10 px-4',
+          'sidebar-brand-panel flex h-[64px] items-center rounded-2xl px-3',
           collapsed ? 'justify-center' : 'justify-between',
         )}
       >
         <Link
           to={routes.dashboard}
-          className="flex items-center gap-3 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400"
+          className="group flex items-center gap-3 rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400"
         >
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white shadow-[0_12px_28px_-14px_rgba(6,13,22,0.6)] ring-1 ring-white/30">
+          <div className="sidebar-logo-well grid h-10 w-10 shrink-0 place-items-center rounded-xl transition-transform duration-200 group-hover:-translate-y-0.5">
             <BrandMark className="h-8 w-8" />
           </div>
           {!collapsed ? (
@@ -157,18 +156,21 @@ function Sidebar({
           <button
             type="button"
             onClick={onClose}
-            className="grid h-10 w-10 place-items-center rounded-lg hover:bg-white/10"
+            className="neu-raised-sm grid h-10 w-10 place-items-center rounded-xl text-slate-600 transition hover:-translate-y-0.5 hover:text-ink hover:shadow-[var(--neu-shadow-2)] active:translate-y-0 active:shadow-[var(--neu-pressed)]"
             aria-label="Menyuni yopish"
           >
             <X className="h-5 w-5" />
           </button>
         ) : null}
       </div>
-      <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-5" aria-label="Asosiy navigatsiya">
+      <nav className="flex-1 space-y-3 overflow-y-auto px-1 py-3" aria-label="Asosiy navigatsiya">
         {visibleGroups.map((group) => (
-          <div key={group.label}>
+          <div
+            key={group.label}
+            className={cn('sidebar-nav-group rounded-2xl p-2', collapsed && 'px-1.5')}
+          >
             {!collapsed ? (
-              <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+              <p className="mb-2 px-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
                 {group.label}
               </p>
             ) : null}
@@ -189,12 +191,12 @@ function Sidebar({
         ))}
       </nav>
       {!mobile ? (
-        <div className="border-t border-white/10 p-3">
+        <div className="sidebar-collapse-panel rounded-2xl p-1.5">
           <button
             type="button"
             onClick={onToggle}
             className={cn(
-              'flex min-h-10 w-full items-center gap-3 rounded-lg px-3 text-sm text-slate-400 hover:bg-white/10 hover:text-white',
+              'sidebar-collapse-button flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-sm text-slate-600 transition-all duration-200 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary active:shadow-[var(--neu-pressed)]',
               collapsed && 'justify-center px-2',
             )}
             aria-label={collapsed ? 'Yon menyuni kengaytirish' : 'Yon menyuni yig‘ish'}
@@ -261,9 +263,7 @@ function TopBar({
   const selectedPeriod =
     searchParams.get('period') ??
     rememberedPeriod ??
-    periods.find(
-      (period) => period.year === todayYear && period.month === todayMonth,
-    )?.id ??
+    periods.find((period) => period.year === todayYear && period.month === todayMonth)?.id ??
     periods.find((period) => period.status === 'open')?.id ??
     '';
 
@@ -385,23 +385,23 @@ function TopBar({
 
   return (
     <>
-      <header className="fincore-topbar sticky top-0 z-30 flex min-h-[76px] flex-wrap items-center gap-3 border-b border-white/80 px-4 py-2 sm:flex-nowrap sm:px-6">
+      <header className="fincore-topbar sticky top-0 z-30 flex min-h-[76px] flex-wrap items-center gap-3 border-b border-border/60 px-4 py-2 sm:px-6 xl:flex-nowrap">
         <div className="contents">
           <button
             type="button"
             onClick={onOpenMenu}
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 lg:hidden"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-slate-600 transition hover:bg-surface hover:shadow-[var(--neu-shadow-1)] active:shadow-[var(--neu-pressed)] lg:hidden"
             aria-label="Menyuni ochish"
           >
             <Menu className="h-5 w-5" />
           </button>
-          <div className="order-3 grid w-full grid-cols-3 gap-2 sm:order-none sm:flex sm:w-auto sm:items-center">
+          <div className="order-3 grid w-full grid-cols-2 gap-2 sm:grid-cols-3 xl:order-none xl:flex xl:w-auto xl:items-center">
             <div className="flex min-w-0 gap-1.5">
               <Select
                 aria-label="Hisobot yili"
                 value={selectedYear ?? ''}
                 onChange={(event) => selectYear(Number(event.target.value))}
-                className="min-w-0 flex-1 border-slate-200/70 bg-slate-100/80 font-semibold shadow-none sm:w-28"
+                className="min-w-0 flex-1 font-semibold xl:w-28"
               >
                 {years.map((year) => (
                   <option key={year} value={year}>
@@ -426,7 +426,7 @@ function TopBar({
               aria-label="Hisobot oyi"
               value={selectedPeriod}
               onChange={(event) => updateFilter('period', event.target.value)}
-              className="w-full border-slate-200/70 bg-slate-100/80 font-semibold shadow-none sm:w-36"
+              className="w-full font-semibold xl:w-36"
             >
               {monthsOfYear.map((period) => (
                 <option key={period.id} value={period.id}>
@@ -438,7 +438,7 @@ function TopBar({
               aria-label="Filial"
               value={selectedBranch}
               onChange={(event) => updateFilter('branch', event.target.value)}
-              className="w-full border-slate-200/70 bg-slate-100/80 font-semibold shadow-none sm:w-44"
+              className="col-span-2 w-full font-semibold sm:col-span-1 xl:w-44"
             >
               {hasPermission('expense.view_all_branches') ? (
                 <option value="all">Barcha filiallar</option>
@@ -453,7 +453,7 @@ function TopBar({
         </div>
         <div className="order-4 flex w-full min-w-0 justify-center sm:order-none sm:w-auto sm:flex-1">
           <p
-            className="max-w-full truncate rounded-full border border-slate-200/80 bg-white/70 px-3.5 py-2 text-xs font-bold text-slate-600 shadow-sm"
+            className="neu-raised-sm max-w-full truncate rounded-full px-3.5 py-2 text-xs font-bold text-slate-600"
             aria-label="Global hisobot konteksti"
           >
             {globalScopeLabel}
@@ -475,10 +475,10 @@ function TopBar({
             }
             className={({ isActive }) =>
               cn(
-                'relative grid h-11 w-11 shrink-0 place-items-center rounded-xl border text-slate-600 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:bg-white hover:text-primary hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400',
+                'relative grid h-11 w-11 shrink-0 place-items-center rounded-xl border text-slate-600 transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400',
                 isActive
-                  ? 'border-blue-200 bg-blue-50 text-primary ring-1 ring-blue-100'
-                  : 'border-slate-200/80 bg-white/80',
+                  ? 'border-blue-200 bg-blue-50 text-primary shadow-[var(--neu-pressed)]'
+                  : 'neu-raised-sm hover:shadow-[var(--neu-shadow-2)] active:shadow-[var(--neu-pressed)]',
               )
             }
           >
@@ -486,7 +486,7 @@ function TopBar({
             {notificationCount > 0 ? (
               <span
                 aria-label={`${notificationCount} ta yangi kassir tahriri`}
-                className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white shadow-[0_0_0_3px_rgba(255,255,255,0.95)]"
+                className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[10px] font-bold leading-none text-[#101C2F] shadow-[0_0_0_3px_rgb(16_28_47/0.95)]"
               >
                 {notificationCount > 9 ? '9+' : notificationCount}
               </span>
@@ -497,14 +497,14 @@ function TopBar({
           <button
             type="button"
             onClick={() => setAccountOpen((value) => !value)}
-            className="flex min-h-11 items-center gap-3 rounded-xl px-2 text-left transition hover:bg-white hover:shadow-sm"
+            className="flex min-h-11 items-center gap-3 rounded-xl px-2 text-left transition hover:bg-surface hover:shadow-[var(--neu-shadow-1)] active:shadow-[var(--neu-pressed)]"
             // Mobil ekranda ism yashiriladi va faqat bosh harflar qoladi —
             // tugmaning nomi baribir to‘liq bo‘lishi kerak.
             aria-label={user ? `${user.fullName} — hisob menyusi` : 'Hisob menyusi'}
             aria-expanded={accountOpen}
             aria-haspopup="menu"
           >
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-navy-50 to-navy-100 text-sm font-bold text-navy-700 ring-1 ring-navy-200/70">
+            <div className="neu-inset grid h-10 w-10 shrink-0 place-items-center rounded-full text-sm font-bold text-primary ring-1 ring-primary/15">
               {user?.fullName
                 .split(' ')
                 .map((part) => part[0])
@@ -522,7 +522,7 @@ function TopBar({
           {accountOpen ? (
             <div
               role="menu"
-              className="absolute right-0 top-14 w-64 rounded-card border border-border/90 bg-white/95 p-2 shadow-elevated backdrop-blur-xl"
+              className="neu-elevated neu-pop absolute right-0 top-14 w-64 rounded-card p-2"
             >
               <div className="border-b border-border px-3 py-2">
                 <p className="text-sm font-semibold text-ink">{user?.fullName}</p>
@@ -601,8 +601,11 @@ function TopBar({
 function MobileBottomNav() {
   const { hasPermission } = useAuth();
   const { pathname } = useLocation();
+  const dashboardItem = navigation
+    .flatMap((group) => group.items)
+    .find((item) => item.to === routes.dashboard);
   const items = [
-    { ...navigation[0]!.items[0]!, icon: LayoutDashboard },
+    ...(dashboardItem ? [{ ...dashboardItem, icon: LayoutDashboard }] : []),
     {
       label: 'Tushum',
       to: routes.revenues,
@@ -626,7 +629,7 @@ function MobileBottomNav() {
     .slice(0, 4);
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-30 grid border-t border-border bg-white px-2 pb-[env(safe-area-inset-bottom)] lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 grid border-t border-border/60 bg-surface px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_18px_-12px_rgb(197_198_207/0.85)] lg:hidden"
       style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
       aria-label="Mobil navigatsiya"
     >
@@ -680,7 +683,9 @@ export function AppShell() {
       const stored = JSON.parse(localStorage.getItem(seenStorageKey) ?? '[]') as unknown;
       setSeenIds(
         new Set(
-          Array.isArray(stored) ? stored.filter((value): value is string => typeof value === 'string') : [],
+          Array.isArray(stored)
+            ? stored.filter((value): value is string => typeof value === 'string')
+            : [],
         ),
       );
     } catch {
@@ -708,25 +713,18 @@ export function AppShell() {
   return (
     <div className="min-h-screen bg-canvas">
       <div className="fixed inset-y-0 left-0 z-40 hidden lg:block">
-        <Sidebar
-          collapsed={collapsed}
-          onToggle={() => setCollapsed((value) => !value)}
-        />
+        <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((value) => !value)} />
       </div>
       {mobileOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden">
           <button
             type="button"
-            className="absolute inset-0 bg-slate-950/60"
+            className="neu-scrim absolute inset-0"
             onClick={() => setMobileOpen(false)}
             aria-label="Menyuni yopish"
           />
-          <div className="relative h-full w-min shadow-2xl">
-            <Sidebar
-              collapsed={false}
-              mobile
-              onClose={() => setMobileOpen(false)}
-            />
+          <div className="relative h-full w-min shadow-[var(--neu-shadow-3)]">
+            <Sidebar collapsed={false} mobile onClose={() => setMobileOpen(false)} />
           </div>
         </div>
       ) : null}

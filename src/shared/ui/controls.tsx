@@ -91,7 +91,7 @@ export function RadioGroup<T extends string>({
       {options.map((option) => (
         <label
           key={option.value}
-          className="flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border border-border px-3 py-2 has-[:checked]:border-primary has-[:checked]:bg-blue-50"
+          className="neu-raised-sm flex min-h-11 cursor-pointer items-start gap-3 rounded-lg px-3 py-2 transition-[background-color,box-shadow,border-color] duration-200 has-[:checked]:border-primary has-[:checked]:bg-blue-50 has-[:checked]:shadow-[var(--neu-pressed)]"
         >
           <input
             type="radio"
@@ -137,13 +137,7 @@ export function Combobox({
 
 export function FilterBar({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <section
-      aria-label="Filtrlar"
-      className={cn(
-        'rounded-card border border-border/90 bg-white/90 p-4 shadow-card backdrop-blur-sm',
-        className,
-      )}
-    >
+    <section aria-label="Filtrlar" className={cn('neu-raised rounded-card p-4', className)}>
       {children}
     </section>
   );
@@ -160,7 +154,7 @@ export function Tabs({
     <div
       role="tablist"
       aria-label={label}
-      className="flex gap-1 overflow-x-auto rounded-xl bg-slate-100/80 p-1"
+      className="neu-inset flex gap-1 overflow-x-auto rounded-xl p-1"
     >
       {items.map((item) => (
         <button
@@ -173,8 +167,8 @@ export function Tabs({
           className={cn(
             'min-h-10 whitespace-nowrap rounded-lg px-4 text-sm font-semibold transition-all focus-visible:outline focus-visible:outline-2',
             item.selected
-              ? 'bg-white text-primary shadow-sm ring-1 ring-slate-200/80'
-              : 'text-muted hover:bg-white/60 hover:text-ink',
+              ? 'neu-raised-sm text-primary'
+              : 'text-muted hover:bg-raised/80 hover:text-ink',
           )}
         >
           {item.label}
@@ -196,7 +190,7 @@ export function Skeleton({
       role="status"
       aria-label={label}
       className={cn(
-        'block animate-pulse rounded-lg bg-slate-200 motion-reduce:animate-none',
+        'neu-inset block animate-pulse rounded-lg motion-reduce:animate-none',
         className,
       )}
     />

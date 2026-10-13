@@ -1,5 +1,16 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Eye, EyeOff, LockKeyhole, Phone, ShieldCheck } from 'lucide-react';
+import {
+  Activity,
+  ArrowRight,
+  BarChart3,
+  Eye,
+  EyeOff,
+  Fingerprint,
+  LockKeyhole,
+  Phone,
+  ShieldCheck,
+  Sparkles,
+} from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
@@ -58,59 +69,118 @@ export function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-navy lg:grid lg:grid-cols-[1.05fr_0.95fr]">
-      <section
-        className="relative hidden overflow-hidden brand-navy-panel p-12 text-white lg:flex lg:flex-col lg:justify-between"
-        aria-label="FINCORE haqida"
-      >
-        <div className="relative flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-xl bg-white shadow-[0_16px_34px_-16px_rgba(6,13,22,0.7)] ring-1 ring-white/30">
-            <BrandMark className="h-9 w-9" />
+    <main className="login-page-shell">
+      <div className="login-ambient login-ambient-one" aria-hidden="true" />
+      <div className="login-ambient login-ambient-two" aria-hidden="true" />
+      <section className="login-story-panel" aria-label="FINCORE haqida">
+        <div className="login-brand-row">
+          <div className="login-brand-mark">
+            <BrandMark className="h-10 w-10" />
           </div>
           <div>
-            <p className="text-xl font-bold tracking-tight">FINCORE</p>
-            <p className="text-xs text-slate-300">O‘quv markazi moliyasi</p>
+            <p className="login-brand-name">FINCORE</p>
+            <p className="login-brand-caption">Moliya nazorati</p>
+          </div>
+          <span className="login-system-status">
+            <span aria-hidden="true" /> Tizim faol
+          </span>
+        </div>
+
+        <div className="login-story-content">
+          <div className="login-story-copy">
+            <p className="login-eyebrow">
+              <Sparkles size={14} aria-hidden="true" /> Financial operating system
+            </p>
+            <h1>
+              Moliyani <span>aniq</span>, xavfsiz va real vaqtda boshqaring.
+            </h1>
+            <p>
+              Budjet, tushum va xarajat yagona nazorat markazida. Har bir ko‘rsatkich manba
+              tranzaksiyasigacha kuzatiladi.
+            </p>
+          </div>
+
+          <div className="login-control-visual" aria-hidden="true">
+            <div className="login-visual-ring login-visual-ring-outer" />
+            <div className="login-visual-ring login-visual-ring-inner" />
+            <div className="login-visual-core">
+              <Activity size={28} />
+              <strong>LIVE</strong>
+            </div>
+            <div className="login-visual-node login-visual-node-plan">
+              <span>REJA</span>
+              <i />
+            </div>
+            <div className="login-visual-node login-visual-node-fact">
+              <span>FAKT</span>
+              <i />
+            </div>
+            <div className="login-visual-node login-visual-node-audit">
+              <span>AUDIT</span>
+              <i />
+            </div>
           </div>
         </div>
-        <div className="relative max-w-xl">
-          <p className="inline-flex rounded-full border border-navy-300/25 bg-navy-400/15 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-navy-200 backdrop-blur">
-            Financial operating system
-          </p>
-          <h1 className="mt-6 text-5xl font-bold leading-[1.08] tracking-[-0.045em]">
-            Moliyani real vaqtda, ishonch bilan boshqaring.
-          </h1>
-          <p className="mt-6 max-w-lg text-base leading-7 text-slate-300">
-            Budjet va xarajat bitta ledgerda bog‘langan. Har KPI manba tranzaksiyasigacha ochiladi.
-          </p>
-        </div>
-        <div className="relative flex gap-8 text-sm text-slate-300">
-          <span className="inline-flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-green-400" />
-            Role va filial scope
-          </span>
-          <span className="inline-flex items-center gap-2">
-            <LockKeyhole className="h-5 w-5 text-navy-300" />
-            Audit qilinadigan oqim
-          </span>
+
+        <div className="login-feature-row">
+          <div className="login-feature-card">
+            <span className="login-feature-icon login-feature-icon-success">
+              <ShieldCheck size={18} />
+            </span>
+            <span>
+              <strong>Scope nazorati</strong>
+              <small>Role va filial kesimida</small>
+            </span>
+          </div>
+          <div className="login-feature-card">
+            <span className="login-feature-icon">
+              <BarChart3 size={18} />
+            </span>
+            <span>
+              <strong>Jonli analitika</strong>
+              <small>Reja va fakt bir ekranda</small>
+            </span>
+          </div>
+          <div className="login-feature-card">
+            <span className="login-feature-icon login-feature-icon-warning">
+              <LockKeyhole size={18} />
+            </span>
+            <span>
+              <strong>Audit izi</strong>
+              <small>Har bir amal kuzatuvda</small>
+            </span>
+          </div>
         </div>
       </section>
 
-      <section className="relative flex min-h-screen items-center justify-center overflow-hidden bg-canvas px-5 py-10 sm:px-10">
-        <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-blue-300/20 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-32 left-8 h-72 w-72 rounded-full bg-cyan-200/20 blur-3xl" />
-        <div className="w-full max-w-md">
-          <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <div className="grid h-10 w-10 place-items-center rounded-xl border border-blue-100 bg-white shadow-sm">
-              <BrandMark className="h-8 w-8" />
+      <section className="login-access-panel">
+        <div className="login-access-stack">
+          <div className="login-mobile-brand">
+            <div className="login-brand-mark login-brand-mark-mobile">
+              <BrandMark className="h-9 w-9" />
             </div>
             <div>
-              <p className="font-bold text-ink">FINCORE</p>
-              <p className="text-xs text-muted">Moliya platformasi</p>
+              <p className="login-brand-name">FINCORE</p>
+              <p className="login-brand-caption">Moliya nazorati</p>
             </div>
           </div>
-          <div className="relative rounded-[28px] border border-white/80 bg-white/90 p-6 shadow-[0_32px_80px_-38px_rgba(15,27,45,0.4)] ring-1 ring-slate-200/70 backdrop-blur-xl sm:p-8">
-            <h2 className="text-2xl font-bold tracking-tight text-ink">Tizimga kirish</h2>
-            <p className="mt-2 text-sm text-muted">Telefon raqamingiz va parolingizni kiriting.</p>
+
+          <div className="login-form-card">
+            <div className="login-form-heading">
+              <div className="login-auth-emblem" aria-hidden="true">
+                <Fingerprint size={25} />
+              </div>
+              <div>
+                <p className="login-form-kicker">Xavfsiz kirish</p>
+                <h2>Tizimga kirish</h2>
+              </div>
+              <span className="login-secure-pill">
+                <ShieldCheck size={13} /> Himoyalangan
+              </span>
+            </div>
+            <p className="login-form-description">
+              FinCore boshqaruv paneliga kirish uchun hisob ma’lumotlaringizni kiriting.
+            </p>
             {serverError ? (
               <Alert title="Kirish amalga oshmadi" tone="danger" className="mt-5">
                 {serverError}
@@ -123,12 +193,15 @@ export function LoginPage() {
                 required
                 error={errors.login?.message}
               >
-                <div className="relative">
-                  <Phone className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
+                <div className="login-field-shell">
+                  <span className="login-input-icon" aria-hidden="true">
+                    <Phone size={16} />
+                  </span>
                   <Input
                     id="login"
                     autoComplete="username"
-                    className="pl-10"
+                    className="login-input pl-12"
+                    placeholder="+998 00 000 00 00"
                     aria-invalid={Boolean(errors.login)}
                     aria-describedby={errors.login ? 'login-error' : undefined}
                     {...register('login')}
@@ -136,20 +209,23 @@ export function LoginPage() {
                 </div>
               </FormField>
               <FormField label="Parol" htmlFor="password" required error={errors.password?.message}>
-                <div className="relative">
-                  <LockKeyhole className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
+                <div className="login-field-shell">
+                  <span className="login-input-icon" aria-hidden="true">
+                    <LockKeyhole size={16} />
+                  </span>
                   <Input
                     id="password"
                     type={showPassword ? 'text' : 'password'}
                     autoComplete="current-password"
-                    className="px-10"
+                    className="login-input px-12"
+                    placeholder="Parolingizni kiriting"
                     aria-invalid={Boolean(errors.password)}
                     aria-describedby={errors.password ? 'password-error' : undefined}
                     {...register('password')}
                   />
                   <button
                     type="button"
-                    className="absolute right-2 top-1.5 grid h-8 w-8 place-items-center rounded text-slate-500 hover:bg-slate-100"
+                    className="login-password-toggle"
                     onClick={() => setShowPassword((value) => !value)}
                     aria-label={showPassword ? 'Parolni yashirish' : 'Parolni ko‘rsatish'}
                   >
@@ -157,16 +233,23 @@ export function LoginPage() {
                   </button>
                 </div>
               </FormField>
-              <Button type="submit" size="lg" className="w-full" loading={isSubmitting}>
-                Kirish
+              <Button
+                type="submit"
+                size="lg"
+                className="login-submit w-full"
+                loading={isSubmitting}
+              >
+                <span>Kirish</span>
+                <ArrowRight size={18} aria-hidden="true" />
               </Button>
             </form>
             {environment.enableMocks && (
-              <div className="mt-7 border-t border-border pt-5">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                  Demo hisoblar · parol: demo123
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
+              <div className="login-demo-panel">
+                <div className="login-demo-heading">
+                  <span>Demo hisoblar</span>
+                  <small>Parol: demo123</small>
+                </div>
+                <div className="login-demo-actions">
                   {demoAccounts.map((account) => (
                     <button
                       key={account.phone}
@@ -175,7 +258,7 @@ export function LoginPage() {
                         setValue('login', account.phone);
                         setValue('password', 'demo123');
                       }}
-                      className="rounded-full border border-border bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-blue-300 hover:bg-blue-50"
+                      className="login-demo-button"
                     >
                       {account.label}
                     </button>
@@ -184,7 +267,8 @@ export function LoginPage() {
               </div>
             )}
           </div>
-          <p className="mt-5 text-center text-xs text-slate-400">
+          <p className="login-session-note">
+            <LockKeyhole size={13} aria-hidden="true" />
             {environment.enableMocks
               ? 'Demo muhit. Production sessiya HTTP-only cookie orqali boshqariladi.'
               : 'Sessiya HTTP-only cookie orqali boshqariladi.'}

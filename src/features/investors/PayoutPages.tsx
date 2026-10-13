@@ -63,7 +63,7 @@ function PayoutStatusBadge({ status }: { status: PayoutStatus }) {
   const meta = STATUS_META[status];
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold shadow-sm [&_svg]:h-3.5 [&_svg]:w-3.5 ${meta.className}`}
+      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold shadow-[var(--neu-shadow-xs)] [&_svg]:h-3.5 [&_svg]:w-3.5 ${meta.className}`}
     >
       {meta.icon}
       {meta.label}
@@ -570,7 +570,7 @@ export function PayoutRequestsPage() {
             <input
               id="paid-on"
               type="date"
-              className="h-11 w-full rounded-xl border border-border bg-white px-3 text-sm"
+              className="neu-inset h-11 w-full rounded-xl border border-border/70 px-3 text-sm"
               value={paidOn}
               onChange={(event) => setPaidOn(event.target.value)}
             />

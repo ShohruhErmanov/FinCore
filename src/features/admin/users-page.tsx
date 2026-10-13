@@ -242,7 +242,7 @@ function UserAccessDialog({
         <section aria-label="Rol va filial">
           <h3 className="mb-3 text-sm font-bold text-ink">Rol va filial</h3>
           {fixedRole ? (
-            <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-muted">
+            <p className="neu-inset rounded-lg px-3 py-2 text-sm text-muted">
               {fixedRole.roleName} rolini bu yerda o‘zgartirib bo‘lmaydi. Parolni pastda
               o‘zgartirishingiz mumkin.
             </p>
@@ -620,7 +620,7 @@ function CreateUserPanel({
           </Select>
         </FormField>
         {role === 'investor' ? (
-          <section className="grid gap-4 rounded-2xl border border-blue-100 bg-gradient-to-b from-blue-50/80 to-white p-4 shadow-sm md:col-span-2 md:grid-cols-2 md:p-5">
+          <section className="grid gap-4 neu-raised-sm rounded-2xl border-blue-100 p-4 md:col-span-2 md:grid-cols-2 md:p-5">
             <div className="md:col-span-2">
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-700">
                 Investor moliyaviy ma’lumotlari
@@ -705,8 +705,8 @@ function CreateUserPanel({
                       key={code}
                       className={`flex min-h-12 cursor-pointer items-center justify-center rounded-xl border px-3 text-center text-sm font-semibold transition ${
                         selected
-                          ? 'border-blue-500 bg-blue-600 text-white shadow-md shadow-blue-200'
-                          : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300'
+                          ? 'border-primary bg-primary text-[#101C2F] shadow-[var(--neu-pressed)]'
+                          : 'border-slate-200 bg-raised text-slate-700 shadow-[var(--neu-shadow-1)] hover:border-blue-300'
                       } ${available ? '' : 'cursor-not-allowed opacity-45'}`}
                     >
                       <input
@@ -727,7 +727,7 @@ function CreateUserPanel({
           </section>
         ) : null}
         {role === 'finance_manager' ? (
-          <label className="flex min-h-11 items-center gap-3 rounded-lg border border-border px-3 py-2">
+          <label className="neu-raised-sm flex min-h-11 items-center gap-3 rounded-lg px-3 transition-[box-shadow,border-color] duration-200 has-[:checked]:border-primary/40 has-[:checked]:shadow-[var(--neu-pressed)] py-2">
             <input
               type="checkbox"
               checked={alsoCashier}

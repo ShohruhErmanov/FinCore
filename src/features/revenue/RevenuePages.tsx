@@ -142,13 +142,21 @@ export function RevenueLedgerPage() {
   useEffect(() => {
     if (!selectedPeriod || !automaticRange) return;
     const monthPrefix = `${selectedPeriod.year}-${String(selectedPeriod.month).padStart(2, '0')}-`;
-    if (explicitDateFrom?.startsWith(monthPrefix) && explicitDateTo?.startsWith(monthPrefix)) return;
+    if (explicitDateFrom?.startsWith(monthPrefix) && explicitDateTo?.startsWith(monthPrefix))
+      return;
     const next = new URLSearchParams(searchParams);
     next.set('dateFrom', automaticRange.from);
     next.set('dateTo', automaticRange.to);
     next.delete('page');
     setSearchParams(next, { replace: true });
-  }, [automaticRange, explicitDateFrom, explicitDateTo, searchParams, selectedPeriod, setSearchParams]);
+  }, [
+    automaticRange,
+    explicitDateFrom,
+    explicitDateTo,
+    searchParams,
+    selectedPeriod,
+    setSearchParams,
+  ]);
 
   const queryString = searchParams.toString();
   const query = useQuery({
@@ -264,7 +272,7 @@ export function RevenueLedgerPage() {
             {references.me.data?.permissions.includes('revenue.create') ? (
               <Link
                 to={routes.revenueNew}
-                className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-blue-700"
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-[#101C2F] hover:bg-blue-700"
               >
                 <CalendarPlus className="h-4 w-4" /> Tushum kiritish
               </Link>
@@ -800,7 +808,7 @@ export function RevenueDetailPage() {
           <>
             <Link
               to={routes.revenues}
-              className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-semibold text-ink hover:bg-slate-50"
+              className="inline-flex min-h-11 items-center gap-2 neu-raised-sm neu-interactive rounded-lg px-4 text-sm font-semibold text-ink hover:bg-raised"
             >
               <ArrowLeft className="h-4 w-4" /> Jurnalga qaytish
             </Link>
@@ -1005,7 +1013,7 @@ export function RevenuePlanPage() {
               <table className="w-full min-w-[900px] text-left">
                 <caption className="sr-only">{planQuery.data.periodLabel} tushum rejasi</caption>
                 <thead>
-                  <tr className="border-b border-border bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  <tr className="border-b border-border bg-canvas/70 text-xs font-semibold uppercase tracking-wide text-slate-600">
                     <th className="px-4 py-3">Filial</th>
                     <th className="px-4 py-3 text-right">Oylik reja</th>
                     <th className="px-4 py-3 text-right">Kunlik reja</th>

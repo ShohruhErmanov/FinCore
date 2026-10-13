@@ -46,7 +46,7 @@ export function Alert({
 export function LoadingState({ label = 'Ma’lumotlar yuklanmoqda…' }: { label?: string }) {
   return (
     <div
-      className="flex min-h-48 flex-col items-center justify-center gap-3 rounded-card border border-dashed border-border bg-white p-8 text-muted"
+      className="neu-raised flex min-h-48 flex-col items-center justify-center gap-3 rounded-card border-dashed p-8 text-muted"
       role="status"
     >
       <LoaderCircle className="h-7 w-7 animate-spin text-primary" />
@@ -65,7 +65,7 @@ export function EmptyState({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-48 flex-col items-center justify-center rounded-card border border-dashed border-border bg-white p-8 text-center">
+    <div className="neu-raised flex min-h-48 flex-col items-center justify-center rounded-card border-dashed p-8 text-center">
       <FileQuestion className="h-9 w-9 text-slate-400" />
       <h3 className="mt-3 font-semibold text-ink">{title}</h3>
       {description ? <p className="mt-1 max-w-lg text-sm text-muted">{description}</p> : null}

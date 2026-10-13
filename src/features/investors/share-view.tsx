@@ -79,8 +79,8 @@ export function InvestorShareView({
           </dl>
         ) : (
           <p className="text-sm text-muted">
-            Bu tarixiy investor uchun boshlang‘ich kapital va qo‘shilish oyi qayd etilmagan;
-            mavjud hisob-kitob o‘zgartirilmagan.
+            Bu tarixiy investor uchun boshlang‘ich kapital va qo‘shilish oyi qayd etilmagan; mavjud
+            hisob-kitob o‘zgartirilmagan.
           </p>
         )}
       </Card>
@@ -182,7 +182,7 @@ export function InvestorShareView({
 
 function CapitalFact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+    <div className="neu-inset rounded-2xl p-4">
       <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">{label}</dt>
       <dd className="mt-2 text-lg font-semibold tabular-nums text-ink">{value}</dd>
     </div>

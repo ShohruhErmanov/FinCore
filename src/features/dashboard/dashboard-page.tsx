@@ -3,11 +3,11 @@ import { Activity, ArrowRight, CalendarPlus, Download, ReceiptText, Sparkles } f
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   Area,
-  AreaChart,
   Bar,
   BarChart,
   Cell,
   CartesianGrid,
+  ComposedChart,
   Legend,
   Pie,
   PieChart,
@@ -62,6 +62,15 @@ function axisMoney(value: number): string {
   return formatMoney(String(value));
 }
 
+const CHART_TOOLTIP_STYLE = {
+  background: '#213149',
+  color: '#EDF4FF',
+  border: '1px solid rgba(43, 62, 88, 0.9)',
+  borderRadius: 14,
+  boxShadow: '8px 8px 18px rgba(10,20,37,.85), -8px -8px 18px rgba(43,62,88,.7)',
+  padding: '10px 12px',
+};
+
 function expensePlanComparison(
   planUzs: string,
   varianceUzs: string,
@@ -95,14 +104,17 @@ function TrendChart({
   const totalActual = points.reduce((sum, point) => sum + BigInt(point.actualUzs), 0n);
   const completion = percentOf(totalActual.toString(), totalPlan.toString());
   const hasData = totalPlan !== 0n || totalActual !== 0n;
-  const actualColor = tone === 'revenue' ? '#FFB800' : '#FF8050';
+  const actualColor = tone === 'revenue' ? '#6F9FFF' : '#FF8C9C';
   const gradientId = `actual-${tone}-gradient`;
+  const strokeGradientId = `actual-${tone}-stroke`;
+  const planGradientId = `plan-${tone}-stroke`;
+  const glowId = `actual-${tone}-glow`;
 
   return (
     <Card title={title} description={description}>
       <div role="region" aria-label={ariaLabel}>
         <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <div className="rounded-xl border border-slate-200/80 bg-slate-50/80 px-3.5 py-3">
+          <div className="neu-chart-stat rounded-xl px-3.5 py-3">
             <dt className="flex items-center gap-2 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-slate-500">
               <span className="h-2 w-2 rounded-full bg-slate-400" aria-hidden="true" />
               Reja jami
@@ -117,7 +129,7 @@ function TrendChart({
 
           <div
             className={cn(
-              'rounded-xl border px-3.5 py-3',
+              'neu-chart-stat rounded-xl px-3.5 py-3',
               tone === 'revenue'
                 ? 'border-cyan-100 bg-cyan-50/60'
                 : 'border-blue-100 bg-blue-50/60',
@@ -144,7 +156,7 @@ function TrendChart({
             </dd>
           </div>
 
-          <div className="col-span-2 rounded-xl border border-slate-200/80 bg-white px-3.5 py-3 sm:col-span-1">
+          <div className="neu-chart-stat col-span-2 rounded-xl px-3.5 py-3 sm:col-span-1">
             <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-slate-500">
               Reja bajarilishi
             </dt>
@@ -155,27 +167,50 @@ function TrendChart({
         </dl>
 
         {hasData ? (
-          <div className="mt-5 h-[280px] w-full overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#060D16_0%,#0F1B2D_55%,#1E3A5C_100%)] px-2 pb-1 pt-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] sm:h-[320px] sm:px-4">
+          <div className="neu-chart-frame mt-5 h-[280px] w-full overflow-hidden rounded-2xl px-2 pb-1 pt-4 sm:h-[320px] sm:px-4">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={actualColor} stopOpacity={0.34} />
-                    <stop offset="72%" stopColor={actualColor} stopOpacity={0.08} />
+                    <stop offset="0%" stopColor={actualColor} stopOpacity={0.42} />
+                    <stop offset="58%" stopColor={actualColor} stopOpacity={0.12} />
                     <stop offset="100%" stopColor={actualColor} stopOpacity={0} />
                   </linearGradient>
+                  <linearGradient id={strokeGradientId} x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor={tone === 'revenue' ? '#A9C9FF' : '#FFC5CE'} />
+                    <stop offset="48%" stopColor={actualColor} />
+                    <stop offset="100%" stopColor={tone === 'revenue' ? '#78E6CF' : '#F2BE73'} />
+                  </linearGradient>
+                  <linearGradient id={planGradientId} x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="#60738F" />
+                    <stop offset="50%" stopColor="#B3C4DB" />
+                    <stop offset="100%" stopColor="#7187A5" />
+                  </linearGradient>
+                  <filter id={glowId} x="-30%" y="-40%" width="160%" height="180%">
+                    <feGaussianBlur stdDeviation="3.2" result="softGlow" />
+                    <feColorMatrix
+                      in="softGlow"
+                      type="matrix"
+                      values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 .58 0"
+                      result="coloredGlow"
+                    />
+                    <feMerge>
+                      <feMergeNode in="coloredGlow" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
                 </defs>
                 <CartesianGrid
                   strokeDasharray="0"
                   vertical={false}
-                  stroke="rgba(211, 222, 234, 0.16)"
+                  stroke="rgba(43, 62, 88, 0.9)"
                 />
                 <XAxis
                   dataKey="label"
                   tickLine={false}
-                  axisLine={{ stroke: 'rgba(211, 222, 234, 0.2)' }}
+                  axisLine={{ stroke: 'rgba(43, 62, 88, 0.9)' }}
                   fontSize={11}
-                  tick={{ fill: '#D3DEEA' }}
+                  tick={{ fill: '#B3C4DB' }}
                   interval="preserveStartEnd"
                   tickMargin={10}
                 />
@@ -186,52 +221,70 @@ function TrendChart({
                   tickLine={false}
                   axisLine={false}
                   fontSize={10}
-                  tick={{ fill: '#A9BED5' }}
+                  tick={{ fill: '#B3C4DB' }}
                   width={66}
                   tickMargin={6}
                 />
                 <Tooltip
-                  formatter={(value: number, name: string) => [
-                    formatMoney(String(Math.trunc(value))),
-                    name,
-                  ]}
-                  labelStyle={{ color: '#f8fafc', fontWeight: 700, marginBottom: 6 }}
-                  itemStyle={{ paddingTop: 2, paddingBottom: 2 }}
-                  contentStyle={{
-                    background: 'rgba(15, 27, 45, 0.96)',
-                    color: '#E8EEF5',
-                    borderRadius: 14,
-                    border: '1px solid rgba(122, 157, 192, 0.28)',
-                    boxShadow: '0 18px 42px -22px rgba(6, 13, 22, 0.8)',
-                    padding: '10px 12px',
+                  content={(tooltip) => {
+                    const point = tooltip.payload?.[0]?.payload as
+                      | { plan?: number; actual?: number }
+                      | undefined;
+                    if (!tooltip.active || !point) return null;
+                    return (
+                      <div style={CHART_TOOLTIP_STYLE}>
+                        <p className="mb-1.5 font-bold text-ink">{tooltip.label}</p>
+                        <p className="flex items-center gap-2 py-0.5 text-sm text-muted">
+                          <span className="h-2 w-2 rounded-full bg-slate-300" aria-hidden="true" />
+                          Reja:{' '}
+                          <strong className="font-semibold text-ink">
+                            {formatMoney(String(Math.trunc(point.plan ?? 0)))}
+                          </strong>
+                        </p>
+                        <p className="flex items-center gap-2 py-0.5 text-sm text-muted">
+                          <span
+                            className="h-2 w-2 rounded-full"
+                            style={{ backgroundColor: actualColor }}
+                            aria-hidden="true"
+                          />
+                          Amalda:{' '}
+                          <strong className="font-semibold text-ink">
+                            {formatMoney(String(Math.trunc(point.actual ?? 0)))}
+                          </strong>
+                        </p>
+                      </div>
+                    );
                   }}
-                  cursor={{ stroke: 'rgba(232, 238, 245, 0.32)', strokeWidth: 1 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="plan"
-                  name="Reja"
-                  stroke="#D3DEEA"
-                  strokeWidth={2}
-                  strokeDasharray="7 6"
-                  dot={false}
-                  activeDot={{ r: 4, fill: '#E8EEF5', stroke: '#16293F', strokeWidth: 2 }}
+                  cursor={{ stroke: 'rgba(111, 159, 255, 0.42)', strokeWidth: 1 }}
                 />
                 <Area
                   type="monotone"
                   dataKey="actual"
                   name="Amalda"
-                  stroke={actualColor}
-                  strokeWidth={3}
+                  className="premium-chart-line"
+                  stroke={`url(#${strokeGradientId})`}
+                  strokeWidth={3.75}
                   fill={`url(#${gradientId})`}
-                  dot={{ r: 2.7, fill: actualColor, stroke: '#16293F', strokeWidth: 1.5 }}
-                  activeDot={{ r: 5, fill: actualColor, stroke: '#f8fafc', strokeWidth: 2 }}
+                  filter={`url(#${glowId})`}
+                  dot={{ r: 3, fill: '#172439', stroke: actualColor, strokeWidth: 2 }}
+                  activeDot={{ r: 6, fill: '#EDF4FF', stroke: actualColor, strokeWidth: 3 }}
                 />
-              </AreaChart>
+                <Line
+                  type="monotone"
+                  dataKey="plan"
+                  name="Reja"
+                  className="premium-chart-plan"
+                  stroke={`url(#${planGradientId})`}
+                  strokeWidth={2.25}
+                  strokeDasharray="2 8"
+                  dot={{ r: 2.25, fill: '#172439', stroke: '#B3C4DB', strokeWidth: 1.5 }}
+                  activeDot={{ r: 4.5, fill: '#172439', stroke: '#B3C4DB', strokeWidth: 2 }}
+                />
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         ) : (
-          <div className="mt-5 grid min-h-64 place-items-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-6 text-center">
+          <div className="mt-5 grid min-h-64 place-items-center neu-inset rounded-2xl px-6 text-center">
             <div>
               <p className="font-semibold text-slate-700">Bu kesim uchun ma’lumot mavjud emas</p>
               <p className="mt-1 text-sm text-muted">
@@ -240,6 +293,22 @@ function TrendChart({
             </div>
           </div>
         )}
+        {hasData ? (
+          <div className="mt-3 flex flex-wrap justify-center gap-2 text-[11px] font-semibold">
+            <span className="neu-chart-legend-chip">
+              <span className="w-5 border-t-2 border-dashed border-slate-400" aria-hidden="true" />
+              Reja
+            </span>
+            <span className="neu-chart-legend-chip">
+              <span
+                className="h-0.5 w-5 rounded-full"
+                style={{ backgroundColor: actualColor }}
+                aria-hidden="true"
+              />
+              Amalda
+            </span>
+          </div>
+        ) : null}
       </div>
     </Card>
   );
@@ -255,7 +324,7 @@ function SummaryTile({
   helper: string;
 }) {
   return (
-    <div className="rounded-card border border-border bg-white p-4 shadow-card">
+    <div className="neu-raised rounded-card p-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
       <p className="mt-2 text-xl font-bold text-ink">{value}</p>
       <p className="mt-1 text-xs leading-5 text-muted">{helper}</p>
@@ -301,9 +370,10 @@ function AnnualCompositionCharts({ data }: { data: AnnualExpenseSummary }) {
     variable: toChartNumber(row.variableUzs),
   }));
   const composition = [
-    { name: 'Doimiy', value: toChartNumber(data.fixedActualUzs), color: '#1E3A5C' },
-    { name: 'O‘zgaruvchan', value: toChartNumber(data.variableActualUzs), color: '#FFB800' },
+    { name: 'Doimiy', value: toChartNumber(data.fixedActualUzs), color: '#6F9FFF' },
+    { name: 'O‘zgaruvchan', value: toChartNumber(data.variableActualUzs), color: '#F2BE73' },
   ];
+  const compositionTotal = composition.reduce((sum, item) => sum + item.value, 0);
   const hasComposition = composition.some((item) => item.value > 0);
 
   return (
@@ -313,18 +383,31 @@ function AnnualCompositionCharts({ data }: { data: AnnualExpenseSummary }) {
         description={`${data.year} yil, oylar kesimi`}
       >
         <div
-          className="h-[300px] w-full"
+          className="neu-chart-frame h-[300px] w-full overflow-hidden rounded-2xl px-2 pb-1 pt-4"
           aria-label="Oylik doimiy va o‘zgaruvchan xarajatlar diagrammasi"
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={monthly} margin={{ top: 10, right: 10, left: 2, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E9E3DE" />
+              <defs>
+                <linearGradient id="fixed-bar-premium" x1="0" y1="1" x2="0" y2="0">
+                  <stop offset="0%" stopColor="#477FD9" />
+                  <stop offset="55%" stopColor="#6F9FFF" />
+                  <stop offset="100%" stopColor="#A9C9FF" />
+                </linearGradient>
+                <linearGradient id="variable-bar-premium" x1="0" y1="1" x2="0" y2="0">
+                  <stop offset="0%" stopColor="#C88839" />
+                  <stop offset="55%" stopColor="#F2BE73" />
+                  <stop offset="100%" stopColor="#FFDBA4" />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#2B3E58" />
               <XAxis
                 dataKey="label"
                 tickLine={false}
                 axisLine={false}
                 fontSize={11}
                 interval="preserveStartEnd"
+                tick={{ fill: '#B3C4DB' }}
               />
               <YAxis
                 tickFormatter={axisMoney}
@@ -332,14 +415,31 @@ function AnnualCompositionCharts({ data }: { data: AnnualExpenseSummary }) {
                 axisLine={false}
                 fontSize={11}
                 width={130}
+                tick={{ fill: '#B3C4DB' }}
               />
               <Tooltip
                 formatter={(value: number) => formatMoney(String(value))}
-                cursor={{ fill: '#FAF8F6' }}
+                cursor={{ fill: 'rgba(111,159,255,0.08)' }}
+                contentStyle={CHART_TOOLTIP_STYLE}
+                labelStyle={{ color: '#EDF4FF', fontWeight: 700 }}
               />
-              <Legend />
-              <Bar dataKey="fixed" name="Doimiy" fill="#1E3A5C" radius={[5, 5, 0, 0]} />
-              <Bar dataKey="variable" name="O‘zgaruvchan" fill="#FFB800" radius={[5, 5, 0, 0]} />
+              <Legend iconType="circle" wrapperStyle={{ paddingTop: 12 }} />
+              <Bar
+                dataKey="fixed"
+                name="Doimiy"
+                className="premium-chart-bar"
+                fill="url(#fixed-bar-premium)"
+                radius={[8, 8, 3, 3]}
+                isAnimationActive={false}
+              />
+              <Bar
+                dataKey="variable"
+                name="O‘zgaruvchan"
+                className="premium-chart-bar"
+                fill="url(#variable-bar-premium)"
+                radius={[8, 8, 3, 3]}
+                isAnimationActive={false}
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -350,12 +450,24 @@ function AnnualCompositionCharts({ data }: { data: AnnualExpenseSummary }) {
         description={`${data.year} yil jami xarajat tarkibi`}
       >
         <div
-          className="grid h-[300px] w-full place-items-center"
+          className="neu-chart-frame grid h-[300px] w-full place-items-center overflow-hidden rounded-2xl p-2"
           aria-label="Yillik doimiy va o‘zgaruvchan xarajatlar diagrammasi"
         >
           {hasComposition ? (
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
+                <defs>
+                  <linearGradient id="fixed-pie-premium" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#B7D3FF" />
+                    <stop offset="48%" stopColor="#6F9FFF" />
+                    <stop offset="100%" stopColor="#477FD9" />
+                  </linearGradient>
+                  <linearGradient id="variable-pie-premium" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#FFE0B0" />
+                    <stop offset="48%" stopColor="#F2BE73" />
+                    <stop offset="100%" stopColor="#C88839" />
+                  </linearGradient>
+                </defs>
                 <Pie
                   data={composition}
                   dataKey="value"
@@ -363,14 +475,56 @@ function AnnualCompositionCharts({ data }: { data: AnnualExpenseSummary }) {
                   cx="50%"
                   cy="50%"
                   outerRadius={96}
-                  paddingAngle={2}
+                  innerRadius={58}
+                  paddingAngle={4}
+                  stroke="#1C2C44"
+                  strokeWidth={3}
                 >
-                  {composition.map((item) => (
-                    <Cell key={item.name} fill={item.color} />
+                  {composition.map((item, index) => (
+                    <Cell
+                      key={item.name}
+                      className="premium-chart-sector"
+                      fill={`url(#${index === 0 ? 'fixed-pie-premium' : 'variable-pie-premium'})`}
+                    />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value: number) => formatMoney(String(value))} />
-                <Legend />
+                <Tooltip
+                  cursor={false}
+                  offset={18}
+                  wrapperStyle={{ outline: 'none', pointerEvents: 'none' }}
+                  content={(tooltip) => {
+                    const item = tooltip.payload?.[0]?.payload as
+                      | { name?: string; value?: number; color?: string }
+                      | undefined;
+                    if (!tooltip.active || !item) return null;
+
+                    const value = Math.trunc(item.value ?? 0);
+                    const share = compositionTotal > 0 ? (value / compositionTotal) * 100 : 0;
+
+                    return (
+                      <div className="neu-chart-tooltip min-w-[180px] rounded-2xl px-4 py-3">
+                        <div className="flex items-center gap-2.5">
+                          <span
+                            className="h-2.5 w-2.5 shrink-0 rounded-full shadow-[0_0_8px_currentColor]"
+                            style={{
+                              backgroundColor: item.color ?? '#6F9FFF',
+                              color: item.color ?? '#6F9FFF',
+                            }}
+                            aria-hidden="true"
+                          />
+                          <p className="text-sm font-semibold text-ink">{item.name}</p>
+                        </div>
+                        <p className="mt-2 whitespace-nowrap text-base font-bold tabular-nums text-ink">
+                          {formatMoney(String(value))}
+                        </p>
+                        <p className="mt-1 text-xs font-medium text-muted">
+                          Jami xarajatning {formatPercent(share)} qismi
+                        </p>
+                      </div>
+                    );
+                  }}
+                />
+                <Legend iconType="circle" wrapperStyle={{ paddingTop: 12 }} />
               </PieChart>
             </ResponsiveContainer>
           ) : (
@@ -487,7 +641,7 @@ function AnnualSummary({
           <table className="w-full min-w-[860px] text-sm">
             <caption className="sr-only">{data.year} yil oylik dinamika jadvali</caption>
             <thead>
-              <tr className="border-b border-border bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
+              <tr className="border-b border-border bg-canvas/70 text-xs font-semibold uppercase tracking-wide text-slate-600">
                 <th className="px-4 py-3 text-left">Oy</th>
                 <th className="px-4 py-3 text-right">Doimiy</th>
                 <th className="px-4 py-3 text-right">O‘zgaruvchan</th>
@@ -531,7 +685,7 @@ function AnnualSummary({
               ))}
             </tbody>
             <tfoot>
-              <tr className="border-t-2 border-border bg-slate-50 font-bold text-ink">
+              <tr className="border-t-2 border-border bg-canvas/70 font-bold text-ink">
                 <th scope="row" className="px-4 py-3 text-left">
                   JAMI
                 </th>
@@ -675,15 +829,15 @@ export function DashboardPage() {
 
       <section
         aria-label="FinCore Pulse"
-        className="relative mb-5 overflow-hidden rounded-[24px] border border-navy-400/30 brand-navy-panel p-6 text-white shadow-[0_28px_70px_-36px_rgba(15,27,45,0.85)] sm:p-7"
+        className="neu-hero relative mb-5 overflow-hidden rounded-[24px] border border-border/70 p-6 text-ink sm:p-7"
       >
         <div className="relative grid gap-7 lg:grid-cols-[1.35fr_0.65fr] lg:items-end">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-navy-100 backdrop-blur">
+            <div className="neu-inset inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-primary">
               <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
               FinCore Pulse
             </div>
-            <p className="mt-5 max-w-2xl text-sm font-medium text-navy-100">
+            <p className="mt-5 max-w-2xl text-sm font-medium text-muted">
               {netResult === null
                 ? `${data.period.label} uchun amaldagi tushum`
                 : `${data.period.label} uchun tushum va xarajatning tezkor operatsion natijasi`}
@@ -691,7 +845,7 @@ export function DashboardPage() {
             <div className="mt-2 text-3xl font-bold tracking-[-0.04em] sm:text-4xl">
               <MoneyText value={heroAmountUzs} compact />
             </div>
-            <p className="mt-2 text-sm text-navy-100/85">
+            <p className="mt-2 text-sm text-muted">
               {netResult === null
                 ? 'Tanlangan davr bo‘yicha qayd etilgan amaldagi tushum.'
                 : netResult > 0n
@@ -702,27 +856,27 @@ export function DashboardPage() {
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-            <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-md">
+            <div className="rounded-2xl border border-border/70 p-4 neu-on-navy">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-xs font-semibold text-navy-100">Tushum rejasi</span>
-                <Activity className="h-4 w-4 text-cyan-300" aria-hidden="true" />
+                <span className="text-xs font-semibold text-muted">Tushum rejasi</span>
+                <Activity className="h-4 w-4 text-primary" aria-hidden="true" />
               </div>
               <p className="mt-2 text-2xl font-bold tabular-nums">
                 {formatPercent(data.revenueCompletionPct)}
               </p>
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/15">
+              <div className="neu-track mt-3 h-1.5 overflow-hidden rounded-full">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-cyan-300 to-blue-300"
+                  className="h-full rounded-full bg-primary"
                   style={{
                     width: `${Math.max(0, Math.min(data.revenueCompletionPct ?? 0, 100))}%`,
                   }}
                 />
               </div>
             </div>
-            <div className="flex items-center justify-between rounded-2xl border border-white/15 bg-slate-950/15 px-4 py-3 text-xs backdrop-blur-md">
-              <span className="text-navy-100">Ma’lumot holati</span>
-              <span className="inline-flex items-center gap-2 font-bold text-white">
-                <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.9)]" />
+            <div className="flex items-center justify-between rounded-2xl border border-border/70 px-4 py-3 text-xs neu-on-navy">
+              <span className="text-muted">Ma’lumot holati</span>
+              <span className="inline-flex items-center gap-2 font-bold text-ink">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
                 Server agregati
               </span>
             </div>
@@ -808,7 +962,7 @@ export function DashboardPage() {
         <div
           role="group"
           aria-label="Diagramma kesimi"
-          className="inline-flex rounded-lg border border-border bg-white p-1"
+          className="neu-inset inline-flex rounded-lg p-1"
         >
           {granularityOptions.map((option) => (
             <button
@@ -819,8 +973,8 @@ export function DashboardPage() {
               className={cn(
                 'min-h-9 rounded-md px-4 text-sm font-semibold transition',
                 granularity === option.value
-                  ? 'bg-primary text-white shadow-sm'
-                  : 'text-slate-600 hover:bg-slate-50',
+                  ? 'bg-primary text-[#101C2F] shadow-[var(--neu-shadow-1)]'
+                  : 'text-slate-600 hover:bg-surface/70',
               )}
             >
               {option.label}
@@ -860,7 +1014,7 @@ export function DashboardPage() {
       >
         <div className="grid gap-4 md:grid-cols-2">
           {data.branches.map((item) => (
-            <div key={item.branchId} className="rounded-xl border border-border p-5">
+            <div key={item.branchId} className="neu-raised-sm rounded-xl p-5">
               <div className="flex items-start justify-between gap-4">
                 <p className="font-semibold text-ink">{item.name}</p>
                 <Link
@@ -886,7 +1040,7 @@ export function DashboardPage() {
                       <PercentText value={item.revenueCompletionPct} />
                     </span>
                   </div>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+                  <div className="mt-2 h-2 overflow-hidden rounded-full neu-track">
                     <div
                       className="h-full rounded-full bg-success"
                       style={{
@@ -910,7 +1064,7 @@ export function DashboardPage() {
                       <PercentText value={item.expenseCompletionPct} />
                     </span>
                   </div>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+                  <div className="mt-2 h-2 overflow-hidden rounded-full neu-track">
                     <div
                       className="h-full rounded-full bg-primary"
                       style={{
@@ -928,7 +1082,7 @@ export function DashboardPage() {
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         <Link
           to={drilldownUrl(routes.revenues, queryBase)}
-          className="flex items-center gap-3 rounded-card border border-border bg-white p-4 shadow-card hover:border-blue-300"
+          className="neu-raised neu-interactive flex items-center gap-3 rounded-card p-4 hover:border-blue-300"
         >
           <CalendarPlus className="h-5 w-5 text-success" />
           <div>
@@ -938,7 +1092,7 @@ export function DashboardPage() {
         </Link>
         <Link
           to={drilldownUrl(routes.expenses, queryBase)}
-          className="flex items-center gap-3 rounded-card border border-border bg-white p-4 shadow-card hover:border-blue-300"
+          className="neu-raised neu-interactive flex items-center gap-3 rounded-card p-4 hover:border-blue-300"
         >
           <ReceiptText className="h-5 w-5 text-primary" />
           <div>
