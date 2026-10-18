@@ -68,7 +68,9 @@ try {
 
   if (missing.length > 0) {
     console.log(`\nMIGRATSIYA KERAK: ha — ${missing.length} ta jadval yetishmayapti.`);
-    console.log('  docs/database/001_reference_schema.sql va 002_seed_reference.sql ishga tushirilsin.');
+    console.log(
+      '  docs/database/001_reference_schema.sql va 002_seed_reference.sql ishga tushirilsin.',
+    );
   } else {
     console.log('\nMIGRATSIYA KERAK: yo‘q — foundation jadvallari joyida.');
     const counts = await prisma.$queryRaw`

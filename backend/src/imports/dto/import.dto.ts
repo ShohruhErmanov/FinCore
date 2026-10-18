@@ -13,6 +13,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
+import { ISO_DATE_PATTERN, WHOLE_UZS_PATTERN } from '@/common/validation/patterns';
 
 /** One normalised row from the Excel workbook the frontend parses client-side. */
 export class ImportExpenseRowDto {
@@ -29,7 +30,7 @@ export class ImportExpenseRowDto {
   sourceRow!: number;
 
   @ApiProperty({ example: '2026-08-20' })
-  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'transactionDate YYYY-MM-DD bo‘lishi kerak' })
+  @Matches(ISO_DATE_PATTERN, { message: 'transactionDate YYYY-MM-DD bo‘lishi kerak' })
   transactionDate!: string;
 
   @ApiProperty({ format: 'uuid' })
@@ -47,7 +48,7 @@ export class ImportExpenseRowDto {
   description!: string;
 
   @ApiProperty({ example: '1732500', description: 'Butun so‘m, string' })
-  @Matches(/^\d+$/, { message: 'amountUzs musbat butun son-string bo‘lishi kerak' })
+  @Matches(WHOLE_UZS_PATTERN, { message: 'amountUzs musbat butun son-string bo‘lishi kerak' })
   amountUzs!: string;
 
   @ApiProperty({ format: 'uuid' })
@@ -91,7 +92,10 @@ export class ImportExpenseRowDto {
 }
 
 export class ImportExpensesDto {
-  @ApiProperty({ type: [ImportExpenseRowDto], description: 'Excel’dan normallashtirilgan qatorlar' })
+  @ApiProperty({
+    type: [ImportExpenseRowDto],
+    description: 'Excel’dan normallashtirilgan qatorlar',
+  })
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ImportExpenseRowDto)

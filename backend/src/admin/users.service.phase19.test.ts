@@ -55,9 +55,9 @@ function setup() {
   const tx = {
     users,
     $executeRaw: vi.fn().mockResolvedValue(1),
-    $queryRaw: vi.fn().mockResolvedValue([
-      { status: 'active', is_system: false, is_director: false },
-    ]),
+    $queryRaw: vi
+      .fn()
+      .mockResolvedValue([{ status: 'active', is_system: false, is_director: false }]),
   };
   const withActor = vi.fn(
     async (_token: string, work: (transaction: typeof tx) => Promise<unknown>) => work(tx),
@@ -243,9 +243,7 @@ describe('AdminUsersService.deleteUser (PHASE 36)', () => {
 
   it('protects the last active Director before account deletion', async () => {
     const { service, users, tx, sessions } = setup();
-    tx.$queryRaw.mockResolvedValueOnce([
-      { status: 'active', is_system: false, is_director: true },
-    ]);
+    tx.$queryRaw.mockResolvedValueOnce([{ status: 'active', is_system: false, is_director: true }]);
     users.count.mockResolvedValueOnce(0);
 
     await expect(service.deleteUser(directorActor(), TARGET_ID)).rejects.toMatchObject({

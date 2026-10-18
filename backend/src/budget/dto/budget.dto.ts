@@ -13,6 +13,7 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { WHOLE_UZS_PATTERN } from '@/common/validation/patterns';
 
 /** null clears the plan for that cell; "0" is a real plan of zero. */
 export class BudgetLineInputDto {
@@ -27,7 +28,7 @@ export class BudgetLineInputDto {
   @ApiPropertyOptional({ nullable: true, example: '5000000' })
   // null is a valid value, not a missing one: it clears the plan for that cell.
   @ValidateIf((line: BudgetLineInputDto) => line.plannedAmountUzs !== null)
-  @Matches(/^\d+$/, {
+  @Matches(WHOLE_UZS_PATTERN, {
     message: 'plannedAmountUzs null yoki manfiy bo‘lmagan butun son-string bo‘lishi kerak',
   })
   plannedAmountUzs!: string | null;

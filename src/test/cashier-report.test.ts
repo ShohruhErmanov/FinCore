@@ -105,7 +105,10 @@ describe('[FE-CASHIER-02] kassirlar kesimi', () => {
       .find((row) => row.fullName === 'Dilnoza')!;
     expect(dilnoza.varianceUzs).toBe('-50000000');
 
-    const overplan = buildCashierReport({ ...base, branchPlanUzs: { b1: '160000000', b2: '80000000' } });
+    const overplan = buildCashierReport({
+      ...base,
+      branchPlanUzs: { b1: '160000000', b2: '80000000' },
+    });
     const better = overplan.branches
       .flatMap((group) => group.cashiers)
       .find((row) => row.fullName === 'Dilnoza')!;

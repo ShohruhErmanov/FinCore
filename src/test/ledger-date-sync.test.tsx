@@ -81,10 +81,7 @@ describe('navbar period and ledger date filters', () => {
   });
 
   it('synchronizes Kunlik tushum dates with the selected navbar month', async () => {
-    renderLedger(
-      <RevenueLedgerPage />,
-      `/revenues?period=${period.id}&branch=all`,
-    );
+    renderLedger(<RevenueLedgerPage />, `/revenues?period=${period.id}&branch=all`);
 
     expect(await screen.findByLabelText('Boshlanish sanasi')).toHaveValue('2026-08-01');
     expect(screen.getByLabelText('Tugash sanasi')).toHaveValue('2026-08-31');
@@ -97,10 +94,7 @@ describe('navbar period and ledger date filters', () => {
   });
 
   it('synchronizes Jurnal dates with the selected navbar month', async () => {
-    renderLedger(
-      <ExpenseLedgerPage />,
-      `/expenses?period=${period.id}&branch=all`,
-    );
+    renderLedger(<ExpenseLedgerPage />, `/expenses?period=${period.id}&branch=all`);
 
     expect(await screen.findByLabelText('Boshlanish sanasi')).toHaveValue('2026-08-01');
     expect(screen.getByLabelText('Tugash sanasi')).toHaveValue('2026-08-31');

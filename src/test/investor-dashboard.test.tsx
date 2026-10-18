@@ -370,9 +370,7 @@ describe('Investor list — director view', () => {
     expect(plain(capitalCard('Jami investor kapitali').textContent ?? '')).toContain(
       '100 000 000 so‘m',
     );
-    expect(plain(capitalCard('Bank o‘tkazmasi').textContent ?? '')).toContain(
-      '100 000 000 so‘m',
-    );
+    expect(plain(capitalCard('Bank o‘tkazmasi').textContent ?? '')).toContain('100 000 000 so‘m');
     expect(plain(capitalCard('Naqd').textContent ?? '')).toContain('0 so‘m');
   });
 

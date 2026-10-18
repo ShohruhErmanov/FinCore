@@ -1,5 +1,22 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Put, Query } from '@nestjs/common';
-import { ApiBody, ApiCookieAuth, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
+import {
+  ApiBody,
+  ApiCookieAuth,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { CurrentUser, RequirePermissions, type AuthenticatedUser } from '@/common';
 import {
   InvestorCreateDto,
@@ -9,11 +26,7 @@ import {
   InvestorYearQueryDto,
   ReversePaymentDto,
 } from './dto/investor.dto';
-import {
-  InvestorsService,
-  type InvestorDashboard,
-  type InvestorRef,
-} from './investors.service';
+import { InvestorsService, type InvestorDashboard, type InvestorRef } from './investors.service';
 
 /**
  * Reads carry no @RequirePermissions because the rule is OR-shaped — either

@@ -108,9 +108,7 @@ describe('[FE-RBAC] transactional write branch UX', () => {
   });
 
   it('bir nechta scope bo‘lsa faqat aktiv writable filiallarni tanlatadi', async () => {
-    apiMocks.me.mockResolvedValue(
-      userWithWriteScopes(['branch-a', 'branch-b', 'branch-inactive']),
-    );
+    apiMocks.me.mockResolvedValue(userWithWriteScopes(['branch-a', 'branch-b', 'branch-inactive']));
 
     renderPage(<RevenueCreatePage />);
 

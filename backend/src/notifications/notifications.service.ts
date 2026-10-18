@@ -135,12 +135,12 @@ export class NotificationsService {
     `;
 
     return rows.map((row) => ({
-        id: row.id,
-        eventType: row.event_type,
-        message: renderNotification(row.event_type, row.payload),
-        occurredAt: row.occurred_at.toISOString(),
-        telegramStatus: row.telegram_status,
-      }));
+      id: row.id,
+      eventType: row.event_type,
+      message: renderNotification(row.event_type, row.payload),
+      occurredAt: row.occurred_at.toISOString(),
+      telegramStatus: row.telegram_status,
+    }));
   }
 
   async saveSettings(
@@ -307,12 +307,12 @@ export class NotificationsService {
         body: JSON.stringify({ chat_id: target, text: 'FinCore: sinov xabari ✅' }),
         signal: AbortSignal.timeout(10_000),
       });
-      const payload = (await response.json().catch(() => null)) as
-        | { ok?: boolean; description?: string }
-        | null;
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        description?: string;
+      } | null;
 
-      if (response.ok && payload?.ok)
-        return { delivered: true, note: 'DELIVERED' };
+      if (response.ok && payload?.ok) return { delivered: true, note: 'DELIVERED' };
 
       // Telegram's own wording, never the token or the raw URL.
       return {

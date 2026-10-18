@@ -65,16 +65,6 @@ export function toBigInt(value: unknown): bigint {
   return BigInt(String(value).split('.')[0] || '0');
 }
 
-export const MONTHS_SHORT_UZ = [
-  'Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyn',
-  'Iyl', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek',
-];
-
-export const MONTHS_UZ = [
-  'Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun',
-  'Iyul', 'Avgust', 'Sentabr', 'Oktabr', 'Noyabr', 'Dekabr',
-];
-
 /**
  * Splits a monthly figure across days without losing or inventing a tiyin:
  * every daily share is the difference of two running proportions.
@@ -85,8 +75,4 @@ export function distributeDaily(monthly: bigint, days: number): bigint[] {
     { length: days },
     (_, index) => (monthly * BigInt(index + 1)) / total - (monthly * BigInt(index)) / total,
   );
-}
-
-export function daysInMonth(year: number, month: number): number {
-  return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }

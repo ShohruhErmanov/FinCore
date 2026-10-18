@@ -6,7 +6,7 @@ import { queryKeys } from '@/shared/api/query-keys';
 import { cn } from '@/shared/lib/cn';
 import { formatMoney, formatMoneyCompact, formatPercent, toChartNumber } from '@/shared/lib/format';
 import type { MoneyUzs, RevenuePlanYear } from '@/shared/types/domain';
-import { Card, ErrorState, KpiCard, LoadingState } from '@/shared/ui';
+import { Card, ErrorState, KpiCard, LoadingState, ProgressBar } from '@/shared/ui';
 
 /**
  * Every month's revenue plan for the year on one screen, under the monthly
@@ -124,22 +124,22 @@ export function RevenuePlanYearOverview({
                 margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
                 barGap={2}
               >
-                <CartesianGrid stroke="#2B3E58" vertical={false} />
+                <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
                 <XAxis
                   dataKey="name"
-                  tick={{ fill: '#B3C4DB', fontSize: 11 }}
+                  tick={{ fill: 'var(--chart-axis)', fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fill: '#B3C4DB', fontSize: 10 }}
+                  tick={{ fill: 'var(--chart-axis)', fontSize: 10 }}
                   axisLine={false}
                   tickLine={false}
                   width={64}
                   tickFormatter={(value: number) => formatMoneyCompact(String(Math.trunc(value)))}
                 />
                 <Tooltip
-                  cursor={{ fill: 'rgba(111,159,255,0.12)' }}
+                  cursor={{ fill: 'rgb(var(--primary) / 0.12)' }}
                   formatter={(value, name) => [
                     formatMoney(String(Math.trunc(Number(value)))),
                     name === 'plan' ? 'Reja' : 'Amalda',
@@ -148,14 +148,14 @@ export function RevenuePlanYearOverview({
                 <Bar
                   dataKey="plan"
                   name="plan"
-                  fill="#3F5571"
+                  fill="var(--chart-plan)"
                   radius={[4, 4, 0, 0]}
                   maxBarSize={22}
                 />
                 <Bar
                   dataKey="actual"
                   name="actual"
-                  fill="#6F9FFF"
+                  fill="var(--chart-actual)"
                   radius={[4, 4, 0, 0]}
                   maxBarSize={22}
                 />
@@ -360,21 +360,15 @@ function Amount({ value, muteZero = false }: { value: MoneyUzs | null; muteZero?
 
 function Completion({ value }: { value: number | null }) {
   if (value === null) return <span className="text-sm text-slate-300">—</span>;
-  const width = Math.max(0, Math.min(100, value));
   return (
     <span className="inline-flex items-center justify-end gap-2">
-      <span
-        className="hidden h-1.5 w-16 overflow-hidden rounded-full neu-track sm:block"
-        aria-hidden="true"
-      >
-        <span
-          className={cn(
-            'block h-full rounded-full',
-            value >= 100 ? 'bg-emerald-500' : value >= 80 ? 'bg-navy-500' : 'bg-amber-500',
-          )}
-          style={{ width: `${width}%` }}
-        />
-      </span>
+      <ProgressBar
+        value={value}
+        className="hidden h-1.5 w-16 sm:block"
+        barClassName={
+          value >= 100 ? 'bg-emerald-500' : value >= 80 ? 'bg-navy-500' : 'bg-amber-500'
+        }
+      />
       <span
         className={cn(
           'w-16 text-right font-semibold tabular-nums',

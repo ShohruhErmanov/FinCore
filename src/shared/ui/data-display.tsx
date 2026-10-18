@@ -1,4 +1,5 @@
 import { ArrowDownRight, ArrowUpRight, BadgeAlert, CheckCircle2, LockKeyhole } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/shared/lib/cn';
 import { formatMoney, formatPercent } from '@/shared/lib/format';
@@ -18,7 +19,7 @@ export function StatusBadge({
 }: {
   status: PeriodStatus | 'active' | 'inactive' | 'blocked';
 }) {
-  const meta: Record<string, { label: string; tone: Tone; icon: React.ReactNode }> = {
+  const meta: Record<string, { label: string; tone: Tone; icon: ReactNode }> = {
     closed: { label: 'Yopiq davr', tone: 'neutral', icon: <LockKeyhole /> },
     open: { label: 'Ochiq', tone: 'success', icon: <CheckCircle2 /> },
     active: { label: 'Faol', tone: 'success', icon: <CheckCircle2 /> },
@@ -62,9 +63,43 @@ export function PercentText({ value, className }: { value: number | null; classN
   return <span className={cn('tabular-nums', className)}>{formatPercent(value)}</span>;
 }
 
+/**
+ * A groove filled to `value` percent (clamped to 0–100; null reads as empty).
+ * `className` sizes the groove, `barClassName` colours the fill. With a
+ * `label` the bar is an image of that name; without one it is decoration
+ * beside a figure that already says the same.
+ */
+export function ProgressBar({
+  value,
+  className,
+  barClassName = 'bg-primary',
+  label,
+  title,
+}: {
+  value: number | null;
+  className?: string;
+  barClassName?: string;
+  label?: string;
+  title?: string;
+}) {
+  const width = Math.max(0, Math.min(100, value ?? 0));
+  return (
+    <span
+      {...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true })}
+      title={title}
+      className={cn('neu-track block overflow-hidden rounded-full', className)}
+    >
+      <span
+        className={cn('block h-full rounded-full', barClassName)}
+        style={{ width: `${width}%` }}
+      />
+    </span>
+  );
+}
+
 export interface KpiCardProps {
   label: string;
-  value: React.ReactNode;
+  value: ReactNode;
   helper: string;
   tone?: Tone;
   to?: string;
@@ -100,6 +135,15 @@ export function KpiCard({ label, value, helper, tone = 'neutral', to, demo }: Kp
     </Link>
   ) : (
     <div className={className}>{content}</div>
+  );
+}
+
+export function DefinitionItem({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <dt className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</dt>
+      <dd className="mt-1 text-sm font-medium text-ink">{children}</dd>
+    </div>
   );
 }
 

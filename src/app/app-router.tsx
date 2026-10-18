@@ -17,35 +17,34 @@ const ExpensePlanAnalyticsPage = lazy(async () => ({
 const ExpenseAnalyticsPage = lazy(async () => ({
   default: (await import('@/features/dashboard/expense-analytics-page')).ExpenseAnalyticsPage,
 }));
-const loadExpensePages = () => import('@/features/expenses/ExpensePages');
 const ExpenseLedgerPage = lazy(async () => ({
-  default: (await loadExpensePages()).ExpenseLedgerPage,
+  default: (await import('@/features/expenses/expense-ledger-page')).ExpenseLedgerPage,
 }));
 const ExpenseCreatePage = lazy(async () => ({
-  default: (await loadExpensePages()).ExpenseCreatePage,
+  default: (await import('@/features/expenses/expense-create-page')).ExpenseCreatePage,
 }));
 const ExpenseDetailPage = lazy(async () => ({
-  default: (await loadExpensePages()).ExpenseDetailPage,
+  default: (await import('@/features/expenses/expense-detail-page')).ExpenseDetailPage,
 }));
 const loadBudgetPages = () => import('@/features/budgets/BudgetPages');
 const BudgetPage = lazy(async () => ({ default: (await loadBudgetPages()).BudgetPage }));
-const loadRevenuePages = () => import('@/features/revenue/RevenuePages');
 const RevenueLedgerPage = lazy(async () => ({
-  default: (await loadRevenuePages()).RevenueLedgerPage,
+  default: (await import('@/features/revenue/revenue-ledger-page')).RevenueLedgerPage,
 }));
 const RevenueCreatePage = lazy(async () => ({
-  default: (await loadRevenuePages()).RevenueCreatePage,
+  default: (await import('@/features/revenue/revenue-create-page')).RevenueCreatePage,
 }));
 const RevenueDetailPage = lazy(async () => ({
-  default: (await loadRevenuePages()).RevenueDetailPage,
+  default: (await import('@/features/revenue/revenue-detail-page')).RevenueDetailPage,
 }));
-const RevenuePlanPage = lazy(async () => ({ default: (await loadRevenuePages()).RevenuePlanPage }));
-const loadFinancialReportPages = () => import('@/features/reports/FinancialReportPages');
+const RevenuePlanPage = lazy(async () => ({
+  default: (await import('@/features/revenue/revenue-plan-page')).RevenuePlanPage,
+}));
 const MonthlyReportPage = lazy(async () => ({
-  default: (await loadFinancialReportPages()).MonthlyReportPage,
+  default: (await import('@/features/reports/monthly-report-page')).MonthlyReportPage,
 }));
 const BranchComparisonPage = lazy(async () => ({
-  default: (await loadFinancialReportPages()).BranchComparisonPage,
+  default: (await import('@/features/reports/branch-comparison-page')).BranchComparisonPage,
 }));
 const CashierReportPage = lazy(async () => ({
   default: (await import('@/features/reports/CashierReportPage')).CashierReportPage,
@@ -76,10 +75,11 @@ const InvestorListPage = lazy(async () => ({
 const InvestorDetailPage = lazy(async () => ({
   default: (await loadInvestorPages()).InvestorDetailPage,
 }));
-const loadPayoutPages = () => import('@/features/investors/PayoutPages');
-const MySharePage = lazy(async () => ({ default: (await loadPayoutPages()).MySharePage }));
+const MySharePage = lazy(async () => ({
+  default: (await import('@/features/investors/my-share-page')).MySharePage,
+}));
 const PayoutRequestsPage = lazy(async () => ({
-  default: (await loadPayoutPages()).PayoutRequestsPage,
+  default: (await import('@/features/investors/payout-requests-page')).PayoutRequestsPage,
 }));
 
 /** Sends each role to a page it may actually open. */

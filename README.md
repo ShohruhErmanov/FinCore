@@ -29,6 +29,14 @@ Demo parol barcha faol demo hisoblarda `demo123`:
 
 Demo credential faqat lokal mock muhitga tegishli. Production autentifikatsiya HTTP-only secure cookie va server-side RBAC/branch scope orqali bajarilishi kerak; frontend localStorage’da auth token saqlamaydi.
 
+### Docker (to‘liq tizim: frontend + API + PostgreSQL)
+
+```bash
+docker compose up -d --build
+```
+
+Tizim `http://localhost:8080` da ochiladi. Zaxira nusxa, tiklash, yangi o‘rnatish va serverga chiqarish bo‘yicha batafsil: [docker/README.md](docker/README.md).
+
 ## Asosiy texnologiyalar
 
 - React 18, TypeScript va Vite;

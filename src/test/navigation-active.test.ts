@@ -65,7 +65,9 @@ describe('sidebar highlighting', () => {
     ];
 
     for (const path of paths) {
-      expect(activeAt(path).length, `${path}: ${activeAt(path).join(' + ')}`).toBeLessThanOrEqual(1);
+      expect(activeAt(path).length, `${path}: ${activeAt(path).join(' + ')}`).toBeLessThanOrEqual(
+        1,
+      );
     }
   });
 
@@ -110,7 +112,11 @@ describe('report entries per role', () => {
   });
 
   it('gives a finance manager both, on two different pages', () => {
-    const financeManager = ['reports.view', 'reports.view_cashiers', 'reports.view_own_performance'];
+    const financeManager = [
+      'reports.view',
+      'reports.view_cashiers',
+      'reports.view_own_performance',
+    ];
     const entries = reportEntries(financeManager);
     expect(entries).toContain('Kassirlar');
     expect(entries).toContain('Mening natijam');

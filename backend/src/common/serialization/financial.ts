@@ -22,7 +22,8 @@ export function toMoneyUzs(value: bigint | number | string | Prisma.Decimal | nu
     return value.toString();
   }
   const trimmed = value.trim();
-  if (!/^-?\d+$/.test(trimmed)) throw new TypeError(`MoneyUzs must be an integer string, got "${value}"`);
+  if (!/^-?\d+$/.test(trimmed))
+    throw new TypeError(`MoneyUzs must be an integer string, got "${value}"`);
   return trimmed;
 }
 
@@ -41,7 +42,11 @@ export function toIsoDate(value: Date | string | null): string | null {
 }
 
 /** Percentages cross the wire as numbers, rounded server-side so clients agree. */
-export function toPercent(numerator: bigint | number, denominator: bigint | number, digits = 2): number {
+export function toPercent(
+  numerator: bigint | number,
+  denominator: bigint | number,
+  digits = 2,
+): number {
   const top = Number(numerator);
   const bottom = Number(denominator);
   if (!Number.isFinite(top) || !Number.isFinite(bottom) || bottom === 0) return 0;

@@ -110,6 +110,20 @@ describe('validateEnv', () => {
         /FRONTEND_URL must use https/,
       );
     });
+
+    it('allows plain http only on this machine, where the cookie never crosses a network', () => {
+      for (const origin of ['http://localhost:8080', 'http://127.0.0.1:8080', 'http://[::1]:8080'])
+        expect(
+          validateEnv({ ...prod, FRONTEND_URL: origin, COOKIE_SECURE: 'false' }).FRONTEND_URL,
+        ).toBe(origin);
+    });
+
+    it('still demands https and secure cookies for an address other machines use', () => {
+      for (const origin of ['http://192.168.1.20:8080', 'http://fincore.local:8080'])
+        expect(() =>
+          validateEnv({ ...prod, FRONTEND_URL: origin, COOKIE_SECURE: 'false' }),
+        ).toThrow(/FRONTEND_URL must use https[\s\S]*|COOKIE_SECURE/);
+    });
   });
 
   describe('Telegram (PHASE 38)', () => {

@@ -218,7 +218,9 @@ describe('residual', () => {
   });
 
   it('is zero once nothing is left to pay', () => {
-    expect(availability(parseDecimalUzs('100.00'), fromWholeUzs(100n), 0n).residualUzs).toBe('0.00');
+    expect(availability(parseDecimalUzs('100.00'), fromWholeUzs(100n), 0n).residualUzs).toBe(
+      '0.00',
+    );
   });
 
   it('reports zero for an overpayment rather than a negative residual', () => {

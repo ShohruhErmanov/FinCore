@@ -27,11 +27,7 @@ export function ProtectedRoute() {
 }
 
 /** `permission` ro‘yxat bo‘lsa — kamida bittasi yetarli. */
-export function PermissionRoute({
-  permission,
-}: {
-  permission: PermissionCode | PermissionCode[];
-}) {
+export function PermissionRoute({ permission }: { permission: PermissionCode | PermissionCode[] }) {
   const { hasPermission } = useAuth();
   const allowed = Array.isArray(permission)
     ? permission.some((code) => hasPermission(code))

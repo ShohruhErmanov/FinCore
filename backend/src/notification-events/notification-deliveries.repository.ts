@@ -87,8 +87,9 @@ export class NotificationDeliveriesRepository {
     const leaseSeconds = Math.min(Math.max(options.leaseSeconds ?? 60, 5), 3600);
     const now = options.now ?? new Date();
 
-    return this.prisma.db.$transaction(async (tx) =>
-      tx.$queryRaw<ClaimedDelivery[]>`
+    return this.prisma.db.$transaction(
+      async (tx) =>
+        tx.$queryRaw<ClaimedDelivery[]>`
         WITH claimable AS (
           SELECT id
           FROM fincore.notification_deliveries

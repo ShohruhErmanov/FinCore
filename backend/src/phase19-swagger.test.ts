@@ -37,9 +37,7 @@ describe('PHASE 19 Swagger metadata', () => {
     ['reports', ReportsController],
   ] as const)('%s has one Swagger operation for every controller route', (_label, controller) => {
     const routes = routeHandlers(controller);
-    const documented = routes.filter((handler) =>
-      Reflect.hasMetadata(SWAGGER.operation, handler),
-    );
+    const documented = routes.filter((handler) => Reflect.hasMetadata(SWAGGER.operation, handler));
 
     expect(routes.length).toBeGreaterThan(0);
     expect(documented).toHaveLength(routes.length);
@@ -59,7 +57,9 @@ describe('PHASE 19 Swagger metadata', () => {
 
     expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe('reminder-preview');
     expect(security).toContainEqual({ cookie: [] });
-    expect(parameters).toContainEqual(expect.objectContaining({ name: 'date', in: 'query', required: false }));
+    expect(parameters).toContainEqual(
+      expect.objectContaining({ name: 'date', in: 'query', required: false }),
+    );
     expect(responses?.['200']?.type).toBe(ReminderPreviewResponseDto);
     expect(Object.keys(responses ?? {}).sort()).toEqual(['200', '400', '401', '403']);
   });

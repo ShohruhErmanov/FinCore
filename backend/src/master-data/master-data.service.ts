@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { periodLabelUz } from '@/common/calendar';
 import { toIsoDateTime } from '@/common/serialization/financial';
 import { PrismaService } from '@/database';
 
@@ -38,25 +39,6 @@ export interface AccountingPeriodDto {
 }
 
 /** Label format is set by the frontend fixture: "Avgust 2026". */
-const MONTHS_UZ = [
-  'Yanvar',
-  'Fevral',
-  'Mart',
-  'Aprel',
-  'May',
-  'Iyun',
-  'Iyul',
-  'Avgust',
-  'Sentabr',
-  'Oktabr',
-  'Noyabr',
-  'Dekabr',
-];
-
-function periodLabel(year: number, month: number): string {
-  return `${MONTHS_UZ[month - 1] ?? String(month)} ${year}`;
-}
-
 @Injectable()
 export class MasterDataService {
   constructor(private readonly prisma: PrismaService) {}
@@ -71,7 +53,12 @@ export class MasterDataService {
       select: { id: true, code: true, name: true, is_active: true },
       orderBy: { code: 'asc' },
     });
-    return rows.map((row) => ({ id: row.id, code: row.code, name: row.name, isActive: row.is_active }));
+    return rows.map((row) => ({
+      id: row.id,
+      code: row.code,
+      name: row.name,
+      isActive: row.is_active,
+    }));
   }
 
   async branches(branchScopes: string[]): Promise<BranchDto[]> {
@@ -152,7 +139,9 @@ export class MasterDataService {
 
     // Resolved separately: accounting_periods.closed_by has no Prisma relation
     // to users, and adding one would mean touching the auth models.
-    const closerIds = [...new Set(rows.map((row) => row.closed_by).filter((id): id is string => id !== null))];
+    const closerIds = [
+      ...new Set(rows.map((row) => row.closed_by).filter((id): id is string => id !== null)),
+    ];
     const closers = new Map(
       closerIds.length === 0
         ? []
@@ -168,7 +157,7 @@ export class MasterDataService {
       id: row.id,
       year: row.year,
       month: row.month,
-      label: periodLabel(row.year, row.month),
+      label: periodLabelUz(row.year, row.month),
       status: row.status,
       closedAt: toIsoDateTime(row.closed_at),
       closedByName: row.closed_by ? (closers.get(row.closed_by) ?? null) : null,

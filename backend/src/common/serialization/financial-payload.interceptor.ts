@@ -1,4 +1,10 @@
-import { Injectable, Logger, type CallHandler, type ExecutionContext, type NestInterceptor } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  type CallHandler,
+  type ExecutionContext,
+  type NestInterceptor,
+} from '@nestjs/common';
 import { map, type Observable } from 'rxjs';
 
 const MONEY = /^-?\d+$/;
@@ -38,9 +44,15 @@ function inspect(value: unknown, path: string, problems: string[]): void {
             `${at}: ${isShare ? 'ShareUzs two-decimal string' : 'MoneyUzs integer-string'} emas`,
           );
       }
-      if (key.endsWith('At') && (typeof item !== 'string' || !OFFSET_DATE_TIME.test(item) || Number.isNaN(Date.parse(item))))
+      if (
+        key.endsWith('At') &&
+        (typeof item !== 'string' || !OFFSET_DATE_TIME.test(item) || Number.isNaN(Date.parse(item)))
+      )
         problems.push(`${at}: RFC3339 offset timestamp emas`);
-      if ((key === 'transactionDate' || key === 'paymentBusinessDate') && (typeof item !== 'string' || !ISO_DATE.test(item)))
+      if (
+        (key === 'transactionDate' || key === 'paymentBusinessDate') &&
+        (typeof item !== 'string' || !ISO_DATE.test(item))
+      )
         problems.push(`${at}: ISO calendar date emas`);
       if (PERCENT_KEY.test(key) && (typeof item !== 'number' || !Number.isFinite(item)))
         problems.push(`${at}: finite percentage emas`);

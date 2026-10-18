@@ -1,29 +1,29 @@
 import { Injectable } from '@nestjs/common';
 import { ApiException, hasCompanyWideWrite, type AuthenticatedUser } from '@/common';
+import { periodLabelUz } from '@/common/calendar';
+import { ACTOR_CONTEXT_RULE, translateDbError, type DbErrorRule } from '@/common/errors/db-errors';
 import { ActorContextService, PrismaService, type PrismaTransaction } from '@/database';
 import type { MasterCreateDto, MasterUpdateDto } from '@/admin/dto/admin.dto';
 import type { ExpenseCategoryDto, MasterItemDto } from './master-data.service';
 import type { AccountingPeriodDto } from './master-data.service';
 
-const MONTHS_UZ = [
-  'Yanvar',
-  'Fevral',
-  'Mart',
-  'Aprel',
-  'May',
-  'Iyun',
-  'Iyul',
-  'Avgust',
-  'Sentabr',
-  'Oktabr',
-  'Noyabr',
-  'Dekabr',
-] as const;
-
 /** The three resources the settings screens manage; anything else is a 404. */
 export type MasterKind = 'categories' | 'departments' | 'payment-methods' | 'branches';
 
 const KINDS: MasterKind[] = ['categories', 'departments', 'payment-methods', 'branches'];
+
+function masterItemNotFound(): ApiException {
+  return new ApiException(404, 'MASTER_ITEM_NOT_FOUND', 'Master data elementi topilmadi.');
+}
+
+const WRITE_ERRORS: readonly DbErrorRule[] = [
+  [
+    /Unique constraint|duplicate key/i,
+    () => new ApiException(409, 'DUPLICATE_REFERENCE', 'Bu master-data kodi allaqachon mavjud.'),
+  ],
+  [/Record to update not found|No record was found/i, masterItemNotFound],
+  ACTOR_CONTEXT_RULE,
+];
 
 @Injectable()
 export class MasterWriteService {
@@ -96,7 +96,7 @@ export class MasterWriteService {
           id: row.id,
           year: row.year,
           month: row.month,
-          label: `${MONTHS_UZ[row.month - 1]} ${row.year}`,
+          label: periodLabelUz(row.year, row.month),
           status: row.status,
           closedAt: null,
           closedByName: null,
@@ -187,7 +187,7 @@ export class MasterWriteService {
       .withActor(this.actor.mint(user.id), async (tx) => {
         if (resource === 'categories') {
           const exists = await tx.expense_categories.count({ where: { id } });
-          if (exists === 0) throw this.notFound();
+          if (exists === 0) throw masterItemNotFound();
           const updated = await tx.expense_categories.update({
             where: { id },
             data: {
@@ -214,7 +214,7 @@ export class MasterWriteService {
         }
         if (resource === 'departments') {
           const exists = await tx.departments.count({ where: { id } });
-          if (exists === 0) throw this.notFound();
+          if (exists === 0) throw masterItemNotFound();
           return this.toItem(
             await tx.departments.update({
               where: { id },
@@ -225,7 +225,7 @@ export class MasterWriteService {
         }
         if (resource === 'payment-methods') {
           const exists = await tx.payment_methods.count({ where: { id } });
-          if (exists === 0) throw this.notFound();
+          if (exists === 0) throw masterItemNotFound();
           return this.toItem(
             await tx.payment_methods.update({
               where: { id },
@@ -235,7 +235,7 @@ export class MasterWriteService {
           );
         }
         const exists = await tx.branches.count({ where: { id } });
-        if (exists === 0) throw this.notFound();
+        if (exists === 0) throw masterItemNotFound();
         return this.toItem(
           await tx.branches.update({
             where: { id },
@@ -307,10 +307,6 @@ export class MasterWriteService {
     });
   }
 
-  private notFound(): ApiException {
-    return new ApiException(404, 'MASTER_ITEM_NOT_FOUND', 'Master data elementi topilmadi.');
-  }
-
   private async assertCodeFree(resource: MasterKind, code: string): Promise<void> {
     const taken =
       resource === 'categories'
@@ -334,17 +330,6 @@ export class MasterWriteService {
   }
 
   private translateWriteError(error: unknown): unknown {
-    if (error instanceof ApiException) return error;
-    const message = error instanceof Error ? error.message : String(error);
-    if (/Unique constraint|duplicate key/i.test(message))
-      return new ApiException(409, 'DUPLICATE_REFERENCE', 'Bu master-data kodi allaqachon mavjud.');
-    if (/Record to update not found|No record was found/i.test(message)) return this.notFound();
-    if (/actor context|signing key/i.test(message))
-      return new ApiException(
-        500,
-        'ACTOR_CONTEXT_INVALID',
-        'Server identifikatsiya konteksti noto‘g‘ri.',
-      );
-    return error;
+    return translateDbError(error, WRITE_ERRORS);
   }
 }

@@ -19,6 +19,7 @@ import {
   PageHeader,
   PercentText,
   VarianceText,
+  ProgressBar,
 } from '@/shared/ui';
 
 function exportCashierReport(report: CashierReport) {
@@ -207,12 +208,11 @@ function OwnPerformance({ report }: { report: CashierReport }) {
           />
         </div>
 
-        <div className="mt-4 h-3 overflow-hidden rounded-full neu-track">
-          <div
-            className={`h-full rounded-full ${ahead ? 'bg-success' : 'bg-primary'}`}
-            style={{ width: `${Math.max(0, Math.min(row.completionPct ?? 0, 100))}%` }}
-          />
-        </div>
+        <ProgressBar
+          value={row.completionPct}
+          className="mt-4 h-3"
+          barClassName={ahead ? 'bg-success' : 'bg-primary'}
+        />
 
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <Tile

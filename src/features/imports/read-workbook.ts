@@ -36,8 +36,7 @@ export async function readKassaSheets(file: File): Promise<WorkbookSheet[]> {
 
 function toRawCell(value: unknown): string | number | Date | null {
   if (value === null || value === undefined) return null;
-  if (value instanceof Date || typeof value === 'number' || typeof value === 'string')
-    return value;
+  if (value instanceof Date || typeof value === 'number' || typeof value === 'string') return value;
   // Formula yoki rich-text katak
   if (typeof value === 'object') {
     const cell = value as { result?: unknown; text?: unknown; richText?: Array<{ text: string }> };

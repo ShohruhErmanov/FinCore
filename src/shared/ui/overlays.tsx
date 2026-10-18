@@ -123,57 +123,6 @@ export function Modal({
   );
 }
 
-export function Drawer({
-  open,
-  onClose,
-  title,
-  children,
-}: {
-  open: boolean;
-  onClose: () => void;
-  title: string;
-  children: ReactNode;
-}) {
-  const titleId = useId();
-  const panelRef = useDialogFocus(open, onClose);
-  if (!open) return null;
-  return createPortal(
-    <div className="fixed inset-0 z-50">
-      <button
-        type="button"
-        aria-label="Panelni yopish"
-        className="neu-scrim absolute inset-0"
-        onClick={onClose}
-      />
-      <aside
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        className="neu-elevated absolute inset-y-0 right-0 w-full max-w-md overflow-y-auto border-y-0 border-r-0 p-5 focus:outline-none"
-      >
-        <div className="mb-5 flex items-center justify-between gap-4">
-          <h2 id={titleId} className="text-lg font-bold text-ink">
-            {title}
-          </h2>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="aspect-square px-0"
-            aria-label="Yopish"
-            onClick={onClose}
-          >
-            <X className="h-4 w-4" aria-hidden="true" />
-          </Button>
-        </div>
-        {children}
-      </aside>
-    </div>,
-    document.body,
-  );
-}
-
 export function ConfirmDialog({
   open,
   onClose,

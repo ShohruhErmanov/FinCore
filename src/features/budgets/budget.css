@@ -1,5 +1,5 @@
 .budget-page {
-  color: #edf4ff;
+  color: rgb(var(--ink));
 }
 
 .budget-page h1 {
@@ -40,7 +40,7 @@
 }
 
 .budget-page summary:focus-visible {
-  outline: 2px solid #6f9fff;
+  outline: 2px solid rgb(var(--primary));
   outline-offset: 4px;
   border-radius: 4px;
 }
@@ -68,11 +68,11 @@
   border-left: 1px solid rgb(var(--border));
 }
 .budget-entry-summary span {
-  color: #b3c4db;
+  color: rgb(var(--muted));
   font-size: 0.75rem;
 }
 .budget-entry-summary strong {
-  color: #edf4ff;
+  color: rgb(var(--ink));
   font-size: clamp(0.98rem, 1.6vw, 1.15rem);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -88,7 +88,7 @@
   font-size: 0.8rem;
 }
 .budget-entry-branches b {
-  color: #edf4ff;
+  color: rgb(var(--ink));
   font-weight: 600;
 }
 .budget-category-picker {
@@ -108,13 +108,13 @@
 }
 .budget-category-picker-copy label {
   display: block;
-  color: #edf4ff;
+  color: rgb(var(--ink));
   font-size: 0.84rem;
   font-weight: 650;
 }
 .budget-category-picker-copy p {
   margin-top: 2px;
-  color: #b3c4db;
+  color: rgb(var(--muted));
   font-size: 0.73rem;
 }
 .budget-category-select-wrap {
@@ -131,7 +131,7 @@
   background: rgb(var(--canvas));
   box-shadow: var(--neu-inset);
   padding: 0 42px 0 14px;
-  color: #edf4ff;
+  color: rgb(var(--ink));
   font-size: 0.88rem;
   font-weight: 600;
   outline: none;
@@ -142,15 +142,15 @@
     background 160ms;
 }
 .budget-category-select-wrap select:hover {
-  border-color: #2b3e58;
-  background: #213149;
+  border-color: rgb(var(--neutral-400));
+  background: rgb(var(--raised));
 }
 .budget-category-select-wrap select:focus-visible {
-  border-color: #82adff;
-  background: #213149;
+  border-color: rgb(var(--primary));
+  background: rgb(var(--raised));
   box-shadow:
     var(--neu-inset),
-    0 0 0 4px rgb(89 156 245 / 18%);
+    0 0 0 4px rgb(var(--primary) / 18%);
 }
 .budget-category-select-wrap svg {
   position: absolute;
@@ -159,7 +159,7 @@
   width: 17px;
   height: 17px;
   transform: translateY(-50%);
-  color: #b3c4db;
+  color: rgb(var(--muted));
   pointer-events: none;
 }
 .budget-entry-tools {
@@ -179,7 +179,7 @@
   background: rgb(var(--canvas));
   box-shadow: var(--neu-inset);
   font-size: 0.875rem;
-  outline-color: #6f9fff;
+  outline-color: rgb(var(--primary));
 }
 .budget-type-filter,
 .budget-plan-switch {
@@ -196,7 +196,7 @@
   min-height: 30px;
   border-radius: 7px;
   padding: 3px 10px;
-  color: #b3c4db;
+  color: rgb(var(--muted));
   font-size: 0.78rem;
   font-weight: 600;
   transition:
@@ -210,14 +210,14 @@
 }
 .budget-type-filter button[aria-pressed='true'],
 .budget-plan-switch button[aria-pressed='true'] {
-  background: #213149;
-  color: #6f9fff;
+  background: rgb(var(--raised));
+  color: rgb(var(--primary));
   box-shadow: var(--neu-shadow-xs);
 }
 .budget-type-filter button:focus-visible,
 .budget-plan-switch button:focus-visible,
 .budget-note-button:focus-visible {
-  outline: 2px solid #6f9fff;
+  outline: 2px solid rgb(var(--primary));
   outline-offset: 2px;
 }
 .budget-category-list {
@@ -244,7 +244,7 @@
 }
 .budget-category-heading h3 {
   min-width: 0;
-  color: #edf4ff;
+  color: rgb(var(--ink));
   font-size: 0.92rem;
   font-weight: 600;
   line-height: 1.25;
@@ -259,9 +259,9 @@
 .budget-type-badge {
   flex: none;
   border-radius: 999px;
-  background: #172439;
+  background: rgb(var(--inset));
   padding: 1px 8px;
-  color: #ceddf0;
+  color: rgb(var(--neutral-700));
   font-size: 0.68rem;
   font-weight: 600;
 }
@@ -269,11 +269,11 @@
   display: inline-flex;
   align-items: baseline;
   gap: 4px;
-  color: #b3c4db;
+  color: rgb(var(--muted));
   font-size: 0.72rem;
 }
 .budget-category-total strong {
-  color: #edf4ff;
+  color: rgb(var(--ink));
   font-size: 0.82rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -285,7 +285,7 @@
 }
 .budget-branch-editor {
   min-width: 0;
-  border: 1px solid #2b3e58;
+  border: 1px solid rgb(var(--border));
   border-radius: 10px;
   padding: 6px 8px;
   background: rgb(var(--canvas));
@@ -299,7 +299,7 @@
   gap: 4px 8px;
 }
 .budget-branch-name {
-  color: #edf4ff;
+  color: rgb(var(--ink));
   font-size: 0.8rem;
   font-weight: 600;
 }
@@ -321,18 +321,18 @@
   background: rgb(var(--surface));
   box-shadow: var(--neu-inset-sm);
   padding: 4px 44px 4px 10px;
-  color: #edf4ff;
+  color: rgb(var(--ink));
   font-size: 0.92rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  outline-color: #6f9fff;
+  outline-color: rgb(var(--primary));
 }
 .budget-amount-wrap > span {
   position: absolute;
   right: 10px;
   top: 50%;
   transform: translateY(-50%);
-  color: #b3c4db;
+  color: rgb(var(--muted));
   font-size: 0.75rem;
   pointer-events: none;
 }
@@ -346,7 +346,7 @@
   border-radius: 8px;
   background: rgb(var(--surface));
   box-shadow: var(--neu-shadow-xs);
-  color: #b3c4db;
+  color: rgb(var(--muted));
   transition:
     box-shadow 160ms,
     color 160ms,
@@ -356,12 +356,12 @@
   box-shadow: var(--neu-pressed);
 }
 .budget-note-button:hover {
-  color: #ff8c9c;
-  border-color: #71394a;
+  color: rgb(var(--danger));
+  border-color: rgb(var(--danger-scale-300));
 }
 /* A dot on the icon: this line carries a note. */
 .budget-note-button[data-has-note='true'] {
-  color: #ff8c9c;
+  color: rgb(var(--danger));
 }
 .budget-note-button[data-has-note='true']::after {
   content: '';
@@ -371,7 +371,7 @@
   width: 6px;
   height: 6px;
   border-radius: 999px;
-  background: #6f9fff;
+  background: rgb(var(--primary));
 }
 .budget-note-preview,
 .budget-note-input {
@@ -382,12 +382,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #b3c4db;
+  color: rgb(var(--muted));
   font-size: 0.72rem;
 }
 .budget-no-plan {
   margin-top: 6px;
-  color: #7890ae;
+  color: rgb(var(--neutral-500));
   font-size: 0.75rem;
 }
 .budget-branch-meta {
@@ -396,13 +396,13 @@
   align-items: center;
   gap: 2px 10px;
   margin-top: 5px;
-  color: #b3c4db;
+  color: rgb(var(--muted));
   font-size: 0.7rem;
 }
 .budget-entry-empty {
   padding: 24px 16px;
   text-align: center;
-  color: #b3c4db;
+  color: rgb(var(--muted));
 }
 .budget-save-bar {
   position: sticky;

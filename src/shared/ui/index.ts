@@ -1,6 +1,5 @@
 export * from './button';
 export * from './brand-mark';
-export * from './controls';
 export * from './date-input';
 export * from './data-display';
 export * from './feedback';
@@ -9,4 +8,6 @@ export * from './layout';
 export * from './overlays';
 export * from './select';
 export * from './table';
+export * from './tabs';
+export * from './theme-toggle';
 export * from './toast-context';

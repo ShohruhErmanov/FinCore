@@ -34,25 +34,25 @@ talab qiladigan har qanday so'rov esa toza `503 DATABASE_UNAVAILABLE` beradi.
 
 ## Skriptlar
 
-| Buyruq | Vazifasi |
-| --- | --- |
-| `npm run start:dev` | Watch rejimida ishga tushirish |
-| `npm run build` | `dist/` ga kompilyatsiya |
-| `npm run start:prod` | `node dist/main.js` |
-| `npm run typecheck` | `tsc --noEmit` (testlar ham tekshiriladi) |
-| `npm test` | Vitest, bir marta |
-| `npm run test:watch` | Vitest, watch rejimida |
-| `npm run prisma:generate` | Prisma client'ni qayta yaratish |
-| `npm run prisma:pull` | Jonli bazadan modellarni qayta olish |
+| Buyruq                    | Vazifasi                                  |
+| ------------------------- | ----------------------------------------- |
+| `npm run start:dev`       | Watch rejimida ishga tushirish            |
+| `npm run build`           | `dist/` ga kompilyatsiya                  |
+| `npm run start:prod`      | `node dist/main.js`                       |
+| `npm run typecheck`       | `tsc --noEmit` (testlar ham tekshiriladi) |
+| `npm test`                | Vitest, bir marta                         |
+| `npm run test:watch`      | Vitest, watch rejimida                    |
+| `npm run prisma:generate` | Prisma client'ni qayta yaratish           |
+| `npm run prisma:pull`     | Jonli bazadan modellarni qayta olish      |
 
 ## Endpointlar (Phase 18.1)
 
-| Metod | Yo'l | Ruxsat | Javob |
-| --- | --- | --- | --- |
-| `GET` | `/api/health` | ochiq | `{ status, environment, uptimeSeconds, database, checkedAt }` |
-| `POST` | `/api/auth/login` | ochiq (5/min) | `200` + `AuthenticatedUser`, sessiya cookie o'rnatiladi |
-| `POST` | `/api/auth/logout` | ochiq | `204`, cookie o'chiriladi |
-| `GET` | `/api/me` | sessiya | `AuthenticatedUser` |
+| Metod  | Yo'l               | Ruxsat        | Javob                                                         |
+| ------ | ------------------ | ------------- | ------------------------------------------------------------- |
+| `GET`  | `/api/health`      | ochiq         | `{ status, environment, uptimeSeconds, database, checkedAt }` |
+| `POST` | `/api/auth/login`  | ochiq (5/min) | `200` + `AuthenticatedUser`, sessiya cookie o'rnatiladi       |
+| `POST` | `/api/auth/logout` | ochiq         | `204`, cookie o'chiriladi                                     |
+| `GET`  | `/api/me`          | sessiya       | `AuthenticatedUser`                                           |
 
 Swagger: `SWAGGER_ENABLED=true` bo'lganda `http://localhost:3000/api/docs`.
 
@@ -82,7 +82,7 @@ sessiya guard'i va kontrakt interceptori.
   `{ code, message, details? }` shakliga keltiradi — HTML javob frontend'da
   `API_UNAVAILABLE` xatosiga aylanadi.
 - **Schema o'zgartirilmaydi.** `docs/database/001_reference_schema.sql` —
-  yagona haqiqat manbai. `prisma/schema.prisma` unga *moslashadi*, migratsiya
+  yagona haqiqat manbai. `prisma/schema.prisma` unga _moslashadi_, migratsiya
   yaratmaydi.
 
 ## Xavfsizlik

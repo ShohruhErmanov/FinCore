@@ -203,6 +203,22 @@ export const MONTH_NAMES_UZ = [
   'Dekabr',
 ] as const;
 
+/** Uch harfli oy nomlari — diagramma o‘qlari va tor ustunlar uchun. */
+export const MONTH_SHORT_NAMES_UZ = [
+  'Yan',
+  'Fev',
+  'Mar',
+  'Apr',
+  'May',
+  'Iyn',
+  'Iyl',
+  'Avg',
+  'Sen',
+  'Okt',
+  'Noy',
+  'Dek',
+] as const;
+
 /** 1–12 → oy nomi; diapazondan tashqarida raqamning o'zi qaytadi. */
 export function monthNameUz(month: number): string {
   return MONTH_NAMES_UZ[month - 1] ?? String(month);

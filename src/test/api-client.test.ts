@@ -125,9 +125,7 @@ describe('[FE-API-01] backend ulanmagan deployment', () => {
       },
       requests: [{ calculatedShareUzs: '6056829.42', requestedAmountUzs: '6056829' }],
     };
-    mockFetch(
-      respond(JSON.stringify(payload), { contentType: 'application/json; charset=utf-8' }),
-    );
+    mockFetch(respond(JSON.stringify(payload), { contentType: 'application/json; charset=utf-8' }));
 
     await expect(apiRequest('/investor-payouts/me')).resolves.toEqual(payload);
   });

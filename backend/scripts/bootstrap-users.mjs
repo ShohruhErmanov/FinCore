@@ -93,13 +93,15 @@ try {
     select: { id: true },
   });
   if (!grantor)
-    abort('BOOTSTRAP_SYSTEM_USER_MISSING', 'Tizim akkaunti yo‘q — 002_seed_reference.sql ishga tushirilmagan.');
+    abort(
+      'BOOTSTRAP_SYSTEM_USER_MISSING',
+      'Tizim akkaunti yo‘q — 002_seed_reference.sql ishga tushirilmagan.',
+    );
 
   const roles = new Map(
-    (await prisma.roles.findMany({ select: { id: true, code: true, is_active: true } })).map((r) => [
-      r.code,
-      r,
-    ]),
+    (await prisma.roles.findMany({ select: { id: true, code: true, is_active: true } })).map(
+      (r) => [r.code, r],
+    ),
   );
   const branches = new Map(
     (await prisma.branches.findMany({ select: { id: true, code: true } })).map((b) => [b.code, b]),
@@ -213,7 +215,9 @@ try {
     );
   }
 
-  console.log(`\nBOOTSTRAP_USERS_DONE  yaratildi=${created} o‘tkazildi=${skipped} yangi_grant=${grantsAdded} parol_yangilandi=${reset}`);
+  console.log(
+    `\nBOOTSTRAP_USERS_DONE  yaratildi=${created} o‘tkazildi=${skipped} yangi_grant=${grantsAdded} parol_yangilandi=${reset}`,
+  );
   console.log('Parollar chop etilmadi va hech qayerga yozilmadi.');
 } catch (error) {
   const message = String(error?.message ?? error)

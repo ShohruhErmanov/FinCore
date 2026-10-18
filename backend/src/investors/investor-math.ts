@@ -12,7 +12,12 @@ import { percentageValue } from '@/reports/report-math';
  * They are never added, compared or rendered in the same field.
  */
 
-export type SettlementStatus = 'no_entitlement' | 'unpaid' | 'partially_paid' | 'settled' | 'overpaid';
+export type SettlementStatus =
+  | 'no_entitlement'
+  | 'unpaid'
+  | 'partially_paid'
+  | 'settled'
+  | 'overpaid';
 
 export interface Settlement {
   entitledAmountUzs: string;

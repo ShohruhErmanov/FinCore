@@ -31,7 +31,19 @@ export class ApiException extends HttpException {
     return new ApiException(401, 'ACCOUNT_DISABLED', message);
   }
 
-  static forbidden(message = 'Bu amal uchun ruxsatingiz yo‘q.', details?: Record<string, unknown>): ApiException {
+  /** The permission guard's refusal: what the caller would have needed. */
+  static missingPermissions(permissions: readonly string[]): ApiException {
+    return ApiException.forbidden(undefined, { missingPermissions: [...permissions] });
+  }
+
+  static periodNotFound(message = 'Hisob davri topilmadi.'): ApiException {
+    return new ApiException(404, 'PERIOD_NOT_FOUND', message);
+  }
+
+  static forbidden(
+    message = 'Bu amal uchun ruxsatingiz yo‘q.',
+    details?: Record<string, unknown>,
+  ): ApiException {
     return new ApiException(403, 'FORBIDDEN', message, details);
   }
 }

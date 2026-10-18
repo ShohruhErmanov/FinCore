@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsUUID, Matches, ValidateNested } from 'class-validator';
+import { WHOLE_UZS_PATTERN } from '@/common/validation/patterns';
 
 export class CategoryBaselineLineDto {
   @ApiProperty({ format: 'uuid' })
@@ -12,7 +13,9 @@ export class CategoryBaselineLineDto {
   branchId!: string;
 
   @ApiProperty({ example: '7200000', description: 'Butun so‘m, string' })
-  @Matches(/^\d+$/, { message: 'amountUzs manfiy bo‘lmagan butun son-string bo‘lishi kerak' })
+  @Matches(WHOLE_UZS_PATTERN, {
+    message: 'amountUzs manfiy bo‘lmagan butun son-string bo‘lishi kerak',
+  })
   amountUzs!: string;
 }
 
@@ -54,7 +57,11 @@ export class CategoryBaselineRowResponseDto {
   @ApiProperty()
   isActive!: boolean;
 
-  @ApiProperty({ description: 'branchId → butun so‘m string', type: 'object', additionalProperties: { type: 'string' } })
+  @ApiProperty({
+    description: 'branchId → butun so‘m string',
+    type: 'object',
+    additionalProperties: { type: 'string' },
+  })
   amounts!: Record<string, string>;
 
   @ApiProperty({ example: '27200000' })

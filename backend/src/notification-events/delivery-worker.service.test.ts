@@ -1,8 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppEnv } from '@/config';
-import type { TelegramDeliveryProvider, DeliveryOutcome } from '@/telegram/telegram-delivery.provider';
+import type {
+  TelegramDeliveryProvider,
+  DeliveryOutcome,
+} from '@/telegram/telegram-delivery.provider';
 import { NotificationDeliveryWorker } from './delivery-worker.service';
-import type { DeliveryContext, NotificationDeliveriesRepository } from './notification-deliveries.repository';
+import type {
+  DeliveryContext,
+  NotificationDeliveriesRepository,
+} from './notification-deliveries.repository';
 
 const IDENT = '22222222-2222-4222-8222-222222222222';
 
@@ -31,7 +37,14 @@ const context = (over: Partial<DeliveryContext> = {}): DeliveryContext => ({
   ...over,
 });
 
-function harness(over: { env?: Partial<AppEnv>; outcome?: DeliveryOutcome; contexts?: DeliveryContext[]; chatId?: bigint | null } = {}) {
+function harness(
+  over: {
+    env?: Partial<AppEnv>;
+    outcome?: DeliveryOutcome;
+    contexts?: DeliveryContext[];
+    chatId?: bigint | null;
+  } = {},
+) {
   const contexts = over.contexts ?? [context()];
   const repo = {
     claim: vi.fn().mockResolvedValue(contexts.map((c) => ({ id: c.deliveryId }))),
@@ -80,9 +93,14 @@ describe('NotificationDeliveryWorker — lifecycle', () => {
 
   it('skips a tick while the previous one is still running', async () => {
     let release!: () => void;
-    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     const { repo, worker } = harness();
-    (repo.claim as ReturnType<typeof vi.fn>).mockImplementation(async () => { await gate; return []; });
+    (repo.claim as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      await gate;
+      return [];
+    });
 
     const first = worker.tick();
     const second = await worker.tick(); // must not enter while first is in flight
@@ -102,7 +120,9 @@ describe('NotificationDeliveryWorker — lifecycle', () => {
   });
 
   it('claims with the configured batch size and lease, under its own worker id', async () => {
-    const { repo, worker } = harness({ env: { NOTIFICATION_WORKER_BATCH_SIZE: 3, NOTIFICATION_WORKER_LEASE_SECONDS: 45 } });
+    const { repo, worker } = harness({
+      env: { NOTIFICATION_WORKER_BATCH_SIZE: 3, NOTIFICATION_WORKER_LEASE_SECONDS: 45 },
+    });
 
     await worker.tick();
 
@@ -126,7 +146,10 @@ describe('NotificationDeliveryWorker — delivery flow', () => {
 
     const summary = await worker.tick();
 
-    expect(provider.send).toHaveBeenCalledWith({ chatId: 999n, text: expect.stringContaining('kiritilmagan') });
+    expect(provider.send).toHaveBeenCalledWith({
+      chatId: 999n,
+      text: expect.stringContaining('kiritilmagan'),
+    });
     expect(repo.markDelivered).toHaveBeenCalledWith('del-1', worker.workerId, 'tg-1');
     expect(summary).toMatchObject({ claimed: 1, delivered: 1 });
   });
@@ -137,7 +160,11 @@ describe('NotificationDeliveryWorker — delivery flow', () => {
     await worker.tick();
 
     expect(provider.send).not.toHaveBeenCalled();
-    expect(repo.markPermanentlyFailed).toHaveBeenCalledWith('del-1', worker.workerId, 'RECIPIENT_UNREACHABLE');
+    expect(repo.markPermanentlyFailed).toHaveBeenCalledWith(
+      'del-1',
+      worker.workerId,
+      'RECIPIENT_UNREACHABLE',
+    );
   });
 
   it('fails permanently on an unsupported event type without calling the provider', async () => {
@@ -148,7 +175,11 @@ describe('NotificationDeliveryWorker — delivery flow', () => {
     await worker.tick();
 
     expect(provider.send).not.toHaveBeenCalled();
-    expect(repo.markPermanentlyFailed).toHaveBeenCalledWith('del-1', worker.workerId, 'EVENT_TYPE_UNSUPPORTED');
+    expect(repo.markPermanentlyFailed).toHaveBeenCalledWith(
+      'del-1',
+      worker.workerId,
+      'EVENT_TYPE_UNSUPPORTED',
+    );
   });
 
   it('fails permanently on an unsupported channel', async () => {
@@ -157,7 +188,11 @@ describe('NotificationDeliveryWorker — delivery flow', () => {
     await worker.tick();
 
     expect(provider.send).not.toHaveBeenCalled();
-    expect(repo.markPermanentlyFailed).toHaveBeenCalledWith('del-1', worker.workerId, 'CHANNEL_UNSUPPORTED');
+    expect(repo.markPermanentlyFailed).toHaveBeenCalledWith(
+      'del-1',
+      worker.workerId,
+      'CHANNEL_UNSUPPORTED',
+    );
   });
 
   it('schedules a retry with exponential backoff, without touching attempts', async () => {
@@ -200,12 +235,20 @@ describe('NotificationDeliveryWorker — delivery flow', () => {
     const summary = await worker.tick();
 
     expect(repo.markRetry).not.toHaveBeenCalled();
-    expect(repo.markPermanentlyFailed).toHaveBeenCalledWith('del-1', worker.workerId, 'MAX_ATTEMPTS_TELEGRAM_HTTP_500');
+    expect(repo.markPermanentlyFailed).toHaveBeenCalledWith(
+      'del-1',
+      worker.workerId,
+      'MAX_ATTEMPTS_TELEGRAM_HTTP_500',
+    );
     expect(summary).toMatchObject({ permanentlyFailed: 1 });
   });
 
   it('keeps processing the batch when one delivery blows up', async () => {
-    const contexts = [context({ deliveryId: 'del-1' }), context({ deliveryId: 'del-2' }), context({ deliveryId: 'del-3' })];
+    const contexts = [
+      context({ deliveryId: 'del-1' }),
+      context({ deliveryId: 'del-2' }),
+      context({ deliveryId: 'del-3' }),
+    ];
     const { repo, worker } = harness({ contexts });
     (repo.markDelivered as ReturnType<typeof vi.fn>).mockImplementation(async (id: string) => {
       if (id === 'del-2') throw new Error('transition conflict');
@@ -213,7 +256,11 @@ describe('NotificationDeliveryWorker — delivery flow', () => {
 
     const summary = await worker.tick();
 
-    expect((repo.markDelivered as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0])).toEqual(['del-1', 'del-2', 'del-3']);
+    expect((repo.markDelivered as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0])).toEqual([
+      'del-1',
+      'del-2',
+      'del-3',
+    ]);
     expect(summary).toMatchObject({ claimed: 3, delivered: 2 });
   });
 
@@ -233,7 +280,11 @@ describe('NotificationDeliveryWorker — delivery flow', () => {
       contexts: [
         context({
           // A forged destination in the event payload must be ignored entirely.
-          payload: { branchId: '11111111-1111-4111-8111-111111111111', businessDate: '2026-08-20', chatId: '13371337' },
+          payload: {
+            branchId: '11111111-1111-4111-8111-111111111111',
+            businessDate: '2026-08-20',
+            chatId: '13371337',
+          },
         }),
       ],
     });

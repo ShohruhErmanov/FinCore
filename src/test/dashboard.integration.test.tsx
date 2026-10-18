@@ -311,6 +311,28 @@ describe('[FE-MSW, AC-14, AC-16] dashboard integration', () => {
     );
   });
 
+  it('kesim almashganda sahifa yuklanish holatiga tushmaydi, diagramma joyida yangilanadi', async () => {
+    const user = userEvent.setup();
+    renderDashboard();
+    expect(await screen.findByText('300 000 000 so‘m')).toBeInTheDocument();
+
+    // The weekly buckets never arrive: the page must keep what it already shows.
+    vi.mocked(dashboardApi.get).mockReturnValue(new Promise(() => {}));
+    await user.click(screen.getByRole('button', { name: 'Haftalik' }));
+
+    expect(screen.getByRole('button', { name: 'Haftalik' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.queryByText('Dashboard yuklanmoqda…')).not.toBeInTheDocument();
+    expect(screen.getByText('300 000 000 so‘m')).toBeInTheDocument();
+    expect(
+      screen
+        .getByRole('region', { name: 'Tushum reja va amalda diagrammasi' })
+        .closest('[aria-busy]'),
+    ).toHaveAttribute('aria-busy', 'true');
+  });
+
   it('KPI drill-down canonical period va branch filterlarini URLda saqlaydi', async () => {
     const user = userEvent.setup();
     renderDashboard();

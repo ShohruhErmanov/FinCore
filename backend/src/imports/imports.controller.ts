@@ -16,9 +16,14 @@ export class ImportsController {
   @Post('expenses')
   @HttpCode(200)
   @RequirePermissions('import.run')
-  @ApiOperation({ summary: 'Excel’dan xarajat import qilish (qator darajasida qisman muvaffaqiyat)' })
+  @ApiOperation({
+    summary: 'Excel’dan xarajat import qilish (qator darajasida qisman muvaffaqiyat)',
+  })
   @ApiBody({ type: ImportExpensesDto })
-  @ApiResponse({ status: 200, description: 'ImportSummary — imported / skipped / rejected / totalUzs' })
+  @ApiResponse({
+    status: 200,
+    description: 'ImportSummary — imported / skipped / rejected / totalUzs',
+  })
   @ApiResponse({ status: 400, description: 'VALIDATION_ERROR' })
   @ApiResponse({ status: 401, description: 'UNAUTHENTICATED' })
   @ApiResponse({ status: 403, description: 'FORBIDDEN — import.run yo‘q' })

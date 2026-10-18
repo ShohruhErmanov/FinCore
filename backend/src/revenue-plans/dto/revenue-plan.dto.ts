@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsArray, IsUUID, Matches, ValidateIf, ValidateNested } from 'class-validator';
+import { WHOLE_UZS_PATTERN } from '@/common/validation/patterns';
 
 /** null clears the branch's plan; "0" is a real plan of zero. */
 export class RevenuePlanLineInputDto {
@@ -10,7 +11,7 @@ export class RevenuePlanLineInputDto {
 
   @ApiPropertyOptional({ nullable: true, example: '80000000' })
   @ValidateIf((line: RevenuePlanLineInputDto) => line.plannedAmountUzs !== null)
-  @Matches(/^\d+$/, {
+  @Matches(WHOLE_UZS_PATTERN, {
     message: 'plannedAmountUzs null yoki manfiy bo‘lmagan butun son-string bo‘lishi kerak',
   })
   plannedAmountUzs!: string | null;

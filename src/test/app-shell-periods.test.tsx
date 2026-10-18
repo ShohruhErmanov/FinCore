@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppShell } from '@/app/layout/app-shell';
+import { ThemeProvider } from '@/app/theme';
 import { notificationApi, referenceApi } from '@/shared/api/contracts';
 import { routes } from '@/shared/config/routes';
 import type { AccountingPeriod } from '@/shared/types/domain';
@@ -37,17 +38,19 @@ function renderShell(initialPeriods: AccountingPeriod[], refreshedPeriods = init
   vi.spyOn(referenceApi, 'branches').mockResolvedValue([]);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <QueryClientProvider client={client}>
-      <ToastProvider>
-        <MemoryRouter initialEntries={['/']}>
-          <Routes>
-            <Route element={<AppShell />}>
-              <Route index element={<LocationProbe />} />
-            </Route>
-          </Routes>
-        </MemoryRouter>
-      </ToastProvider>
-    </QueryClientProvider>,
+    <ThemeProvider>
+      <QueryClientProvider client={client}>
+        <ToastProvider>
+          <MemoryRouter initialEntries={['/']}>
+            <Routes>
+              <Route element={<AppShell />}>
+                <Route index element={<LocationProbe />} />
+              </Route>
+            </Routes>
+          </MemoryRouter>
+        </ToastProvider>
+      </QueryClientProvider>
+    </ThemeProvider>,
   );
 }
 

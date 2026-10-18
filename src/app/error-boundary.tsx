@@ -28,7 +28,7 @@ export class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBo
             </p>
             <button
               type="button"
-              className="mt-6 min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-[#101C2F] hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+              className="mt-6 min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-[rgb(var(--primary-contrast))] shadow-[var(--neu-shadow-1)] hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-300"
               onClick={() => window.location.reload()}
             >
               Sahifani qayta yuklash

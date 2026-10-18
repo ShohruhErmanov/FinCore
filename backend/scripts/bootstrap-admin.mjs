@@ -60,7 +60,10 @@ try {
     select: { id: true, name: true, is_active: true, allows_all_branch_scope: true },
   });
   if (!role)
-    abort('BOOTSTRAP_ROLE_MISSING', `'${DIRECTOR_ROLE_CODE}' roli topilmadi — seed ishga tushirilmagan.`);
+    abort(
+      'BOOTSTRAP_ROLE_MISSING',
+      `'${DIRECTOR_ROLE_CODE}' roli topilmadi — seed ishga tushirilmagan.`,
+    );
   if (!role.is_active) abort('BOOTSTRAP_ROLE_INACTIVE', `'${DIRECTOR_ROLE_CODE}' roli nofaol.`);
 
   const grantor = await prisma.users.findUnique({
@@ -68,7 +71,10 @@ try {
     select: { id: true },
   });
   if (!grantor)
-    abort('BOOTSTRAP_SYSTEM_USER_MISSING', 'Tizim akkaunti topilmadi — 002_seed_reference.sql ishga tushirilmagan.');
+    abort(
+      'BOOTSTRAP_SYSTEM_USER_MISSING',
+      'Tizim akkaunti topilmadi — 002_seed_reference.sql ishga tushirilmagan.',
+    );
 
   const existing = await prisma.users.findFirst({
     where: identifier.email ? { email: identifier.email } : { phone: identifier.phone },

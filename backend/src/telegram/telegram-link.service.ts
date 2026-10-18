@@ -26,7 +26,13 @@ interface TelegramUpdate {
   message?: {
     text?: unknown;
     chat?: { id?: unknown; type?: unknown };
-    from?: { id?: unknown; is_bot?: unknown; username?: unknown; first_name?: unknown; last_name?: unknown };
+    from?: {
+      id?: unknown;
+      is_bot?: unknown;
+      username?: unknown;
+      first_name?: unknown;
+      last_name?: unknown;
+    };
   };
 }
 
@@ -209,9 +215,10 @@ export class TelegramLinkService {
       chatId,
       telegramUserId,
       username: typeof message.from?.username === 'string' ? message.from.username : null,
-      displayName: [message.from?.first_name, message.from?.last_name]
-        .filter((part): part is string => typeof part === 'string' && part.length > 0)
-        .join(' ') || null,
+      displayName:
+        [message.from?.first_name, message.from?.last_name]
+          .filter((part): part is string => typeof part === 'string' && part.length > 0)
+          .join(' ') || null,
     });
   }
 
@@ -348,11 +355,7 @@ export class TelegramLinkService {
     // closes the window between sign-in and the click, and blocks the reserved
     // service account outright.
     if (!row || row.is_system || row.status !== 'active')
-      throw new ApiException(
-        403,
-        'TELEGRAM_LINK_FORBIDDEN',
-        'Bu hisob Telegramga ulana olmaydi.',
-      );
+      throw new ApiException(403, 'TELEGRAM_LINK_FORBIDDEN', 'Bu hisob Telegramga ulana olmaydi.');
   }
 
   private async liveAccount(userId: string): Promise<{ id: string } | null> {

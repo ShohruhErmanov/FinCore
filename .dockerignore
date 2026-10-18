@@ -1,0 +1,21 @@
+# Build context of docker/frontend.Dockerfile is the repository root; it only
+# needs the frontend sources. Never send env files: .env.local points the
+# frontend at a developer's own API.
+**/node_modules
+dist
+coverage
+playwright-report
+test-results
+e2e
+docs
+backend
+.git
+.github
+.claude
+.codex
+**/*.log
+**/*.tsbuildinfo
+.env
+.env.*
+docker/*.env
+docker/backups

@@ -56,11 +56,9 @@ function toDateValue(date: Date) {
 function formatDateValue(value: string) {
   const date = fromDateValue(value);
   if (!date) return '';
-  return new Intl.DateTimeFormat('uz-Latn-UZ', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  }).format(date);
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${day}.${month}.${date.getFullYear()}`;
 }
 
 function addDays(date: Date, amount: number) {
@@ -109,7 +107,7 @@ export const DateInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLIn
       id,
       style,
       onChange,
-    onClick,
+      onClick,
       onFocus,
       onBlur,
       onKeyDown,

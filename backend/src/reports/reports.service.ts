@@ -1,14 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import type { AuthenticatedUser } from '@/common';
+import { monthNameUz, monthShortNameUz } from '@/common/calendar';
 import { PrismaService } from '@/database';
-import {
-  MONTHS_SHORT_UZ,
-  MONTHS_UZ,
-  percentageValue,
-  planActual,
-  toBigInt,
-  type PlanActual,
-} from './report-math';
+import { percentageValue, planActual, toBigInt, type PlanActual } from './report-math';
 
 /**
  * Report numbers come from the sanctioned views in
@@ -338,7 +332,7 @@ export class ReportsService {
         year,
         selectedMonth: {
           month: selectedMonth,
-          label: MONTHS_UZ[selectedMonth - 1] ?? String(selectedMonth),
+          label: monthNameUz(selectedMonth),
           rows: [],
           branches: [],
           total: { branch: TOTAL_REF, expense: planActual(null, 0n, false) },
@@ -504,7 +498,7 @@ export class ReportsService {
       year,
       selectedMonth: {
         month: selectedMonth,
-        label: MONTHS_UZ[selectedMonth - 1] ?? String(selectedMonth),
+        label: monthNameUz(selectedMonth),
         rows: selectedMonthRows,
         branches: selectedMonthBranches,
         total: selectedMonthTotal,
@@ -537,6 +531,6 @@ export class ReportsService {
   }
 
   monthLabel(month: number): string {
-    return MONTHS_SHORT_UZ[month - 1] ?? String(month);
+    return monthShortNameUz(month);
   }
 }

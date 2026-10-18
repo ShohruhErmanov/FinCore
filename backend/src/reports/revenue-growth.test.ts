@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildRevenueGrowth, daysInMonth, monthlyGrowthSpans } from './revenue-growth';
+import { daysInMonth } from '@/common/calendar';
+import { buildRevenueGrowth, monthlyGrowthSpans } from './revenue-growth';
 
 const million = (n: number) => BigInt(n) * 1_000_000n;
 

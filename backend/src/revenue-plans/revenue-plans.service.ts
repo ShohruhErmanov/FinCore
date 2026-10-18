@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
+import { ACTOR_CONTEXT_RULE, translateDbError, type DbErrorRule } from '@/common/errors/db-errors';
 import { ApiException, type AuthenticatedUser } from '@/common';
 import { toIsoDateTime, toMoneyUzs } from '@/common/serialization/financial';
 import { ActorContextService, PrismaService } from '@/database';
-import { MONTHS_UZ, daysInMonth, percentageValue, toBigInt } from '@/reports/report-math';
+import { daysInMonth, periodLabelUz } from '@/common/calendar';
+import { percentageValue, toBigInt } from '@/reports/report-math';
 import type { RevenuePlanLineInputDto } from './dto/revenue-plan.dto';
 import { buildRevenuePlanYear, type RevenuePlanYear } from './revenue-plan-year';
 
@@ -35,6 +37,23 @@ interface PlanVsActualRow {
   planned_amount_uzs: unknown;
   actual_uzs: unknown;
 }
+
+const WRITE_ERRORS: readonly DbErrorRule[] = [
+  [
+    /period is closed/i,
+    () => new ApiException(409, 'PERIOD_CLOSED', 'Yopiq davrdagi tushum rejasi tahrirlanmaydi.'),
+  ],
+  [
+    /only draft revenue plans may be deleted|immutable outside a recognized state/i,
+    () =>
+      new ApiException(409, 'REVENUE_PLAN_LOCKED', 'Tushum rejasi tasdiqlangan va tahrirlanmaydi.'),
+  ],
+  [
+    /foreign key|violates/i,
+    () => new ApiException(422, 'REFERENCE_INVALID', 'Filial yoki davr topilmadi.'),
+  ],
+  ACTOR_CONTEXT_RULE,
+];
 
 @Injectable()
 export class RevenuePlansService {
@@ -170,7 +189,7 @@ export class RevenuePlansService {
       where: { id: periodId },
       select: { id: true, year: true, month: true, status: true },
     });
-    if (!period) throw new ApiException(404, 'PERIOD_NOT_FOUND', 'Hisob davri topilmadi.');
+    if (!period) throw ApiException.periodNotFound();
     return period;
   }
 
@@ -231,7 +250,7 @@ export class RevenuePlansService {
     return {
       id: `revenue-plan-${period.id}`,
       periodId: period.id,
-      periodLabel: `${MONTHS_UZ[period.month - 1] ?? period.month} ${period.year}`,
+      periodLabel: periodLabelUz(period.year, period.month),
       daysInMonth: days,
       updatedAt: toIsoDateTime(latest?.updated_at ?? new Date())!,
       updatedByName: editor?.full_name ?? '',
@@ -240,26 +259,6 @@ export class RevenuePlansService {
   }
 
   private translateWriteError(error: unknown): unknown {
-    if (error instanceof ApiException) return error;
-    const message = error instanceof Error ? error.message : String(error);
-    if (/period is closed/i.test(message))
-      return new ApiException(409, 'PERIOD_CLOSED', 'Yopiq davrdagi tushum rejasi tahrirlanmaydi.');
-    if (
-      /only draft revenue plans may be deleted|immutable outside a recognized state/i.test(message)
-    )
-      return new ApiException(
-        409,
-        'REVENUE_PLAN_LOCKED',
-        'Tushum rejasi tasdiqlangan va tahrirlanmaydi.',
-      );
-    if (/foreign key|violates/i.test(message))
-      return new ApiException(422, 'REFERENCE_INVALID', 'Filial yoki davr topilmadi.');
-    if (/actor context|signing key/i.test(message))
-      return new ApiException(
-        500,
-        'ACTOR_CONTEXT_INVALID',
-        'Server identifikatsiya konteksti noto‘g‘ri.',
-      );
-    return error;
+    return translateDbError(error, WRITE_ERRORS);
   }
 }

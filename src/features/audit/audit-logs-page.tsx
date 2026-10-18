@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { auditApi } from '@/shared/api/contracts';
+import { queryKeys } from '@/shared/api/query-keys';
 import { formatDateTime } from '@/shared/lib/format';
 import type { AuditLogRow } from '@/shared/types/domain';
 import { describeAuditAction, type AuditActionKind } from './audit-actions';
@@ -69,7 +70,7 @@ function AuditAction({ code }: { code: string }) {
 export function AuditLogsPage() {
   const [action, setAction] = useState('');
   const query = useQuery({
-    queryKey: ['audit-logs', action],
+    queryKey: queryKeys.auditLogs(action),
     queryFn: ({ signal }) => auditApi.list({ page: 1, pageSize: 100, action }, signal),
   });
 

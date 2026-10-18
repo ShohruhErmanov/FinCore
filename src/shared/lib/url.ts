@@ -13,3 +13,21 @@ export function drilldownUrl(pathname: string, search: Record<string, string>): 
   const query = params.toString();
   return query ? `${pathname}?${query}` : pathname;
 }
+
+type SearchParamsSetter = (
+  nextInit: URLSearchParams,
+  navigateOptions?: { replace?: boolean; state?: unknown; preventScrollReset?: boolean },
+) => void;
+
+export function updateSearchParam(
+  current: URLSearchParams,
+  setter: SearchParamsSetter,
+  key: string,
+  value: string,
+): void {
+  const next = new URLSearchParams(current);
+  if (value) next.set(key, value);
+  else next.delete(key);
+  if (key !== 'page') next.delete('page');
+  setter(next, { replace: true });
+}

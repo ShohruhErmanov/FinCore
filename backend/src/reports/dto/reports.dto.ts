@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ISO_DATE_PATTERN } from '@/common/validation/patterns';
 
 export class YearQueryDto {
   @ApiProperty({ example: 2026 })
@@ -47,7 +48,8 @@ export class CashiersQueryDto {
   // own row instead. There is deliberately no value that widens the answer.
   @ApiPropertyOptional({
     enum: ['own'],
-    description: '"own" — barcha kassirlarni ko‘ra oladigan foydalanuvchiga faqat o‘z qatorini qaytaradi',
+    description:
+      '"own" — barcha kassirlarni ko‘ra oladigan foydalanuvchiga faqat o‘z qatorini qaytaradi',
   })
   @IsOptional()
   @IsIn(['own'])
@@ -87,11 +89,11 @@ export class ExpenseAnalyticsQueryDto {
   period!: string;
 
   @ApiProperty({ example: '2026-08-01', description: 'Boshlanish sanasi (YYYY-MM-DD)' })
-  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  @Matches(ISO_DATE_PATTERN)
   from!: string;
 
   @ApiProperty({ example: '2026-08-31', description: 'Tugash sanasi (YYYY-MM-DD)' })
-  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  @Matches(ISO_DATE_PATTERN)
   to!: string;
 
   @ApiPropertyOptional({ description: 'Filial UUID yoki "all"' })

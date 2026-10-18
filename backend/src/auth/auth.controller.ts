@@ -1,13 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  Inject,
-  Post,
-  Req,
-  Res,
-} from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Post, Req, Res } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
@@ -52,7 +43,10 @@ export class AuthController {
   @Post('auth/logout')
   @HttpCode(204)
   @ApiOperation({ summary: 'Sessiyani tugatish' })
-  logout(@Req() request: AuthenticatedRequest, @Res({ passthrough: true }) response: Response): void {
+  logout(
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: Response,
+  ): void {
     const sessionId = request.signedCookies?.[SESSION_COOKIE];
     if (typeof sessionId === 'string') this.sessions.destroy(sessionId);
     // maxAge 0 so the browser drops it; the remaining attributes must match the

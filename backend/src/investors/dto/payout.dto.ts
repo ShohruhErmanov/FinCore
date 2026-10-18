@@ -12,10 +12,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-/** Integer so'm as a string: a payout is money that has to be handed over. */
-const MONEY = /^\d+$/;
+import { ISO_DATE_PATTERN, WHOLE_UZS_PATTERN } from '@/common/validation/patterns';
 
 export class PayoutYearQueryDto {
   @ApiPropertyOptional({ example: 2026, minimum: 2000, maximum: 2100 })
@@ -40,7 +37,9 @@ export class PayoutRequestCreateDto {
     example: '6056829',
     description: 'So‘ralayotgan summa — butun so‘m, davr bo‘yicha qolgan summadan oshmasligi kerak',
   })
-  @Matches(MONEY, { message: 'amountUzs manfiy bo‘lmagan butun son-string bo‘lishi kerak' })
+  @Matches(WHOLE_UZS_PATTERN, {
+    message: 'amountUzs manfiy bo‘lmagan butun son-string bo‘lishi kerak',
+  })
   amountUzs!: string;
 
   @ApiPropertyOptional({ maxLength: 500 })
@@ -71,7 +70,7 @@ export class PayoutMarkPaidDto {
     description:
       'To‘lov sanasi. Davr shu sanadan kelib chiqadi, shuning uchun so‘rov davri ichida bo‘lishi shart.',
   })
-  @Matches(ISO_DATE, { message: 'paidOn YYYY-MM-DD bo‘lishi kerak' })
+  @Matches(ISO_DATE_PATTERN, { message: 'paidOn YYYY-MM-DD bo‘lishi kerak' })
   paidOn!: string;
 
   @ApiPropertyOptional({ maxLength: 500 })

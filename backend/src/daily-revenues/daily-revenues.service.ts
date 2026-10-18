@@ -1,4 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import { requireAnyPermission } from '@/common/authz/permissions';
+import { ACTOR_CONTEXT_RULE, translateDbError, type DbErrorRule } from '@/common/errors/db-errors';
+import { optionalFilter } from '@/common/query-filters';
+import { MAX_UZS } from '@/common/validation/patterns';
 import { Prisma } from '@prisma/client';
 import { ApiException, cashierEditReason, hasCashierRole, type AuthenticatedUser } from '@/common';
 import { toIsoDateTime } from '@/common/serialization/financial';
@@ -55,7 +59,6 @@ const CHANNELS = [
 ] as const;
 
 type ChannelField = (typeof CHANNELS)[number]['field'];
-const MAX_UZS = 9_223_372_036_854_775_807n;
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 /** daily-{branchId}-{YYYY-MM-DD} — stable across the reverse+reinsert of a PATCH. */
@@ -110,10 +113,34 @@ interface AggregateRow {
   updated_at: Date;
 }
 
-/** A filter value of "all" or an empty string means "do not filter". */
-function pick(value: string | undefined): string | undefined {
-  return !value || value === 'all' ? undefined : value;
-}
+const WRITE_ERRORS: readonly DbErrorRule[] = [
+  [
+    /period .* is closed|accounting period is closed/i,
+    () => new ApiException(409, 'PERIOD_LOCKED', 'Yopilgan davrga tushum kiritib bo‘lmaydi.'),
+  ],
+  [
+    /append-only|immutable except/i,
+    () =>
+      new ApiException(
+        409,
+        'REVENUE_IMMUTABLE',
+        'Tushum yozuvi o‘zgarmas — faqat bekor qilish orqali tahrirlanadi.',
+      ),
+  ],
+  [
+    /idempotency_key/i,
+    () => new ApiException(409, 'REVENUE_DAY_EXISTS', 'Bu so‘rov allaqachon qayta ishlangan.'),
+  ],
+  [
+    /bigint.*range|out of range/i,
+    () => new ApiException(422, 'AMOUNT_INVALID', 'Summa ruxsat etilgan chegaradan oshdi.'),
+  ],
+  ACTOR_CONTEXT_RULE,
+  [
+    /foreign key|violates|invalid input/i,
+    () => new ApiException(422, 'REFERENCE_INVALID', 'Ma’lumotnomalardan biri topilmadi.'),
+  ],
+];
 
 @Injectable()
 export class DailyRevenuesService {
@@ -307,9 +334,7 @@ export class DailyRevenuesService {
   ): Promise<DailyRevenueDto> {
     // The mock accepts either permission here, and the guard can only AND, so
     // this route carries no @RequirePermissions and checks the pair itself.
-    const allowed = ['revenue.edit', 'revenue.create'];
-    if (!allowed.some((code) => user.permissions.includes(code)))
-      throw ApiException.forbidden(undefined, { missingPermissions: allowed });
+    requireAnyPermission(user, ['revenue.edit', 'revenue.create']);
 
     const cashierEdit = hasCashierRole(user);
     const editReason = cashierEditReason(user, input.editReason);
@@ -451,7 +476,7 @@ export class DailyRevenuesService {
   private scopedWhere(user: AuthenticatedUser, query: DailyRevenueListQueryDto): Prisma.Sql {
     const parts: Prisma.Sql[] = [Prisma.sql`TRUE`];
 
-    const branch = pick(query.branch);
+    const branch = optionalFilter(query.branch);
     const readable = user.permissions.includes('revenue.view_all_branches')
       ? null
       : user.branchScopes;
@@ -462,7 +487,7 @@ export class DailyRevenuesService {
     else if (branch) parts.push(Prisma.sql`rt.branch_id = ${branch}::uuid`);
     else if (readable) parts.push(Prisma.sql`rt.branch_id = ANY(${readable}::uuid[])`);
 
-    const periodId = pick(query.periodId);
+    const periodId = optionalFilter(query.periodId);
     if (periodId) parts.push(Prisma.sql`rt.accounting_period_id = ${periodId}::uuid`);
     if (query.dateFrom)
       parts.push(Prisma.sql`rt.payment_business_date >= ${query.dateFrom.slice(0, 10)}::date`);
@@ -709,9 +734,7 @@ export class DailyRevenuesService {
   }
 
   private assertReadPermission(user: AuthenticatedUser): void {
-    const allowed = ['revenue.view_own_branch', 'revenue.view_all_branches'];
-    if (!allowed.some((code) => user.permissions.includes(code)))
-      throw ApiException.forbidden(undefined, { missingPermissions: allowed });
+    requireAnyPermission(user, ['revenue.view_own_branch', 'revenue.view_all_branches']);
   }
 
   private assertBusinessDate(value: string): void {
@@ -724,28 +747,6 @@ export class DailyRevenuesService {
   }
 
   private translateWriteError(error: unknown): unknown {
-    if (error instanceof ApiException) return error;
-    const message = error instanceof Error ? error.message : String(error);
-    if (/period .* is closed|accounting period is closed/i.test(message))
-      return new ApiException(409, 'PERIOD_LOCKED', 'Yopilgan davrga tushum kiritib bo‘lmaydi.');
-    if (/append-only|immutable except/i.test(message))
-      return new ApiException(
-        409,
-        'REVENUE_IMMUTABLE',
-        'Tushum yozuvi o‘zgarmas — faqat bekor qilish orqali tahrirlanadi.',
-      );
-    if (/idempotency_key/i.test(message))
-      return new ApiException(409, 'REVENUE_DAY_EXISTS', 'Bu so‘rov allaqachon qayta ishlangan.');
-    if (/bigint.*range|out of range/i.test(message))
-      return new ApiException(422, 'AMOUNT_INVALID', 'Summa ruxsat etilgan chegaradan oshdi.');
-    if (/actor context|signing key/i.test(message))
-      return new ApiException(
-        500,
-        'ACTOR_CONTEXT_INVALID',
-        'Server identifikatsiya konteksti noto‘g‘ri.',
-      );
-    if (/foreign key|violates|invalid input/i.test(message))
-      return new ApiException(422, 'REFERENCE_INVALID', 'Ma’lumotnomalardan biri topilmadi.');
-    return error;
+    return translateDbError(error, WRITE_ERRORS);
   }
 }

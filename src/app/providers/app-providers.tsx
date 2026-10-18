@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { BrowserRouter } from 'react-router-dom';
+import { ThemeProvider } from '@/app/theme';
 import { AuthProvider } from '@/features/auth/auth-context';
 import { ToastProvider } from '@/shared/ui';
 
@@ -15,12 +16,14 @@ export function AppProviders({ children }: { children: ReactNode }) {
       }),
   );
   return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <ToastProvider>
-          <AuthProvider>{children}</AuthProvider>
-        </ToastProvider>
-      </BrowserRouter>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <ToastProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </ToastProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }

@@ -2,7 +2,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const fromBackend = resolve(process.cwd(), '../docs/database/019_investor_capital_contributions.sql');
+const fromBackend = resolve(
+  process.cwd(),
+  '../docs/database/019_investor_capital_contributions.sql',
+);
 const fromRoot = resolve(process.cwd(), 'docs/database/019_investor_capital_contributions.sql');
 const migrationPath = existsSync(fromBackend) ? fromBackend : fromRoot;
 const sql = readFileSync(migrationPath, 'utf8');

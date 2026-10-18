@@ -1,9 +1,12 @@
 import { Injectable } from '@nestjs/common';
+import { requirePermission } from '@/common/authz/permissions';
+import { translateDbError, type DbErrorRule } from '@/common/errors/db-errors';
 import { ApiException, type AuthenticatedUser } from '@/common';
 import { toIsoDateTime } from '@/common/serialization/financial';
 import { ActorContextService, PrismaService } from '@/database';
 import { NotificationEventsService } from '@/notification-events/notification-events.service';
-import { MONTHS_UZ, toBigInt } from '@/reports/report-math';
+import { monthNameUz, periodLabelUz } from '@/common/calendar';
+import { toBigInt } from '@/reports/report-math';
 import { InvestorsService, type InvestorRef } from './investors.service';
 import {
   annualShare,
@@ -120,6 +123,49 @@ interface RequestRow {
  * different yardsticks measured against the same payments — which is correct,
  * because the money only left the company once.
  */
+const WRITE_ERRORS: readonly DbErrorRule[] = [
+  [
+    /investor_payout_requests_open_unique/,
+    () =>
+      new ApiException(
+        409,
+        'PAYOUT_ALREADY_REQUESTED',
+        'Bu davr uchun ko‘rib chiqilmagan so‘rov allaqachon bor.',
+      ),
+  ],
+  [
+    /investor_payout_requests_payment_unique|payment cannot be replaced/,
+    () => new ApiException(409, 'PAYOUT_ALREADY_SETTLED', 'Bu so‘rov allaqachon to‘langan.'),
+  ],
+  [
+    /investor_payout_within_share/,
+    () =>
+      new ApiException(
+        422,
+        'PAYOUT_EXCEEDS_AVAILABLE',
+        'So‘ralgan summa hisoblangan ulushdan ko‘p.',
+      ),
+  ],
+  [
+    /already (paid|rejected|cancelled)|cannot move from/,
+    () => new ApiException(409, 'PAYOUT_STATE_INVALID', 'So‘rov holati bu amalga yo‘l qo‘ymaydi.'),
+  ],
+  [
+    /facts are immutable/,
+    () => new ApiException(409, 'PAYOUT_IMMUTABLE', 'So‘rov ma’lumotlari o‘zgartirilmaydi.'),
+  ],
+  [
+    /settling payment must be/,
+    () =>
+      new ApiException(
+        422,
+        'PAYOUT_PAYMENT_MISMATCH',
+        'To‘lov so‘rovga mos kelmadi — summa yoki sana tekshiring.',
+      ),
+  ],
+  [/uzs_amount/, () => new ApiException(422, 'AMOUNT_INVALID', 'Summa noto‘g‘ri.')],
+];
+
 @Injectable()
 export class InvestorPayoutsService {
   constructor(
@@ -152,7 +198,7 @@ export class InvestorPayoutsService {
       const open = fromWholeUzs(toBigInt(row.open_uzs));
       return {
         month: row.month,
-        label: MONTHS_UZ[row.month - 1] ?? String(row.month),
+        label: monthNameUz(row.month),
         periodId: row.period_id,
         factRevenueUzs: String(toBigInt(row.fact_revenue_uzs)),
         ownershipPercent: Number(row.ownership_percent ?? 0),
@@ -245,10 +291,7 @@ export class InvestorPayoutsService {
   // ---------------------------------------------------------------- writing
 
   async request(user: AuthenticatedUser, input: PayoutRequestCreateDto): Promise<PayoutRequestRow> {
-    if (!user.permissions.includes('investor.settlement.request'))
-      throw ApiException.forbidden(undefined, {
-        missingPermissions: ['investor.settlement.request'],
-      });
+    requirePermission(user, 'investor.settlement.request');
 
     // The session decides whose request this is. There is no investorId on the
     // DTO to tamper with.
@@ -458,9 +501,7 @@ export class InvestorPayoutsService {
 
     const isOwner = profile?.id === current.investorId;
     if (!isOwner || !user.permissions.includes('investor.settlement.request'))
-      throw ApiException.forbidden(undefined, {
-        missingPermissions: ['investor.settlement.request'],
-      });
+      throw ApiException.missingPermissions(['investor.settlement.request']);
 
     if (current.status !== 'pending' && current.status !== 'approved')
       throw new ApiException(409, 'PAYOUT_NOT_CANCELLABLE', 'Bu so‘rovni bekor qilib bo‘lmaydi.');
@@ -634,7 +675,7 @@ export class InvestorPayoutsService {
       periodId: row.period_id,
       year: row.year,
       month: row.month,
-      monthLabel: MONTHS_UZ[row.month - 1] ?? String(row.month),
+      monthLabel: monthNameUz(row.month),
       requestedAmountUzs: String(toBigInt(row.requested_amount_uzs)),
       calculatedShareUzs: formatDecimalUzs(
         parseDecimalUzs(String(row.calculated_share_uzs ?? '0')),
@@ -662,16 +703,15 @@ export class InvestorPayoutsService {
       where: { id: periodId },
       select: { year: true, month: true },
     });
-    if (!period) throw new ApiException(404, 'PERIOD_NOT_FOUND', 'Hisob davri topilmadi.');
+    if (!period) throw ApiException.periodNotFound();
 
     const rows = await this.shareRows(investorId, period.year);
     const row = rows.find((item) => item.period_id === periodId);
-    if (!row)
-      throw new ApiException(404, 'PERIOD_NOT_FOUND', 'Bu davr uchun ulush ma’lumoti topilmadi.');
+    if (!row) throw ApiException.periodNotFound('Bu davr uchun ulush ma’lumoti topilmadi.');
 
     const share = parseDecimalUzs(String(row.calculated_share_uzs ?? '0'));
     return {
-      label: `${MONTHS_UZ[period.month - 1] ?? period.month} ${period.year}`,
+      label: periodLabelUz(period.year, period.month),
       factRevenueUzs: String(toBigInt(row.fact_revenue_uzs)),
       ownershipPercent: Number(row.ownership_percent ?? 0),
       ...availability(
@@ -683,59 +723,19 @@ export class InvestorPayoutsService {
   }
 
   private assertApprove(user: AuthenticatedUser): void {
-    if (!user.permissions.includes('investor.settlement.approve'))
-      throw ApiException.forbidden(undefined, {
-        missingPermissions: ['investor.settlement.approve'],
-      });
+    requirePermission(user, 'investor.settlement.approve');
   }
 
   private assertViewAll(user: AuthenticatedUser): void {
-    if (!user.permissions.includes('investor.view_all'))
-      throw ApiException.forbidden(undefined, {
-        missingPermissions: ['investor.view_all'],
-      });
+    requirePermission(user, 'investor.view_all');
   }
 
   private assertPay(user: AuthenticatedUser): void {
-    if (!user.permissions.includes('investor.settlement.pay'))
-      throw ApiException.forbidden(undefined, { missingPermissions: ['investor.settlement.pay'] });
+    requirePermission(user, 'investor.settlement.pay');
   }
 
   /** Database guards speak in constraint names; users need sentences. */
   private translate(error: unknown): unknown {
-    if (error instanceof ApiException) return error;
-    const message = error instanceof Error ? error.message : String(error);
-
-    if (/investor_payout_requests_open_unique/.test(message))
-      return new ApiException(
-        409,
-        'PAYOUT_ALREADY_REQUESTED',
-        'Bu davr uchun ko‘rib chiqilmagan so‘rov allaqachon bor.',
-      );
-    if (/investor_payout_requests_payment_unique|payment cannot be replaced/.test(message))
-      return new ApiException(409, 'PAYOUT_ALREADY_SETTLED', 'Bu so‘rov allaqachon to‘langan.');
-    if (/investor_payout_within_share/.test(message))
-      return new ApiException(
-        422,
-        'PAYOUT_EXCEEDS_AVAILABLE',
-        'So‘ralgan summa hisoblangan ulushdan ko‘p.',
-      );
-    if (/already (paid|rejected|cancelled)|cannot move from/.test(message))
-      return new ApiException(
-        409,
-        'PAYOUT_STATE_INVALID',
-        'So‘rov holati bu amalga yo‘l qo‘ymaydi.',
-      );
-    if (/facts are immutable/.test(message))
-      return new ApiException(409, 'PAYOUT_IMMUTABLE', 'So‘rov ma’lumotlari o‘zgartirilmaydi.');
-    if (/settling payment must be/.test(message))
-      return new ApiException(
-        422,
-        'PAYOUT_PAYMENT_MISMATCH',
-        'To‘lov so‘rovga mos kelmadi — summa yoki sana tekshiring.',
-      );
-    if (/uzs_amount/.test(message))
-      return new ApiException(422, 'AMOUNT_INVALID', 'Summa noto‘g‘ri.');
-    return error;
+    return translateDbError(error, WRITE_ERRORS);
   }
 }

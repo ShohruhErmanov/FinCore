@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ACTOR_CONTEXT_RULE, translateDbError, type DbErrorRule } from '@/common/errors/db-errors';
 import { ApiException, type AuthenticatedUser } from '@/common';
 import { toMoneyUzs } from '@/common/serialization/financial';
 import { ActorContextService, PrismaService } from '@/database';
@@ -49,6 +50,18 @@ export interface BaselineLineInput {
  * in Settings, where both the per-row total and the column totals are computed
  * on read rather than stored.
  */
+const WRITE_ERRORS: readonly DbErrorRule[] = [
+  [
+    /uzs_amount_nonnegative|violates check/i,
+    () => new ApiException(422, 'AMOUNT_INVALID', 'Summa manfiy bo‘lishi mumkin emas.'),
+  ],
+  [
+    /foreign key|violates/i,
+    () => new ApiException(422, 'REFERENCE_INVALID', 'Kategoriya yoki filial topilmadi.'),
+  ],
+  ACTOR_CONTEXT_RULE,
+];
+
 @Injectable()
 export class CategoryBaselinesService {
   constructor(
@@ -64,7 +77,14 @@ export class CategoryBaselinesService {
         orderBy: { code: 'asc' },
       }),
       this.prisma.db.expense_categories.findMany({
-        select: { id: true, code: true, name: true, expense_type: true, is_active: true, sort_order: true },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          expense_type: true,
+          is_active: true,
+          sort_order: true,
+        },
         // Fixed block first, then variable — the same two-block layout the
         // Excel sheet uses (rows 4-15 vs 16-33).
         orderBy: [{ expense_type: 'asc' }, { sort_order: 'asc' }, { name: 'asc' }],
@@ -102,7 +122,11 @@ export class CategoryBaselinesService {
     });
 
     return {
-      branches: branches.map((branch) => ({ branchId: branch.id, code: branch.code, name: branch.name })),
+      branches: branches.map((branch) => ({
+        branchId: branch.id,
+        code: branch.code,
+        name: branch.name,
+      })),
       rows,
       totals: {
         byBranch: Object.fromEntries(
@@ -118,7 +142,10 @@ export class CategoryBaselinesService {
    * than deleted, so «0 so'm rejalashtirilgan» stays distinguishable from
    * «hali kiritilmagan» in a later reading of the table.
    */
-  async save(user: AuthenticatedUser, lines: BaselineLineInput[]): Promise<CategoryBaselineBoardDto> {
+  async save(
+    user: AuthenticatedUser,
+    lines: BaselineLineInput[],
+  ): Promise<CategoryBaselineBoardDto> {
     if (lines.length === 0) return this.board();
 
     const [categories, branches] = await Promise.all([
@@ -165,18 +192,6 @@ export class CategoryBaselinesService {
   }
 
   private translateWriteError(error: unknown): unknown {
-    if (error instanceof ApiException) return error;
-    const message = error instanceof Error ? error.message : String(error);
-    if (/uzs_amount_nonnegative|violates check/i.test(message))
-      return new ApiException(422, 'AMOUNT_INVALID', 'Summa manfiy bo‘lishi mumkin emas.');
-    if (/foreign key|violates/i.test(message))
-      return new ApiException(422, 'REFERENCE_INVALID', 'Kategoriya yoki filial topilmadi.');
-    if (/actor context|signing key/i.test(message))
-      return new ApiException(
-        500,
-        'ACTOR_CONTEXT_INVALID',
-        'Server identifikatsiya konteksti noto‘g‘ri.',
-      );
-    return error;
+    return translateDbError(error, WRITE_ERRORS);
   }
 }

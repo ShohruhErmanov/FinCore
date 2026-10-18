@@ -109,7 +109,9 @@ describe('migration 011 — delivery state model', () => {
   it('ties each terminal status to its timestamp', () => {
     expect(sql).toMatch(/\(status = 'delivered'\) = \(delivered_at IS NOT NULL\)/);
     expect(sql).toMatch(/\(status = 'cancelled'\) = \(cancelled_at IS NOT NULL\)/);
-    expect(sql).toMatch(/\(status = 'permanently_failed'\) = \(permanently_failed_at IS NOT NULL\)/);
+    expect(sql).toMatch(
+      /\(status = 'permanently_failed'\) = \(permanently_failed_at IS NOT NULL\)/,
+    );
   });
 
   it('requires a lease owner and deadline together, and for anything processing', () => {
@@ -138,9 +140,9 @@ describe('migration 011 — delivery state model', () => {
 
 describe('migration 011 — no secrets', () => {
   it('declares no credential-shaped column', () => {
-    const columns = [...sql.matchAll(/^\s{2}(\w+)\s+(UUID|TEXT|INT|JSONB|TIMESTAMPTZ|fincore\.)/gm)].map(
-      (m) => m[1]!.toLowerCase(),
-    );
+    const columns = [
+      ...sql.matchAll(/^\s{2}(\w+)\s+(UUID|TEXT|INT|JSONB|TIMESTAMPTZ|fincore\.)/gm),
+    ].map((m) => m[1]!.toLowerCase());
     expect(columns.length).toBeGreaterThan(20);
     for (const forbidden of ['token', 'secret', 'password', 'chat_id', 'pepper', 'phone', 'email'])
       expect(columns).not.toContain(forbidden);

@@ -122,16 +122,9 @@ describe('CashierReportService (PHASE 19)', () => {
   });
 
   it('narrows own-performance permission to the requester without leaking another salary', async () => {
-    const ownMetric = [
-      { branch_id: BRANCH_A, user_id: CASHIER_A, total_uzs: 70n, salary: '10' },
-    ];
+    const ownMetric = [{ branch_id: BRANCH_A, user_id: CASHIER_A, total_uzs: 70n, salary: '10' }];
     const ownDays = [{ branch_id: BRANCH_A, user_id: CASHIER_A, days: 1 }];
-    const { service, queryRaw } = setupQueryResults([
-      branchRows,
-      rosterRows,
-      ownMetric,
-      ownDays,
-    ]);
+    const { service, queryRaw } = setupQueryResults([branchRows, rosterRows, ownMetric, ownDays]);
     const viewer = authenticatedUser({
       permissions: ['reports.view_own_performance'],
     });
@@ -229,9 +222,9 @@ describe('CashierReportService (PHASE 19)', () => {
   it('rejects an out-of-scope branch before executing financial report queries', async () => {
     const { service, accountingPeriods, queryRaw } = setupQueryResults([]);
 
-    await expect(
-      service.get(authenticatedUser(), PERIOD_ID, BRANCH_B),
-    ).rejects.toMatchObject({ code: 'BRANCH_SCOPE_DENIED' });
+    await expect(service.get(authenticatedUser(), PERIOD_ID, BRANCH_B)).rejects.toMatchObject({
+      code: 'BRANCH_SCOPE_DENIED',
+    });
 
     expect(accountingPeriods.findUnique).toHaveBeenCalledOnce();
     expect(queryRaw).not.toHaveBeenCalled();

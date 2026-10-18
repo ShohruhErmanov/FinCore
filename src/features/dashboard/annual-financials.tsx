@@ -1,4 +1,5 @@
 import { cn } from '@/shared/lib/cn';
+import { ProgressBar } from '@/shared/ui';
 import { formatMoney, formatPercent } from '@/shared/lib/format';
 import type {
   AnnualExpenseSummary,
@@ -292,19 +293,15 @@ export function AnnualFinancialOverview({
               <span className="font-semibold text-slate-600">{row.label}</span>
               <span className="tabular-nums text-muted">{formatMoney(row.raw)}</span>
             </div>
-            <div
-              className="mt-1.5 h-2.5 overflow-hidden rounded-full neu-track"
-              role="img"
-              aria-label={`${row.label}: ${formatMoney(row.raw)}`}
-            >
-              <div
-                className={cn(
-                  'h-full rounded-full transition-[width] duration-500',
-                  row.key === 'profit' && row.value < 0n ? 'bg-danger' : ACCENT[row.key].bar,
-                )}
-                style={{ width: `${width(row.value)}%` }}
-              />
-            </div>
+            <ProgressBar
+              value={width(row.value)}
+              label={`${row.label}: ${formatMoney(row.raw)}`}
+              className="mt-1.5 h-2.5"
+              barClassName={cn(
+                'transition-[width] duration-500',
+                row.key === 'profit' && row.value < 0n ? 'bg-danger' : ACCENT[row.key].bar,
+              )}
+            />
           </div>
         ))}
       </div>

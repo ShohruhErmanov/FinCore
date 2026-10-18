@@ -1,4 +1,10 @@
-import { Inject, Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  type OnModuleDestroy,
+  type OnModuleInit,
+} from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 
 import { APP_ENV, type AppEnv } from '@/config';
@@ -70,7 +76,7 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
       this.logger.log('Database connected.');
     } catch (error) {
       this.lastError = redactConnectionString(
-        error instanceof Error ? error.message.split('\n')[0] ?? error.name : String(error),
+        error instanceof Error ? (error.message.split('\n')[0] ?? error.name) : String(error),
       );
       this.state = 'CONNECTION_FAILED';
       await client.$disconnect().catch(() => undefined);
@@ -102,7 +108,7 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
       return true;
     } catch (error) {
       this.lastError = redactConnectionString(
-        error instanceof Error ? error.message.split('\n')[0] ?? error.name : String(error),
+        error instanceof Error ? (error.message.split('\n')[0] ?? error.name) : String(error),
       );
       this.state = 'CONNECTION_FAILED';
       return false;

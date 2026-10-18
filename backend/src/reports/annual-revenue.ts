@@ -1,5 +1,6 @@
 import { toMoneyUzs } from '@/common/serialization/financial';
-import { MONTHS_SHORT_UZ, percentageValue } from './report-math';
+import { MONTHS_SHORT_UZ } from '@/common/calendar';
+import { percentageValue } from './report-math';
 
 /**
  * The revenue half of the annual summary, built the same way the expense half
@@ -62,8 +63,7 @@ export function buildAnnualRevenue(
   const earning = months.filter((row) => BigInt(row.actualUzs) > 0n);
 
   const peak = earning.reduce<RevenueMonth | null>(
-    (best, row) =>
-      best === null || BigInt(row.actualUzs) > BigInt(best.actualUzs) ? row : best,
+    (best, row) => (best === null || BigInt(row.actualUzs) > BigInt(best.actualUzs) ? row : best),
     null,
   );
 
@@ -74,9 +74,7 @@ export function buildAnnualRevenue(
     completionPct: percentageValue(total, plan),
     averageMonthlyUzs: toMoneyUzs(earning.length ? total / BigInt(earning.length) : 0n)!,
     averageMonthsCount: earning.length,
-    peakMonth: peak
-      ? { month: peak.month, label: peak.label, actualUzs: peak.actualUzs }
-      : null,
+    peakMonth: peak ? { month: peak.month, label: peak.label, actualUzs: peak.actualUzs } : null,
     // Growth is measured against last year's magnitude, so it stays readable
     // even if that year somehow closed negative.
     growthPct:
