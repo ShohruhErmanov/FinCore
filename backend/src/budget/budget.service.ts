@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { translateDbError, type DbErrorRule } from '@/common/errors/db-errors';
 import { ApiException, type AuthenticatedUser } from '@/common';
+import { periodLabelUz } from '@/common/calendar';
 import { toIsoDateTime, toMoneyUzs } from '@/common/serialization/financial';
 import { ActorContextService, PrismaService } from '@/database';
 import type { BudgetLineInputDto } from './dto/budget.dto';
@@ -70,19 +72,19 @@ export interface BudgetHistoryDto {
   periods: BudgetHistoryPeriodDto[];
 }
 
-const MONTHS_UZ = [
-  'Yanvar',
-  'Fevral',
-  'Mart',
-  'Aprel',
-  'May',
-  'Iyun',
-  'Iyul',
-  'Avgust',
-  'Sentabr',
-  'Oktabr',
-  'Noyabr',
-  'Dekabr',
+const WRITE_ERRORS: readonly DbErrorRule[] = [
+  [
+    /period is closed/i,
+    () => new ApiException(409, 'PERIOD_CLOSED', 'Yopiq davrdagi budjet tahrirlanmaydi.'),
+  ],
+  [
+    /only be written while their version is in draft/i,
+    () => new ApiException(409, 'BUDGET_VERSION_LOCKED', 'Budjet versiyasi tahrirlanmaydi.'),
+  ],
+  [
+    /foreign key|violates/i,
+    () => new ApiException(422, 'REFERENCE_INVALID', 'Filial yoki kategoriya topilmadi.'),
+  ],
 ];
 
 @Injectable()
@@ -259,7 +261,7 @@ export class BudgetService {
           periodId: period.id,
           year: period.year,
           month: period.month,
-          periodLabel: `${MONTHS_UZ[period.month - 1] ?? period.month} ${period.year}`,
+          periodLabel: periodLabelUz(period.year, period.month),
           periodStatus: period.status,
           budgetVersionId: version?.id ?? null,
           revisionNo: version?.revision_no ?? null,
@@ -373,7 +375,7 @@ export class BudgetService {
       where: { id: periodId },
       select: { id: true, year: true, month: true, status: true },
     });
-    if (!period) throw new ApiException(404, 'PERIOD_NOT_FOUND', 'Hisob davri topilmadi.');
+    if (!period) throw ApiException.periodNotFound();
     return period;
   }
 
@@ -503,7 +505,7 @@ export class BudgetService {
     return {
       id: version?.id ?? `budget-${period.id}`,
       periodId: period.id,
-      periodLabel: `${MONTHS_UZ[period.month - 1] ?? period.month} ${period.year}`,
+      periodLabel: periodLabelUz(period.year, period.month),
       updatedAt: toIsoDateTime(version?.updated_at ?? new Date())!,
       updatedByName: editor?.full_name ?? '',
       lines,
@@ -511,14 +513,7 @@ export class BudgetService {
   }
 
   private translateWriteError(error: unknown): unknown {
-    const message = error instanceof Error ? error.message : String(error);
-    if (/period is closed/i.test(message))
-      return new ApiException(409, 'PERIOD_CLOSED', 'Yopiq davrdagi budjet tahrirlanmaydi.');
-    if (/only be written while their version is in draft/i.test(message))
-      return new ApiException(409, 'BUDGET_VERSION_LOCKED', 'Budjet versiyasi tahrirlanmaydi.');
-    if (/foreign key|violates/i.test(message))
-      return new ApiException(422, 'REFERENCE_INVALID', 'Filial yoki kategoriya topilmadi.');
-    return error;
+    return translateDbError(error, WRITE_ERRORS);
   }
 
   private normalizeReason(reason: string | null | undefined): string | null {

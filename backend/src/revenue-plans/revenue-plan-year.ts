@@ -1,4 +1,5 @@
-import { MONTHS_SHORT_UZ, percentageValue } from '@/reports/report-math';
+import { MONTHS_SHORT_UZ } from '@/common/calendar';
+import { percentageValue } from '@/reports/report-math';
 
 /**
  * Every month's revenue plan on one page — what the director entered, branch by

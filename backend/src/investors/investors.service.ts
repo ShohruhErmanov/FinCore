@@ -1,8 +1,11 @@
 import { Injectable } from '@nestjs/common';
+import { requirePermission } from '@/common/authz/permissions';
+import { translateDbError, type DbErrorRule } from '@/common/errors/db-errors';
 import { ApiException, type AuthenticatedUser } from '@/common';
 import { toIsoDateTime, toMoneyUzs } from '@/common/serialization/financial';
 import { ActorContextService, PrismaService } from '@/database';
-import { MONTHS_UZ, toBigInt } from '@/reports/report-math';
+import { monthNameUz } from '@/common/calendar';
+import { toBigInt } from '@/reports/report-math';
 import { settle, settleTotal, toOwnershipPercent, type Settlement } from './investor-math';
 import type {
   InvestorCreateDto,
@@ -60,6 +63,28 @@ interface AggregateRow {
   payment_count: bigint | null;
 }
 
+const WRITE_ERRORS: readonly DbErrorRule[] = [
+  [
+    /append-only|immutable/i,
+    () =>
+      new ApiException(409, 'PAYMENT_IMMUTABLE', 'To‘lov yozuvi o‘zgartirilmaydi — bekor qiling.'),
+  ],
+  [
+    /ownership_range/i,
+    () =>
+      new ApiException(
+        422,
+        'OWNERSHIP_PERCENT_INVALID',
+        'Ulush 0 va 100 foiz orasida bo‘lishi kerak.',
+      ),
+  ],
+  [/uzs_amount/i, () => new ApiException(422, 'AMOUNT_INVALID', 'Summa noto‘g‘ri.')],
+  [
+    /foreign key|violates foreign key/i,
+    () => new ApiException(422, 'REFERENCE_INVALID', 'Ma’lumotnomalardan biri topilmadi.'),
+  ],
+];
+
 @Injectable()
 export class InvestorsService {
   constructor(
@@ -101,7 +126,7 @@ export class InvestorsService {
 
     const months: InvestorMonthRow[] = rows.map((row) => ({
       month: row.month,
-      label: MONTHS_UZ[row.month - 1] ?? String(row.month),
+      label: monthNameUz(row.month),
       periodId: row.period_id,
       settlement: settle(toBigInt(row.entitled), toBigInt(row.paid)),
       paymentCount: Number(row.payment_count ?? 0n),
@@ -447,7 +472,7 @@ export class InvestorsService {
                   id: capital.start_period_id,
                   year: capital.year,
                   month: capital.month,
-                  label: MONTHS_UZ[capital.month - 1] ?? String(capital.month),
+                  label: monthNameUz(capital.month),
                 },
                 paymentMethod: {
                   id: capital.payment_method_id,
@@ -487,10 +512,7 @@ export class InvestorsService {
     // Self-access needs its own permission too, so removing investor.view_own
     // genuinely closes the door rather than leaving an implicit backdoor.
     if (isSelf && user.permissions.includes('investor.view_own')) return profile;
-    if (!canViewAll)
-      throw ApiException.forbidden(undefined, {
-        missingPermissions: ['investor.view_all'],
-      });
+    if (!canViewAll) throw ApiException.missingPermissions(['investor.view_all']);
     if (!this.isVisible(user, profile))
       throw new ApiException(
         403,
@@ -510,7 +532,7 @@ export class InvestorsService {
       where: { id: periodId },
       select: { year: true, month: true },
     });
-    if (!period) throw new ApiException(404, 'PERIOD_NOT_FOUND', 'Hisob davri topilmadi.');
+    if (!period) throw ApiException.periodNotFound();
     return period;
   }
 
@@ -530,13 +552,11 @@ export class InvestorsService {
   }
 
   private assertViewAll(user: AuthenticatedUser): void {
-    if (!user.permissions.includes('investor.view_all'))
-      throw ApiException.forbidden(undefined, { missingPermissions: ['investor.view_all'] });
+    requirePermission(user, 'investor.view_all');
   }
 
   private assertManage(user: AuthenticatedUser): void {
-    if (!user.permissions.includes('investor.manage'))
-      throw ApiException.forbidden(undefined, { missingPermissions: ['investor.manage'] });
+    requirePermission(user, 'investor.manage');
   }
 
   private isMissingCapitalContributionTable(error: unknown): boolean {
@@ -548,25 +568,7 @@ export class InvestorsService {
   }
 
   private translate(error: unknown): unknown {
-    if (error instanceof ApiException) return error;
-    const message = error instanceof Error ? error.message : String(error);
-    if (/append-only|immutable/i.test(message))
-      return new ApiException(
-        409,
-        'PAYMENT_IMMUTABLE',
-        'To‘lov yozuvi o‘zgartirilmaydi — bekor qiling.',
-      );
-    if (/ownership_range/i.test(message))
-      return new ApiException(
-        422,
-        'OWNERSHIP_PERCENT_INVALID',
-        'Ulush 0 va 100 foiz orasida bo‘lishi kerak.',
-      );
-    if (/uzs_amount/i.test(message))
-      return new ApiException(422, 'AMOUNT_INVALID', 'Summa noto‘g‘ri.');
-    if (/foreign key|violates foreign key/i.test(message))
-      return new ApiException(422, 'REFERENCE_INVALID', 'Ma’lumotnomalardan biri topilmadi.');
-    return error;
+    return translateDbError(error, WRITE_ERRORS);
   }
 }
 

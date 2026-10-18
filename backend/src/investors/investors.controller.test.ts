@@ -38,7 +38,9 @@ describe('GET /investors/me permission', () => {
   const handler = InvestorsController.prototype.mine;
 
   it('lets an investor holding investor.view_own through to their own profile', async () => {
-    const service = { mine: vi.fn().mockResolvedValue({ id: PROFILE_ID }) } as unknown as InvestorsService;
+    const service = {
+      mine: vi.fn().mockResolvedValue({ id: PROFILE_ID }),
+    } as unknown as InvestorsService;
     const controller = new InvestorsController(service);
     const actor = user(['investor.view_own']);
 
@@ -78,21 +80,39 @@ describe('investor endpoint permission matrix', () => {
   const cases: Array<[string, unknown, string]> = [
     ['POST /investors', InvestorsController.prototype.create, 'investor.manage'],
     ['PATCH /investors/:id', InvestorsController.prototype.update, 'investor.manage'],
-    ['PUT /investors/:id/entitlements', InvestorsController.prototype.setEntitlement, 'investor.manage'],
-    ['POST /investors/:id/payments', InvestorsController.prototype.recordPayment, 'investor.manage'],
-    ['POST /investors/:id/payments/:paymentId/reverse', InvestorsController.prototype.reversePayment, 'investor.manage'],
+    [
+      'PUT /investors/:id/entitlements',
+      InvestorsController.prototype.setEntitlement,
+      'investor.manage',
+    ],
+    [
+      'POST /investors/:id/payments',
+      InvestorsController.prototype.recordPayment,
+      'investor.manage',
+    ],
+    [
+      'POST /investors/:id/payments/:paymentId/reverse',
+      InvestorsController.prototype.reversePayment,
+      'investor.manage',
+    ],
   ];
 
   it.each(cases)('%s requires %s', (_label, handler, required) => {
     expect(guard().canActivate(contextFor(user([required]), handler))).toBe(true);
-    expect(() => guard().canActivate(contextFor(user(['investor.view_own']), handler))).toThrowError();
+    expect(() =>
+      guard().canActivate(contextFor(user(['investor.view_own']), handler)),
+    ).toThrowError();
   });
 
   it('leaves GET /investors and GET /investors/:id to the service (OR-shaped rules)', () => {
     // No decorator: the guard must not block, because the rule is either
     // view_all, or view_own for the caller's own id — which only the service
     // can evaluate.
-    expect(guard().canActivate(contextFor(user([]), InvestorsController.prototype.list))).toBe(true);
-    expect(guard().canActivate(contextFor(user([]), InvestorsController.prototype.dashboard))).toBe(true);
+    expect(guard().canActivate(contextFor(user([]), InvestorsController.prototype.list))).toBe(
+      true,
+    );
+    expect(guard().canActivate(contextFor(user([]), InvestorsController.prototype.dashboard))).toBe(
+      true,
+    );
   });
 });

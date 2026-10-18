@@ -15,6 +15,7 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { WHOLE_UZS_PATTERN } from '@/common/validation/patterns';
 
 const ROLE_CODES = ['cashier', 'finance_manager', 'director', 'investor'] as const;
 type RoleCode = (typeof ROLE_CODES)[number];
@@ -106,7 +107,7 @@ export class UserCreateDto {
    */
   @ApiPropertyOptional({ example: '10000000', description: 'Joriy davr uchun tegishli summa' })
   @IsOptional()
-  @Matches(/^\d+$/, {
+  @Matches(WHOLE_UZS_PATTERN, {
     message: 'entitledAmountUzs manfiy bo‘lmagan butun son-string bo‘lishi kerak',
   })
   entitledAmountUzs?: string;
@@ -162,7 +163,7 @@ export class UserPasswordDto {
 
 export class UserSalaryDto {
   @ApiProperty({ example: '4500000', description: 'Belgilangan oylik, butun so‘m string' })
-  @Matches(/^\d+$/, {
+  @Matches(WHOLE_UZS_PATTERN, {
     message: 'fixedSalaryUzs manfiy bo‘lmagan butun son-string bo‘lishi kerak',
   })
   fixedSalaryUzs!: string;

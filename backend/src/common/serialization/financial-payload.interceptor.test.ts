@@ -50,7 +50,9 @@ describe('FinancialPayloadInterceptor', () => {
   });
 
   it('flags a share that arrives without its decimals', () => {
-    expect(check({ annual: { shareUzs: '6276829' } })).toContain('ShareUzs two-decimal string emas');
+    expect(check({ annual: { shareUzs: '6276829' } })).toContain(
+      'ShareUzs two-decimal string emas',
+    );
   });
 
   it('still flags decimals in an ordinary money field', () => {

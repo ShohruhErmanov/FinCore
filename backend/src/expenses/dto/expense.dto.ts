@@ -11,14 +11,11 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-
-/** Money crosses the wire as an integer string; a JS number would lose precision. */
-const MONEY = /^\d+$/;
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+import { ISO_DATE_PATTERN, WHOLE_UZS_PATTERN } from '@/common/validation/patterns';
 
 export class ExpenseCreateDto {
   @ApiProperty({ example: '2026-08-20' })
-  @Matches(ISO_DATE, { message: 'transactionDate YYYY-MM-DD bo‘lishi kerak' })
+  @Matches(ISO_DATE_PATTERN, { message: 'transactionDate YYYY-MM-DD bo‘lishi kerak' })
   transactionDate!: string;
 
   @ApiPropertyOptional({ description: 'Berilmasa foydalanuvchining yozish scope’i ishlatiladi' })
@@ -37,7 +34,7 @@ export class ExpenseCreateDto {
   description!: string;
 
   @ApiProperty({ example: '1732500', description: 'Butun so‘m, string' })
-  @Matches(MONEY, { message: 'amountUzs musbat butun son-string bo‘lishi kerak' })
+  @Matches(WHOLE_UZS_PATTERN, { message: 'amountUzs musbat butun son-string bo‘lishi kerak' })
   amountUzs!: string;
 
   @ApiProperty()
@@ -68,7 +65,7 @@ export class ExpenseCreateDto {
 export class ExpenseUpdateDto {
   @ApiPropertyOptional()
   @IsOptional()
-  @Matches(ISO_DATE, { message: 'transactionDate YYYY-MM-DD bo‘lishi kerak' })
+  @Matches(ISO_DATE_PATTERN, { message: 'transactionDate YYYY-MM-DD bo‘lishi kerak' })
   transactionDate?: string;
 
   @ApiPropertyOptional()
@@ -85,7 +82,7 @@ export class ExpenseUpdateDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @Matches(MONEY, { message: 'amountUzs musbat butun son-string bo‘lishi kerak' })
+  @Matches(WHOLE_UZS_PATTERN, { message: 'amountUzs musbat butun son-string bo‘lishi kerak' })
   amountUzs?: string;
 
   @ApiPropertyOptional()

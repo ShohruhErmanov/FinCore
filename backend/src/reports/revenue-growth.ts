@@ -1,5 +1,6 @@
 import { toMoneyUzs } from '@/common/serialization/financial';
-import { MONTHS_SHORT_UZ, percentageValue } from './report-math';
+import { daysInMonth, monthShortNameUz } from '@/common/calendar';
+import { percentageValue } from './report-math';
 
 /**
  * Revenue growth, as two separate figures that are never mixed.
@@ -41,11 +42,6 @@ export interface AnnualRevenueGrowth {
 export interface RevenueGrowth {
   monthly: MonthlyRevenueGrowth;
   annual: AnnualRevenueGrowth;
-}
-
-/** Days in a calendar month, so a 31st never leaks into a 30-day comparison. */
-export function daysInMonth(year: number, month: number): number {
-  return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
 
 export interface GrowthSpan {
@@ -105,9 +101,9 @@ export function buildRevenueGrowth(
   return {
     monthly: {
       month: spans.month,
-      monthLabel: MONTHS_SHORT_UZ[spans.month - 1] ?? String(spans.month),
+      monthLabel: monthShortNameUz(spans.month),
       previousMonth: spans.previousMonth,
-      previousMonthLabel: MONTHS_SHORT_UZ[spans.previousMonth - 1] ?? String(spans.previousMonth),
+      previousMonthLabel: monthShortNameUz(spans.previousMonth),
       currentUzs: toMoneyUzs(monthly.current)!,
       previousUzs: toMoneyUzs(monthly.previous)!,
       changePct: change(monthly.current, monthly.previous),

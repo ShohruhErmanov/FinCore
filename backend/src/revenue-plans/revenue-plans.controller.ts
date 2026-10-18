@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, ParseIntPipe, ParseUUIDPipe, Put } from '@nestjs/common';
+import { requireAnyPermission } from '@/common/authz/permissions';
 import { ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ApiException, CurrentUser, RequirePermissions, type AuthenticatedUser } from '@/common';
 import { SaveRevenuePlanDto } from './dto/revenue-plan.dto';
@@ -83,8 +84,6 @@ export class RevenuePlansController {
 
   /** The board and the year are read by the same people. */
   private assertCanRead(user: AuthenticatedUser): void {
-    const allowed = ['revenue_plan.manage', 'reports.view'];
-    if (!allowed.some((code) => user.permissions.includes(code)))
-      throw ApiException.forbidden(undefined, { missingPermissions: allowed });
+    requireAnyPermission(user, ['revenue_plan.manage', 'reports.view']);
   }
 }

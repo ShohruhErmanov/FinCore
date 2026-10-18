@@ -82,7 +82,13 @@ function makeState(seed: { users?: UserRow[]; tokens?: TokenRow[]; accounts?: Ac
         state.users.find((row) => row.id === where.id) ?? null,
     },
     telegram_link_tokens: {
-      updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+      updateMany: async ({
+        where,
+        data,
+      }: {
+        where: Record<string, unknown>;
+        data: Record<string, unknown>;
+      }) => {
         let count = 0;
         for (const row of state.tokens)
           if (matches(row as unknown as Record<string, unknown>, where)) {
@@ -128,10 +134,13 @@ function makeState(seed: { users?: UserRow[]; tokens?: TokenRow[]; accounts?: Ac
     },
     telegram_accounts: {
       findFirst: async ({ where }: { where: Record<string, unknown> }) =>
-        state.accounts.find((row) => matches(row as unknown as Record<string, unknown>, where)) ?? null,
+        state.accounts.find((row) => matches(row as unknown as Record<string, unknown>, where)) ??
+        null,
       findMany: async ({ where }: { where: Record<string, unknown> }) => {
         const ids = (where.user_id as { in: string[] }).in;
-        return state.accounts.filter((row) => ids.includes(row.user_id) && row.status === where.status);
+        return state.accounts.filter(
+          (row) => ids.includes(row.user_id) && row.status === where.status,
+        );
       },
       create: async ({ data }: { data: Record<string, unknown> }) => {
         const row: AccountRow = {
@@ -152,7 +161,13 @@ function makeState(seed: { users?: UserRow[]; tokens?: TokenRow[]; accounts?: Ac
         Object.assign(row, data);
         return row;
       },
-      updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+      updateMany: async ({
+        where,
+        data,
+      }: {
+        where: Record<string, unknown>;
+        data: Record<string, unknown>;
+      }) => {
         let count = 0;
         for (const row of state.accounts)
           if (matches(row as unknown as Record<string, unknown>, where)) {
@@ -233,7 +248,9 @@ describe('TelegramLinkService — link creation', () => {
   });
 
   it('refuses an inactive account', async () => {
-    const { prisma } = makeState({ users: [{ id: USER_ID, status: 'inactive', is_system: false }] });
+    const { prisma } = makeState({
+      users: [{ id: USER_ID, status: 'inactive', is_system: false }],
+    });
     await expect(new TelegramLinkService(prisma, env()).createLink(user())).rejects.toMatchObject({
       code: 'TELEGRAM_LINK_FORBIDDEN',
     });
@@ -392,7 +409,10 @@ describe('TelegramLinkService — webhook binding', () => {
 
   it('binds once when two deliveries race on the same token', async () => {
     const { state, service, raw } = await issued();
-    await Promise.all([service.handleUpdate(privateStart(raw)), service.handleUpdate(privateStart(raw))]);
+    await Promise.all([
+      service.handleUpdate(privateStart(raw)),
+      service.handleUpdate(privateStart(raw)),
+    ]);
     expect(state.accounts).toHaveLength(1);
     expect(state.tokens[0]!.status).toBe('consumed');
   });

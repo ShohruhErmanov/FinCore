@@ -38,7 +38,9 @@ try {
   console.log(`ACTOR_SIGNING_KEY_ID=${keyId}`);
   console.log(`ACTOR_SIGNING_KEY=${key.toString('base64')}`);
 } catch (error) {
-  const message = String(error?.message ?? error).split('\n')[0].replace(/postgres(?:ql)?:\/\/\S+/gi, 'postgres://[redacted]');
+  const message = String(error?.message ?? error)
+    .split('\n')[0]
+    .replace(/postgres(?:ql)?:\/\/\S+/gi, 'postgres://[redacted]');
   console.error('ACTOR_KEY_FAILED\n  ' + message);
   process.exitCode = 1;
 } finally {

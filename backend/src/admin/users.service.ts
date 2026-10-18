@@ -1,6 +1,13 @@
 import { Injectable } from '@nestjs/common';
+import {
+  ACTOR_CONTEXT_RULE,
+  errorMessage,
+  translateDbError,
+  type DbErrorRule,
+} from '@/common/errors/db-errors';
 import { AuthService, hashPassword, SessionService, verifyPassword } from '@/auth';
-import { ApiException, type AuthenticatedUser } from '@/common';
+import { MAX_UZS } from '@/common/validation/patterns';
+import { ApiException, normalizePhone, type AuthenticatedUser } from '@/common';
 import { ActorContextService, PrismaService, type PrismaTransaction } from '@/database';
 import type {
   UserAccessDto,
@@ -25,12 +32,28 @@ export interface UserDirectoryItemDto {
 }
 
 const ACTIVE = { is_active: true, revoked_at: null } as const;
-const MAX_UZS = 9_223_372_036_854_775_807n;
 
-/** Same normalisation AuthService uses, so a duplicate is caught in any format. */
-function normalizePhone(value: string): string {
-  return value.replace(/[\s()-]/g, '');
+interface InvestorCapital {
+  amount: bigint;
+  startPeriodId: string;
+  paymentMethodId: string;
 }
+
+const WRITE_ERRORS: readonly DbErrorRule[] = [
+  [
+    /may not be granted with an all-branch/i,
+    () => new ApiException(422, 'BRANCH_REQUIRED', 'Bu rol uchun filial scope majburiy.'),
+  ],
+  [
+    /Unique constraint|duplicate key/i,
+    () => new ApiException(409, 'DUPLICATE_REFERENCE', 'Bu qiymat allaqachon mavjud.'),
+  ],
+  ACTOR_CONTEXT_RULE,
+  [
+    /bigint.*range|out of range/i,
+    () => new ApiException(422, 'AMOUNT_INVALID', 'Oylik ruxsat etilgan chegaradan oshdi.'),
+  ],
+];
 
 @Injectable()
 export class AdminUsersService {
@@ -75,6 +98,74 @@ export class AdminUsersService {
   }
 
   async create(actor: AuthenticatedUser, input: UserCreateDto): Promise<AuthenticatedUser> {
+    this.assertMayCreate(actor, input);
+
+    // Checked server-side too: the browser can be bypassed, and a mismatch here
+    // would silently give the new account a password nobody knows.
+    if (input.password !== input.confirmPassword)
+      throw new ApiException(422, 'PASSWORD_MISMATCH', 'Parol va tasdiqlash mos emas.');
+
+    const phone = normalizePhone(input.phone.trim());
+    await this.assertPhoneFree(phone);
+    const grants = await this.grantsFor(input);
+    const roleIds = await this.resolveRoleIds(grants.map((grant) => grant.role));
+    const capital = input.role === 'investor' ? await this.investorCapital(input) : null;
+    // Resolved before the transaction so a missing period fails the request
+    // rather than the write.
+    const entitlementPeriodId =
+      input.role === 'investor' && input.entitledAmountUzs !== undefined
+        ? await this.currentOrOpenPeriodId()
+        : null;
+    // Same helper the login path verifies against, so a freshly created account
+    // can sign in immediately with phone + password.
+    const password_hash = await hashPassword(input.password);
+
+    const created = await this.prisma
+      .withActor(this.actor.mint(actor.id), async (tx) => {
+        const user = await tx.users.create({
+          data: {
+            full_name: input.fullName.trim(),
+            phone,
+            email: null,
+            password_hash,
+            status: 'active',
+            is_system: false,
+          },
+          select: { id: true },
+        });
+        for (const grant of grants)
+          await tx.user_roles.create({
+            data: {
+              user_id: user.id,
+              role_id: roleIds.get(grant.role)!,
+              branch_id: grant.branchId,
+              granted_by: actor.id,
+            },
+            select: { id: true },
+          });
+
+        // An investor account without its ownership record would be a login
+        // that can see nothing, so both are written in one transaction: either
+        // the investor exists completely or not at all.
+        if (capital)
+          await this.insertInvestorRecords(tx, {
+            userId: user.id,
+            actorId: actor.id,
+            input,
+            capital,
+            entitlementPeriodId,
+          });
+        return user.id;
+      })
+      .catch((error: unknown) => {
+        throw this.translateWriteError(error);
+      });
+
+    return this.auth.getAuthenticatedUser(created, false);
+  }
+
+  /** Who may create which role, and which fields each role may carry. */
+  private assertMayCreate(actor: AuthenticatedUser, input: UserCreateDto): void {
     // Business Owner is a bootstrap/provisioning-only strategic role. It must
     // never be created or assigned through the ordinary user-management API.
     if ((input.role as string) === 'business_owner')
@@ -123,30 +214,36 @@ export class AdminUsersService {
         'INVESTOR_FIELDS_NOT_ALLOWED',
         'Investor moliyaviy ma’lumotlari faqat Investor roli uchun yuboriladi.',
       );
+  }
 
-    // Checked server-side too: the browser can be bypassed, and a mismatch here
-    // would silently give the new account a password nobody knows.
-    if (input.password !== input.confirmPassword)
-      throw new ApiException(422, 'PASSWORD_MISMATCH', 'Parol va tasdiqlash mos emas.');
-
-    const phone = normalizePhone(input.phone.trim());
+  /**
+   * Compared digits-only so "+998 90 …" and "+99890…" collide, which the
+   * approved schema's plain UNIQUE(phone) index cannot express on its own.
+   */
+  private async assertPhoneFree(phone: string): Promise<void> {
     const digits = phone.replace(/\D/g, '');
-    // Compared digits-only so "+998 90 …" and "+99890…" collide, which the
-    // approved schema's plain UNIQUE(phone) index cannot express on its own.
     const stored = await this.prisma.db.users.findMany({
       where: { phone: { not: null } },
       select: { phone: true },
     });
     if (stored.some((row) => (row.phone ?? '').replace(/\D/g, '') === digits))
       throw new ApiException(409, 'DUPLICATE_REFERENCE', 'Bu telefon raqam allaqachon mavjud.');
+  }
 
-    // A cashier is meaningless without a branch; other roles may carry one as a
-    // secondary cashier scope (the "Madina" pattern from the requirements).
-    //
-    // An investor is a third shape: they read no branch ledger at all, so their
-    // branch is optional. Since migration 015 the investor role carries
-    // allows_branchless_scope, which lets the grant be NULL — that is the
-    // company-wide investor. A branch may still be named to scope one.
+  /**
+   * The role grants of a new account.
+   *
+   * A cashier is meaningless without a branch; other roles may carry one as a
+   * secondary cashier scope (the "Madina" pattern from the requirements).
+   *
+   * An investor is a third shape: they read no branch ledger at all, so their
+   * branch is optional. Since migration 015 the investor role carries
+   * allows_branchless_scope, which lets the grant be NULL — that is the
+   * company-wide investor. A branch may still be named to scope one.
+   */
+  private async grantsFor(
+    input: UserCreateDto,
+  ): Promise<Array<{ role: string; branchId: string | null }>> {
     const scopeBranchId =
       input.role === 'cashier' || input.role === 'investor'
         ? input.branchId
@@ -177,143 +274,109 @@ export class AdminUsersService {
     ];
     if (input.role === 'finance_manager' && branch)
       grants.push({ role: 'cashier', branchId: branch.id });
+    return grants;
+  }
 
-    const roleIds = await this.resolveRoleIds(grants.map((grant) => grant.role));
+  /** An investor's opening capital: amount, start month and payment method, all checked. */
+  private async investorCapital(input: UserCreateDto): Promise<InvestorCapital> {
+    if (
+      input.capitalAmountUzs === undefined ||
+      input.startPeriodId === undefined ||
+      input.capitalPaymentMethodCode === undefined
+    )
+      throw new ApiException(
+        422,
+        'INVESTOR_CAPITAL_REQUIRED',
+        'Kiritilgan mablag‘, qo‘shilish oyi va to‘lov shakli majburiy.',
+      );
 
-    let capitalAmount: bigint | null = null;
-    let capitalStartPeriodId: string | null = null;
-    let capitalPaymentMethodId: string | null = null;
-    if (input.role === 'investor') {
-      if (
-        input.capitalAmountUzs === undefined ||
-        input.startPeriodId === undefined ||
-        input.capitalPaymentMethodCode === undefined
-      )
-        throw new ApiException(
-          422,
-          'INVESTOR_CAPITAL_REQUIRED',
-          'Kiritilgan mablag‘, qo‘shilish oyi va to‘lov shakli majburiy.',
-        );
+    if (!/^[1-9]\d*$/.test(input.capitalAmountUzs))
+      throw new ApiException(422, 'CAPITAL_AMOUNT_INVALID', 'Mablag‘ 0 dan katta bo‘lishi kerak.');
+    const amount = BigInt(input.capitalAmountUzs);
+    if (amount > MAX_UZS)
+      throw new ApiException(
+        422,
+        'CAPITAL_AMOUNT_INVALID',
+        'Mablag‘ ruxsat etilgan chegaradan katta.',
+      );
 
-      if (!/^[1-9]\d*$/.test(input.capitalAmountUzs))
-        throw new ApiException(
-          422,
-          'CAPITAL_AMOUNT_INVALID',
-          'Mablag‘ 0 dan katta bo‘lishi kerak.',
-        );
-      capitalAmount = BigInt(input.capitalAmountUzs);
-      if (capitalAmount > MAX_UZS)
-        throw new ApiException(
-          422,
-          'CAPITAL_AMOUNT_INVALID',
-          'Mablag‘ ruxsat etilgan chegaradan katta.',
-        );
+    const [period, paymentMethod] = await Promise.all([
+      this.prisma.db.accounting_periods.findUnique({
+        where: { id: input.startPeriodId },
+        select: { id: true },
+      }),
+      this.prisma.db.payment_methods.findUnique({
+        where: { code: input.capitalPaymentMethodCode },
+        select: { id: true, is_active: true },
+      }),
+    ]);
+    if (!period) throw new ApiException(422, 'START_PERIOD_INVALID', 'Qo‘shilish oyi topilmadi.');
+    if (!paymentMethod?.is_active)
+      throw new ApiException(422, 'CAPITAL_PAYMENT_METHOD_INVALID', 'To‘lov shakli faol emas.');
+    return { amount, startPeriodId: period.id, paymentMethodId: paymentMethod.id };
+  }
 
-      const [period, paymentMethod] = await Promise.all([
-        this.prisma.db.accounting_periods.findUnique({
-          where: { id: input.startPeriodId },
-          select: { id: true },
-        }),
-        this.prisma.db.payment_methods.findUnique({
-          where: { code: input.capitalPaymentMethodCode },
-          select: { id: true, is_active: true },
-        }),
-      ]);
-      if (!period) throw new ApiException(422, 'START_PERIOD_INVALID', 'Qo‘shilish oyi topilmadi.');
-      if (!paymentMethod?.is_active)
-        throw new ApiException(422, 'CAPITAL_PAYMENT_METHOD_INVALID', 'To‘lov shakli faol emas.');
-      capitalStartPeriodId = period.id;
-      capitalPaymentMethodId = paymentMethod.id;
-    }
-
-    // Resolved before the transaction so a missing period fails the request
-    // rather than the write. Today's period first, then any open one.
+  /** Today's period first, then the latest open one. */
+  private async currentOrOpenPeriodId(): Promise<string | null> {
     const now = new Date();
-    const openPeriodId =
-      input.role === 'investor' && input.entitledAmountUzs !== undefined
-        ? ((
-            await this.prisma.db.accounting_periods.findFirst({
-              where: { year: now.getUTCFullYear(), month: now.getUTCMonth() + 1 },
-              select: { id: true },
-            })
-          )?.id ??
-          (
-            await this.prisma.db.accounting_periods.findFirst({
-              where: { status: 'open' },
-              orderBy: [{ year: 'desc' }, { month: 'desc' }],
-              select: { id: true },
-            })
-          )?.id ??
-          null)
-        : null;
-    // Same helper the login path verifies against, so a freshly created account
-    // can sign in immediately with phone + password.
-    const password_hash = await hashPassword(input.password);
-
-    const created = await this.prisma
-      .withActor(this.actor.mint(actor.id), async (tx) => {
-        const user = await tx.users.create({
-          data: {
-            full_name: input.fullName.trim(),
-            phone,
-            email: null,
-            password_hash,
-            status: 'active',
-            is_system: false,
-          },
+    return (
+      (
+        await this.prisma.db.accounting_periods.findFirst({
+          where: { year: now.getUTCFullYear(), month: now.getUTCMonth() + 1 },
           select: { id: true },
-        });
-        for (const grant of grants)
-          await tx.user_roles.create({
-            data: {
-              user_id: user.id,
-              role_id: roleIds.get(grant.role)!,
-              branch_id: grant.branchId,
-              granted_by: actor.id,
-            },
-            select: { id: true },
-          });
+        })
+      )?.id ??
+      (
+        await this.prisma.db.accounting_periods.findFirst({
+          where: { status: 'open' },
+          orderBy: [{ year: 'desc' }, { month: 'desc' }],
+          select: { id: true },
+        })
+      )?.id ??
+      null
+    );
+  }
 
-        // An investor account without its ownership record would be a login
-        // that can see nothing, so both are written in one transaction: either
-        // the investor exists completely or not at all.
-        if (input.role === 'investor') {
-          await tx.$executeRaw`
-            INSERT INTO fincore.investor_profiles (user_id, ownership_percent, branch_id, created_by)
-            VALUES (
-              ${user.id}::uuid,
-              ${input.ownershipPercent ?? 0},
-              ${input.branchId ?? null}::uuid,
-              ${actor.id}::uuid
-            )
-          `;
-          await tx.$executeRaw`
-            INSERT INTO fincore.investor_capital_contributions
-              (investor_id, amount_uzs, start_period_id, payment_method_id, created_by)
-            SELECT p.id, ${capitalAmount!}, ${capitalStartPeriodId!}::uuid,
-                   ${capitalPaymentMethodId!}::uuid, ${actor.id}::uuid
-            FROM fincore.investor_profiles p
-            WHERE p.user_id = ${user.id}::uuid
-          `;
-          // Entitlement is recorded per period, so this only seeds the current
-          // one; later months are entered on the investor's own page.
-          if (input.entitledAmountUzs !== undefined && openPeriodId)
-            await tx.$executeRaw`
-              INSERT INTO fincore.investor_entitlements
-                (investor_id, accounting_period_id, entitled_amount_uzs, created_by, updated_by)
-              SELECT p.id, ${openPeriodId}::uuid, ${BigInt(input.entitledAmountUzs)},
-                     ${actor.id}::uuid, ${actor.id}::uuid
-              FROM fincore.investor_profiles p
-              WHERE p.user_id = ${user.id}::uuid
-            `;
-        }
-        return user.id;
-      })
-      .catch((error: unknown) => {
-        throw this.translateWriteError(error);
-      });
-
-    return this.auth.getAuthenticatedUser(created, false);
+  /** The ownership profile, the opening capital and — if given — this month's entitlement. */
+  private async insertInvestorRecords(
+    tx: PrismaTransaction,
+    record: {
+      userId: string;
+      actorId: string;
+      input: UserCreateDto;
+      capital: InvestorCapital;
+      entitlementPeriodId: string | null;
+    },
+  ): Promise<void> {
+    const { userId, actorId, input, capital, entitlementPeriodId } = record;
+    await tx.$executeRaw`
+      INSERT INTO fincore.investor_profiles (user_id, ownership_percent, branch_id, created_by)
+      VALUES (
+        ${userId}::uuid,
+        ${input.ownershipPercent ?? 0},
+        ${input.branchId ?? null}::uuid,
+        ${actorId}::uuid
+      )
+    `;
+    await tx.$executeRaw`
+      INSERT INTO fincore.investor_capital_contributions
+        (investor_id, amount_uzs, start_period_id, payment_method_id, created_by)
+      SELECT p.id, ${capital.amount}, ${capital.startPeriodId}::uuid,
+             ${capital.paymentMethodId}::uuid, ${actorId}::uuid
+      FROM fincore.investor_profiles p
+      WHERE p.user_id = ${userId}::uuid
+    `;
+    // Entitlement is recorded per period, so this only seeds the current
+    // one; later months are entered on the investor's own page.
+    if (input.entitledAmountUzs !== undefined && entitlementPeriodId)
+      await tx.$executeRaw`
+        INSERT INTO fincore.investor_entitlements
+          (investor_id, accounting_period_id, entitled_amount_uzs, created_by, updated_by)
+        SELECT p.id, ${entitlementPeriodId}::uuid, ${BigInt(input.entitledAmountUzs)},
+               ${actorId}::uuid, ${actorId}::uuid
+        FROM fincore.investor_profiles p
+        WHERE p.user_id = ${userId}::uuid
+      `;
   }
 
   async updateAccess(
@@ -828,28 +891,14 @@ export class AdminUsersService {
   }
 
   private translateWriteError(error: unknown): unknown {
-    if (error instanceof ApiException) return error;
-    const message = error instanceof Error ? error.message : String(error);
-    if (/may not be granted with an all-branch/i.test(message))
-      return new ApiException(422, 'BRANCH_REQUIRED', 'Bu rol uchun filial scope majburiy.');
-    if (/Unique constraint|duplicate key/i.test(message))
-      return new ApiException(409, 'DUPLICATE_REFERENCE', 'Bu qiymat allaqachon mavjud.');
-    if (/actor context|signing key/i.test(message))
-      return new ApiException(
-        500,
-        'ACTOR_CONTEXT_INVALID',
-        'Server identifikatsiya konteksti noto‘g‘ri.',
-      );
-    if (/bigint.*range|out of range/i.test(message))
-      return new ApiException(422, 'AMOUNT_INVALID', 'Oylik ruxsat etilgan chegaradan oshdi.');
-    return error;
+    return translateDbError(error, WRITE_ERRORS);
   }
 
   private translateDeleteError(error: unknown): unknown {
     if (error instanceof ApiException) return error;
     const code =
       error && typeof error === 'object' && 'code' in error ? String(error.code) : undefined;
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     if (code === 'P2025' || /record.*not found|no record was found for a delete/i.test(message))
       return new ApiException(404, 'USER_NOT_FOUND', 'Foydalanuvchi topilmadi.');
     if (code === 'P2003' || code === '23503' || /foreign key constraint/i.test(message))

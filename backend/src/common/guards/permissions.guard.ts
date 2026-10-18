@@ -22,7 +22,7 @@ export class PermissionsGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const granted = new Set(request.user?.permissions ?? []);
     const missing = required.filter((code) => !granted.has(code));
-    if (missing.length > 0) throw ApiException.forbidden(undefined, { missingPermissions: missing });
+    if (missing.length > 0) throw ApiException.missingPermissions(missing);
     return true;
   }
 }

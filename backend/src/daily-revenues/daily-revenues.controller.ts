@@ -97,7 +97,10 @@ export class DailyRevenuesController {
   @ApiResponse({ status: 401, description: 'UNAUTHENTICATED' })
   @ApiResponse({ status: 403, description: 'PERMISSION_DENIED / BRANCH_SCOPE_DENIED' })
   @ApiResponse({ status: 409, description: 'REVENUE_DAY_EXISTS / PERIOD_LOCKED' })
-  @ApiResponse({ status: 422, description: 'AMOUNT_INVALID / DATE_OR_PERIOD_INVALID / IDEMPOTENCY_KEY_REQUIRED' })
+  @ApiResponse({
+    status: 422,
+    description: 'AMOUNT_INVALID / DATE_OR_PERIOD_INVALID / IDEMPOTENCY_KEY_REQUIRED',
+  })
   create(
     @CurrentUser() user: AuthenticatedUser,
     @Headers('idempotency-key') idempotencyKey: string | undefined,

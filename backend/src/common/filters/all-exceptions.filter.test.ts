@@ -49,7 +49,10 @@ describe('AllExceptionsFilter', () => {
 
   it('keeps details when they are present', () => {
     const { host, captured } = makeHost();
-    filter.catch(ApiException.forbidden(undefined, { missingPermissions: ['expense.create'] }), host);
+    filter.catch(
+      ApiException.forbidden(undefined, { missingPermissions: ['expense.create'] }),
+      host,
+    );
     expect(captured.status).toBe(403);
     expect(captured.body).toMatchObject({
       code: 'FORBIDDEN',
@@ -80,7 +83,10 @@ describe('AllExceptionsFilter', () => {
 
   it('turns ValidationPipe output into details.fields', () => {
     const { host, captured } = makeHost();
-    filter.catch(new BadRequestException(['login must be a string', 'password should not be empty']), host);
+    filter.catch(
+      new BadRequestException(['login must be a string', 'password should not be empty']),
+      host,
+    );
     expect(captured.status).toBe(400);
     expect(captured.body).toEqual({
       code: 'VALIDATION_ERROR',

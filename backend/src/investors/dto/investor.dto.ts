@@ -13,10 +13,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-/** Integer so'm as a string, so a BIGINT amount never passes through a float. */
-const MONEY = /^\d+$/;
+import { ISO_DATE_PATTERN, WHOLE_UZS_PATTERN } from '@/common/validation/patterns';
 
 export class InvestorYearQueryDto {
   @ApiPropertyOptional({ example: 2026, minimum: 2000, maximum: 2100 })
@@ -40,7 +37,11 @@ export class InvestorCreateDto {
   @Max(100)
   ownershipPercent!: number;
 
-  @ApiPropertyOptional({ format: 'uuid', nullable: true, description: 'Bo‘sh = butun kompaniya bo‘yicha' })
+  @ApiPropertyOptional({
+    format: 'uuid',
+    nullable: true,
+    description: 'Bo‘sh = butun kompaniya bo‘yicha',
+  })
   @IsOptional()
   @IsUUID()
   branchId?: string;
@@ -83,8 +84,13 @@ export class InvestorEntitlementDto {
   @IsUUID()
   periodId!: string;
 
-  @ApiProperty({ example: '10000000', description: 'Shu davr uchun investorga tegishli summa (butun so‘m)' })
-  @Matches(MONEY, { message: 'entitledAmountUzs manfiy bo‘lmagan butun son-string bo‘lishi kerak' })
+  @ApiProperty({
+    example: '10000000',
+    description: 'Shu davr uchun investorga tegishli summa (butun so‘m)',
+  })
+  @Matches(WHOLE_UZS_PATTERN, {
+    message: 'entitledAmountUzs manfiy bo‘lmagan butun son-string bo‘lishi kerak',
+  })
   entitledAmountUzs!: string;
 
   @ApiPropertyOptional({ maxLength: 500 })
@@ -96,11 +102,13 @@ export class InvestorEntitlementDto {
 
 export class InvestorPaymentDto {
   @ApiProperty({ example: '2026-08-20' })
-  @Matches(ISO_DATE, { message: 'paidOn YYYY-MM-DD bo‘lishi kerak' })
+  @Matches(ISO_DATE_PATTERN, { message: 'paidOn YYYY-MM-DD bo‘lishi kerak' })
   paidOn!: string;
 
   @ApiProperty({ example: '8000000', description: 'To‘langan summa (butun so‘m, noldan katta)' })
-  @Matches(MONEY, { message: 'amountUzs manfiy bo‘lmagan butun son-string bo‘lishi kerak' })
+  @Matches(WHOLE_UZS_PATTERN, {
+    message: 'amountUzs manfiy bo‘lmagan butun son-string bo‘lishi kerak',
+  })
   amountUzs!: string;
 
   @ApiPropertyOptional({ maxLength: 500 })
@@ -111,7 +119,11 @@ export class InvestorPaymentDto {
 }
 
 export class ReversePaymentDto {
-  @ApiProperty({ minLength: 3, maxLength: 500, description: 'Bekor qilish sababi — audit uchun majburiy' })
+  @ApiProperty({
+    minLength: 3,
+    maxLength: 500,
+    description: 'Bekor qilish sababi — audit uchun majburiy',
+  })
   @IsString()
   @MinLength(3)
   @MaxLength(500)

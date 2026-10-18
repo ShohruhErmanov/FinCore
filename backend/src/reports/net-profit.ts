@@ -1,5 +1,6 @@
 import { toMoneyUzs } from '@/common/serialization/financial';
-import { MONTHS_SHORT_UZ, percentageValue } from './report-math';
+import { MONTHS_SHORT_UZ } from '@/common/calendar';
+import { percentageValue } from './report-math';
 
 /**
  * Monthly net profit for a year: what was actually collected, minus what was

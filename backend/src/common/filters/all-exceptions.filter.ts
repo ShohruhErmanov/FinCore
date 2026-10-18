@@ -41,9 +41,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const request = http.getRequest<Request>();
 
     const status =
-      exception instanceof HttpException
-        ? exception.getStatus()
-        : HttpStatus.INTERNAL_SERVER_ERROR;
+      exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
 
     const body = this.toBody(exception, status);
 
@@ -67,7 +65,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
       // Already in our contract shape (ApiException): the code and message were
       // written for the client on purpose, so they pass through even at 5xx —
       // that is how 503 stays DATABASE_UNAVAILABLE instead of being masked.
-      if (isRecord(payload) && typeof payload.code === 'string' && typeof payload.message === 'string') {
+      if (
+        isRecord(payload) &&
+        typeof payload.code === 'string' &&
+        typeof payload.message === 'string'
+      ) {
         const details = isRecord(payload.details) ? payload.details : undefined;
         return details
           ? { code: payload.code, message: payload.message, details }

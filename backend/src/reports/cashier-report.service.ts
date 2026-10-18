@@ -2,7 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { ApiException, type AuthenticatedUser } from '@/common';
 import { toMoneyUzs } from '@/common/serialization/financial';
 import { PrismaService } from '@/database';
-import { MONTHS_UZ, distributeDaily, percentageValue, toBigInt } from './report-math';
+import { periodLabelUz } from '@/common/calendar';
+import { distributeDaily, percentageValue, toBigInt } from './report-math';
 
 /** Mirrors CashierRow / CashierBranchGroup / CashierReport (src/features/reports/cashier-report.ts). */
 export interface CashierRowDto {
@@ -94,15 +95,16 @@ export class CashierReportService {
     // AND, so the pair is checked here.
     const seesEveryone = user.permissions.includes('reports.view_cashiers');
     if (!seesEveryone && !user.permissions.includes('reports.view_own_performance'))
-      throw ApiException.forbidden(undefined, {
-        missingPermissions: ['reports.view_cashiers', 'reports.view_own_performance'],
-      });
+      throw ApiException.missingPermissions([
+        'reports.view_cashiers',
+        'reports.view_own_performance',
+      ]);
 
     const period = await this.prisma.db.accounting_periods.findUnique({
       where: { id: periodId },
       select: { id: true, year: true, month: true },
     });
-    if (!period) throw new ApiException(404, 'PERIOD_NOT_FOUND', 'Hisob davri topilmadi.');
+    if (!period) throw ApiException.periodNotFound();
 
     const requested = requestedBranch || 'all';
     if (requested !== 'all' && !user.branchScopes.includes(requested))
@@ -117,16 +119,17 @@ export class CashierReportService {
         ? (user.branchScopes[0] ?? 'all')
         : requested;
     const branchIds =
-      branchFilter === 'all' ? user.branchScopes : user.branchScopes.filter((id) => id === branchFilter);
+      branchFilter === 'all'
+        ? user.branchScopes
+        : user.branchScopes.filter((id) => id === branchFilter);
 
     // "Mening natijam" asks for the own row even from a reader who may see
     // everyone. Narrowing only — a reader who may see nobody else can never use
     // this to widen the answer.
     const viewerId = seesEveryone && requestedScope !== 'own' ? undefined : user.id;
-    const periodLabel = `${MONTHS_UZ[period.month - 1] ?? period.month} ${period.year}`;
+    const periodLabel = periodLabelUz(period.year, period.month);
 
-    if (branchIds.length === 0)
-      return this.assemble(periodLabel, branchFilter, viewerId, []);
+    if (branchIds.length === 0) return this.assemble(periodLabel, branchFilter, viewerId, []);
 
     const viewerSqlId = viewerId ?? null;
     const [branchRows, rosterRows, metrics, days] = await Promise.all([

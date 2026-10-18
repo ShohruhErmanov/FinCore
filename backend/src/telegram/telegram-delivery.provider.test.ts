@@ -34,7 +34,14 @@ describe('TelegramDeliveryProvider', () => {
   });
 
   it('treats a timeout as retryable', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockRejectedValue(
+        Object.assign(new Error('The operation was aborted due to timeout'), {
+          name: 'TimeoutError',
+        }),
+      ),
+    );
     const outcome = await new TelegramDeliveryProvider(env()).send(request);
     expect(outcome).toMatchObject({ kind: 'retryable', errorCode: 'TELEGRAM_TIMEOUT' });
   });
@@ -46,13 +53,19 @@ describe('TelegramDeliveryProvider', () => {
   });
 
   it('treats a 5xx as retryable', async () => {
-    vi.stubGlobal('fetch', respond(502, { ok: false, error_code: 502, description: 'Bad Gateway' }));
+    vi.stubGlobal(
+      'fetch',
+      respond(502, { ok: false, error_code: 502, description: 'Bad Gateway' }),
+    );
     const outcome = await new TelegramDeliveryProvider(env()).send(request);
     expect(outcome).toMatchObject({ kind: 'retryable', errorCode: 'TELEGRAM_HTTP_502' });
   });
 
   it('treats 429 as retryable and carries retry_after', async () => {
-    vi.stubGlobal('fetch', respond(429, { ok: false, error_code: 429, parameters: { retry_after: 30 } }));
+    vi.stubGlobal(
+      'fetch',
+      respond(429, { ok: false, error_code: 429, parameters: { retry_after: 30 } }),
+    );
     const outcome = await new TelegramDeliveryProvider(env()).send(request);
     expect(outcome).toEqual({
       kind: 'retryable',
@@ -77,7 +90,9 @@ describe('TelegramDeliveryProvider', () => {
     const fetchMock = respond(200, { ok: true });
     vi.stubGlobal('fetch', fetchMock);
 
-    const outcome = await new TelegramDeliveryProvider(env({ TELEGRAM_ENABLED: false })).send(request);
+    const outcome = await new TelegramDeliveryProvider(env({ TELEGRAM_ENABLED: false })).send(
+      request,
+    );
 
     expect(outcome).toEqual({ kind: 'permanent', errorCode: 'TELEGRAM_DISABLED' });
     expect(fetchMock).not.toHaveBeenCalled();
@@ -87,7 +102,11 @@ describe('TelegramDeliveryProvider', () => {
     // A fetch rejection can echo the request URL, which contains the token.
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockRejectedValue(new Error(`request to https://api.telegram.org/bot${TOKEN}/sendMessage failed`)),
+      vi
+        .fn()
+        .mockRejectedValue(
+          new Error(`request to https://api.telegram.org/bot${TOKEN}/sendMessage failed`),
+        ),
     );
 
     const outcome = await new TelegramDeliveryProvider(env()).send(request);
@@ -97,7 +116,10 @@ describe('TelegramDeliveryProvider', () => {
   });
 
   it('never leaks the bot token through a provider error description', async () => {
-    vi.stubGlobal('fetch', respond(400, { ok: false, error_code: 400, description: `token ${TOKEN} rejected` }));
+    vi.stubGlobal(
+      'fetch',
+      respond(400, { ok: false, error_code: 400, description: `token ${TOKEN} rejected` }),
+    );
     const outcome = await new TelegramDeliveryProvider(env()).send(request);
     expect(JSON.stringify(outcome)).not.toContain(TOKEN);
   });

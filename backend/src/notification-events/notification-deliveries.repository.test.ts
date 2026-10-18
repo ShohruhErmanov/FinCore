@@ -243,7 +243,12 @@ describe('NotificationDeliveriesRepository — claiming', () => {
     const { db, repo } = await seeded();
     const now = new Date('2026-08-20T10:00:00.000Z');
     await repo.claim('worker-1', { now });
-    await repo.markRetry(db.rows[0]!.id, 'worker-1', 'TELEGRAM_HTTP_500', new Date('2026-08-20T10:05:00.000Z'));
+    await repo.markRetry(
+      db.rows[0]!.id,
+      'worker-1',
+      'TELEGRAM_HTTP_500',
+      new Date('2026-08-20T10:05:00.000Z'),
+    );
     await repo.markDelivered(db.rows[1]!.id, 'worker-1');
 
     const tooEarly = await repo.claim('worker-1', { now: new Date('2026-08-20T10:04:00.000Z') });

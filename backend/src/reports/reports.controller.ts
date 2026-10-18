@@ -18,12 +18,13 @@ import {
   MonthlyQueryDto,
 } from './dto/reports.dto';
 import { CashierReportService, type CashierReportDto } from './cashier-report.service';
-import {
-  DashboardService,
-  type DashboardResponse,
-  type ExpenseAnalyticsResponse,
-  type ExpensePlanAnalyticsResponse,
-} from './dashboard.service';
+import { DashboardService } from './dashboard.service';
+import type {
+  DashboardResponse,
+  ExpenseAnalyticsResponse,
+  ExpensePlanAnalyticsResponse,
+} from './dashboard.types';
+import { ExpenseAnalyticsService } from './expense-analytics.service';
 import { ReportsService, type BranchComparisonReport, type MonthlyReport } from './reports.service';
 
 /**
@@ -38,6 +39,7 @@ export class ReportsController {
   constructor(
     private readonly reports: ReportsService,
     private readonly dashboard: DashboardService,
+    private readonly expenseAnalytics: ExpenseAnalyticsService,
     private readonly cashiers: CashierReportService,
   ) {}
 
@@ -76,7 +78,7 @@ export class ReportsController {
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: ExpensePlanAnalyticsQueryDto,
   ): Promise<ExpensePlanAnalyticsResponse> {
-    return this.dashboard.getExpensePlanAnalytics(user, query.period, query.branch ?? 'all');
+    return this.expenseAnalytics.getExpensePlanAnalytics(user, query.period, query.branch ?? 'all');
   }
 
   @Get('expense-analytics')
@@ -93,7 +95,7 @@ export class ReportsController {
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: ExpenseAnalyticsQueryDto,
   ): Promise<ExpenseAnalyticsResponse> {
-    return this.dashboard.getExpenseAnalytics(
+    return this.expenseAnalytics.getExpenseAnalytics(
       user,
       query.period,
       query.from,

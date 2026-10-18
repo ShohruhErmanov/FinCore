@@ -39,7 +39,9 @@ describe('PermissionsGuard', () => {
 
   it('requires every listed permission, not just one', () => {
     expect(() => guard.canActivate(contextFor('editExpense', ['expense.create']))).toThrow();
-    expect(guard.canActivate(contextFor('editExpense', ['expense.create', 'expense.edit']))).toBe(true);
+    expect(guard.canActivate(contextFor('editExpense', ['expense.create', 'expense.edit']))).toBe(
+      true,
+    );
   });
 
   it('names the missing permissions in the error details', () => {
@@ -47,7 +49,9 @@ describe('PermissionsGuard', () => {
       guard.canActivate(contextFor('editExpense', ['expense.create']));
       expect.unreachable('guard should have thrown');
     } catch (error) {
-      const body = (error as { getResponse(): { code: string; details: { missingPermissions: string[] } } }).getResponse();
+      const body = (
+        error as { getResponse(): { code: string; details: { missingPermissions: string[] } } }
+      ).getResponse();
       expect(body.code).toBe('FORBIDDEN');
       expect(body.details.missingPermissions).toEqual(['expense.edit']);
     }

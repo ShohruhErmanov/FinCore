@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import {
   ApiException,
   GLOBAL_WRITE_ROLE_CODES,
+  normalizePhone,
   type AuthenticatedUser,
   type RoleAssignment,
   type UserStatus,
@@ -10,11 +11,6 @@ import { toIsoDateTime, toMoneyUzs } from '@/common/serialization/financial';
 import { PrismaService } from '@/database';
 import { LoginAttempts } from './login-attempts';
 import { burnPasswordTiming, verifyPassword } from './password';
-
-/** Phone numbers are entered with spaces, dashes and parentheses; storage may not have them. */
-function normalizePhone(value: string): string {
-  return value.replace(/[\s()-]/g, '');
-}
 
 const ACTIVE_ASSIGNMENT = { is_active: true, revoked_at: null } as const;
 

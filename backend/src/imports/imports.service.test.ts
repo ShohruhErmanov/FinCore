@@ -44,7 +44,9 @@ function row(overrides: Partial<ImportExpenseRowDto> = {}): ImportExpenseRowDto 
   };
 }
 
-function harness(branches: Array<{ id: string; name: string }> = [{ id: BRANCH_ID, name: 'Active branch' }]) {
+function harness(
+  branches: Array<{ id: string; name: string }> = [{ id: BRANCH_ID, name: 'Active branch' }],
+) {
   const branchFindMany = vi.fn(async () => branches);
   const expenseFindMany = vi.fn(async () => []);
   const txExecuteRaw = vi.fn(async () => 1);
@@ -100,10 +102,7 @@ describe('ImportsService branch write guards', () => {
     const test = harness();
 
     await expect(
-      test.service.importExpenses(
-        user({ writeBranchScopes: [OTHER_BRANCH_ID] }),
-        [row()],
-      ),
+      test.service.importExpenses(user({ writeBranchScopes: [OTHER_BRANCH_ID] }), [row()]),
     ).resolves.toMatchObject({
       imported: 0,
       skipped: 0,

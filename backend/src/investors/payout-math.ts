@@ -25,8 +25,7 @@ const HUNDRED = 100n;
  */
 export function parseDecimalUzs(value: string): Hundredths {
   const text = value.trim();
-  if (!/^-?\d+(\.\d+)?$/.test(text))
-    throw new Error(`NUMERIC summa kutilgan, olindi: ${value}`);
+  if (!/^-?\d+(\.\d+)?$/.test(text)) throw new Error(`NUMERIC summa kutilgan, olindi: ${value}`);
 
   const negative = text.startsWith('-');
   const [whole = '0', fraction = ''] = (negative ? text.slice(1) : text).split('.');

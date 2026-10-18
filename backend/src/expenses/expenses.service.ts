@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { ACTOR_CONTEXT_RULE, translateDbError, type DbErrorRule } from '@/common/errors/db-errors';
+import { optionalFilter } from '@/common/query-filters';
 import { Prisma } from '@prisma/client';
 import { ApiException, cashierEditReason, hasCashierRole, type AuthenticatedUser } from '@/common';
 import { toIsoDate, toIsoDateTime, toMoneyUzs } from '@/common/serialization/financial';
@@ -69,10 +71,17 @@ const ROW_SELECT = {
 
 type ExpenseRow = Prisma.expensesGetPayload<{ select: typeof ROW_SELECT }>;
 
-/** A filter value of "all" or an empty string means "do not filter". */
-function pick(value: string | undefined): string | undefined {
-  return !value || value === 'all' ? undefined : value;
-}
+const WRITE_ERRORS: readonly DbErrorRule[] = [
+  [
+    /accounting period is closed|period is closed/i,
+    () => new ApiException(409, 'PERIOD_LOCKED', 'Yopilgan davrga yozuv qo‘shib bo‘lmaydi.'),
+  ],
+  ACTOR_CONTEXT_RULE,
+  [
+    /violates check constraint|invalid input|out of range/i,
+    () => new ApiException(422, 'AMOUNT_INVALID', 'Kiritilgan qiymat qoidaga mos emas.'),
+  ],
+];
 
 @Injectable()
 export class ExpensesService {
@@ -261,7 +270,7 @@ export class ExpensesService {
     user: AuthenticatedUser,
     query: ExpenseListQueryDto,
   ): Prisma.expensesWhereInput {
-    const branch = pick(query.branch);
+    const branch = optionalFilter(query.branch);
     const readable = user.permissions.includes('expense.view_all_branches')
       ? undefined
       : user.branchScopes;
@@ -275,18 +284,18 @@ export class ExpensesService {
     // A user with neither all-branch view nor any scope must see nothing.
     if (branch && readable && !readable.includes(branch)) where.branch_id = { in: [] };
 
-    const categoryId = pick(query.categoryId);
+    const categoryId = optionalFilter(query.categoryId);
     if (categoryId) where.category_id = categoryId;
-    const expenseType = pick(query.expenseType);
+    const expenseType = optionalFilter(query.expenseType);
     if (expenseType === 'fixed' || expenseType === 'variable')
       where.expense_type_snapshot = expenseType;
-    const departmentId = pick(query.departmentId);
+    const departmentId = optionalFilter(query.departmentId);
     if (departmentId) where.department_id = departmentId;
-    const paymentMethodId = pick(query.paymentMethodId);
+    const paymentMethodId = optionalFilter(query.paymentMethodId);
     if (paymentMethodId) where.payment_method_id = paymentMethodId;
-    const responsibleUserId = pick(query.responsibleUserId);
+    const responsibleUserId = optionalFilter(query.responsibleUserId);
     if (responsibleUserId) where.responsible_user_id = responsibleUserId;
-    const enteredByUserId = pick(query.enteredByUserId);
+    const enteredByUserId = optionalFilter(query.enteredByUserId);
     if (enteredByUserId) where.entered_by = enteredByUserId;
 
     const dateFilter: Prisma.DateTimeFilter = {};
@@ -360,18 +369,7 @@ export class ExpensesService {
 
   /** Turns the database's own guards into the contract's error codes. */
   private translateWriteError(error: unknown): unknown {
-    const message = error instanceof Error ? error.message : String(error);
-    if (/accounting period is closed|period is closed/i.test(message))
-      return new ApiException(409, 'PERIOD_LOCKED', 'Yopilgan davrga yozuv qo‘shib bo‘lmaydi.');
-    if (/actor context|signing key/i.test(message))
-      return new ApiException(
-        500,
-        'ACTOR_CONTEXT_INVALID',
-        'Server identifikatsiya konteksti noto‘g‘ri.',
-      );
-    if (/violates check constraint|invalid input|out of range/i.test(message))
-      return new ApiException(422, 'AMOUNT_INVALID', 'Kiritilgan qiymat qoidaga mos emas.');
-    return error;
+    return translateDbError(error, WRITE_ERRORS);
   }
 
   private async toDtos(rows: ExpenseRow[]): Promise<ExpenseDto[]> {

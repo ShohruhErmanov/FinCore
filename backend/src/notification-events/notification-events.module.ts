@@ -13,7 +13,11 @@ import { NotificationEventsService } from './notification-events.service';
  */
 @Module({
   imports: [TelegramModule],
-  providers: [NotificationEventsService, NotificationDeliveriesRepository, NotificationDeliveryWorker],
+  providers: [
+    NotificationEventsService,
+    NotificationDeliveriesRepository,
+    NotificationDeliveryWorker,
+  ],
   exports: [NotificationEventsService, NotificationDeliveriesRepository],
 })
 export class NotificationEventsModule {}

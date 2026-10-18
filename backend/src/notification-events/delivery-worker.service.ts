@@ -1,8 +1,17 @@
-import { Inject, Injectable, Logger, type OnApplicationShutdown, type OnModuleInit } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  type OnApplicationShutdown,
+  type OnModuleInit,
+} from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import { hostname } from 'node:os';
 import { APP_ENV, type AppEnv } from '@/config';
-import { TelegramDeliveryProvider, type DeliveryOutcome } from '@/telegram/telegram-delivery.provider';
+import {
+  TelegramDeliveryProvider,
+  type DeliveryOutcome,
+} from '@/telegram/telegram-delivery.provider';
 import { renderNotification, UnsupportedEventTypeError } from './message-renderer';
 import { nextAttemptAt } from './retry-policy';
 import {
