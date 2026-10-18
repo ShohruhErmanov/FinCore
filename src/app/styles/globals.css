@@ -2,21 +2,93 @@
 @tailwind components;
 @tailwind utilities;
 
-/* FinCore Deep Navy Blue Neumorphism design system. */
+/* FinCore Ice Blue + Pearl White Neumorphism design system. */
 :root {
-  --canvas: 23 36 57; /* #172439 */
-  --sidebar: 16 28 47; /* #101C2F */
-  --surface: 28 44 68; /* #1C2C44 */
-  --raised: 33 49 73; /* #213149 */
-  --border: 43 62 88; /* #2B3E58 */
-  --ink: 237 244 255; /* #EDF4FF */
-  --muted: 179 196 219; /* #B3C4DB */
-  --primary: 111 159 255; /* #6F9FFF */
-  --navy: 16 28 47;
-  --success: 110 227 174;
-  --warning: 242 190 115;
-  --danger: 255 140 156;
-  --info: 111 159 255;
+  --canvas: 228 238 249; /* #E4EEF9 */
+  --sidebar: 237 245 252; /* #EDF5FC */
+  --surface: 234 242 250; /* #EAF2FA */
+  --raised: 242 247 253; /* #F2F7FD */
+  --inset: 223 234 246; /* #DFEAF6 */
+  --border: 199 216 234; /* #C7D8EA */
+  --ink: 24 49 83; /* #183153 */
+  --muted: 96 117 143; /* #60758F */
+  --primary: 57 140 245; /* #398CF5 */
+  --primary-contrast: 255 255 255;
+  --primary-soft: 207 227 255; /* #CFE3FF */
+  --navy: 24 49 83;
+  --success: 25 185 130;
+  --warning: 242 184 91;
+  --danger: 239 106 121;
+  --info: 57 140 245;
+
+  /* Runtime Tailwind scales: light mode keeps the current Ice Blue palette. */
+  --neutral-50: 247 250 254;
+  --neutral-100: 237 245 252;
+  --neutral-200: 223 234 246;
+  --neutral-300: 199 216 233;
+  --neutral-400: 156 178 202;
+  --neutral-500: 127 147 170;
+  --neutral-600: 96 117 143;
+  --neutral-700: 70 97 127;
+  --neutral-800: 44 73 106;
+  --neutral-900: 24 49 83;
+  --neutral-950: 16 38 64;
+  --accent-50: 238 246 255;
+  --accent-100: 219 236 255;
+  --accent-200: 188 217 255;
+  --accent-300: 145 192 255;
+  --accent-400: 93 164 251;
+  --accent-500: 57 140 245;
+  --accent-600: 40 125 232;
+  --accent-700: 30 99 198;
+  --accent-800: 30 82 155;
+  --accent-900: 28 70 122;
+  --accent-950: 21 48 86;
+  --success-scale-50: 236 253 247;
+  --success-scale-100: 210 249 234;
+  --success-scale-200: 169 241 213;
+  --success-scale-300: 112 226 185;
+  --success-scale-400: 57 203 155;
+  --success-scale-500: 25 185 130;
+  --success-scale-600: 13 148 104;
+  --success-scale-700: 12 118 86;
+  --success-scale-800: 14 94 72;
+  --success-scale-900: 13 78 61;
+  --success-scale-950: 6 44 35;
+  --danger-scale-50: 255 241 243;
+  --danger-scale-100: 255 225 229;
+  --danger-scale-200: 255 199 207;
+  --danger-scale-300: 255 160 175;
+  --danger-scale-400: 249 120 139;
+  --danger-scale-500: 239 106 121;
+  --danger-scale-600: 217 62 85;
+  --danger-scale-700: 183 45 67;
+  --danger-scale-800: 152 41 60;
+  --danger-scale-900: 129 40 57;
+  --danger-scale-950: 72 15 26;
+  --warning-scale-50: 255 249 235;
+  --warning-scale-100: 254 240 199;
+  --warning-scale-200: 253 224 146;
+  --warning-scale-300: 250 203 92;
+  --warning-scale-400: 242 184 91;
+  --warning-scale-500: 233 155 39;
+  --warning-scale-600: 206 119 26;
+  --warning-scale-700: 170 85 25;
+  --warning-scale-800: 139 67 27;
+  --warning-scale-900: 115 56 25;
+  --warning-scale-950: 66 27 8;
+
+  --chart-grid: #c7d8ea;
+  --chart-axis: #60758f;
+  --chart-plan: #9cb2ca;
+  --chart-actual: #398cf5;
+  --chart-actual-soft: #91c0ff;
+  --chart-canvas: #e4eef9;
+  --chart-raised: #f2f7fd;
+  --chart-text: #183153;
+  --chart-success: #19b982;
+  --chart-danger: #ef6a79;
+  --chart-warning: #f2b85b;
   color: rgb(var(--ink));
   background: rgb(var(--canvas));
   font-family:
@@ -29,40 +101,151 @@
     sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+  color-scheme: light;
 
   /*
    * Five-level Soft UI depth system, consistently lit from the top-left.
    */
+  --neu-light: 255 255 255;
+  --neu-shade: 151 174 201;
+  --neu-edge: rgb(var(--border) / 0.74);
+  --neu-shadow-xs: 2px 2px 5px rgb(var(--neu-shade) / 0.28),
+    -2px -2px 5px rgb(var(--neu-light) / 0.8);
+  --neu-shadow-1: 5px 5px 12px rgb(var(--neu-shade) / 0.3),
+    -5px -5px 12px rgb(var(--neu-light) / 0.84);
+  --neu-shadow-2: 10px 10px 24px rgb(var(--neu-shade) / 0.38),
+    -10px -10px 24px rgb(var(--neu-light) / 0.9);
+  --neu-shadow-2-hover: 12px 12px 27px rgb(var(--neu-shade) / 0.42),
+    -12px -12px 27px rgb(var(--neu-light) / 0.94);
+  --neu-shadow-3: 16px 18px 38px rgb(var(--neu-shade) / 0.44),
+    -12px -12px 30px rgb(var(--neu-light) / 0.94), 0 28px 56px -36px rgb(70 104 143 / 0.28);
+  --neu-inset: inset 5px 5px 10px rgb(var(--neu-shade) / 0.3),
+    inset -5px -5px 10px rgb(var(--neu-light) / 0.86);
+  --neu-inset-sm: inset 2px 2px 5px rgb(var(--neu-shade) / 0.28),
+    inset -2px -2px 5px rgb(var(--neu-light) / 0.8);
+  --neu-pressed: inset 4px 4px 9px rgb(var(--neu-shade) / 0.34),
+    inset -4px -4px 9px rgb(var(--neu-light) / 0.86);
+  --neu-duration: 200ms;
+}
+
+/* Deep Navy Soft UI. The same semantic tokens and utility aliases are reused,
+ * so every existing route changes as one coherent product theme. */
+:root[data-theme='dark'] {
+  --canvas: 23 36 57; /* #172439 */
+  --sidebar: 16 28 47; /* #101C2F */
+  --surface: 28 44 68; /* #1C2C44 */
+  --raised: 33 49 73; /* #213149 */
+  --inset: 18 32 52;
+  --border: 43 62 88; /* #2B3E58 */
+  --ink: 237 244 255; /* #EDF4FF */
+  --muted: 179 196 219; /* #B3C4DB */
+  --primary: 111 159 255; /* #6F9FFF */
+  --primary-contrast: 10 20 37;
+  --primary-soft: 32 59 96;
+  --navy: 16 28 47;
+  --success: 110 227 174;
+  --warning: 242 190 115;
+  --danger: 255 140 156;
+  --info: 111 159 255;
+
+  --neutral-50: 28 44 68;
+  --neutral-100: 33 49 73;
+  --neutral-200: 43 62 88;
+  --neutral-300: 120 144 174;
+  --neutral-400: 150 171 196;
+  --neutral-500: 165 184 208;
+  --neutral-600: 179 196 219;
+  --neutral-700: 206 221 240;
+  --neutral-800: 237 244 255;
+  --neutral-900: 245 248 255;
+  --neutral-950: 255 255 255;
+  --accent-50: 26 47 77;
+  --accent-100: 32 59 96;
+  --accent-200: 41 77 122;
+  --accent-300: 56 101 157;
+  --accent-400: 82 127 202;
+  --accent-500: 111 159 255;
+  --accent-600: 99 147 238;
+  --accent-700: 130 173 255;
+  --accent-800: 164 194 255;
+  --accent-900: 200 218 255;
+  --accent-950: 237 244 255;
+  --success-scale-50: 25 56 46;
+  --success-scale-100: 33 72 58;
+  --success-scale-200: 49 95 78;
+  --success-scale-300: 71 123 101;
+  --success-scale-400: 95 166 131;
+  --success-scale-500: 110 227 174;
+  --success-scale-600: 125 231 184;
+  --success-scale-700: 146 236 197;
+  --success-scale-800: 181 243 213;
+  --success-scale-900: 215 250 232;
+  --success-scale-950: 236 255 245;
+  --danger-scale-50: 71 39 51;
+  --danger-scale-100: 87 43 57;
+  --danger-scale-200: 113 57 74;
+  --danger-scale-300: 149 75 96;
+  --danger-scale-400: 202 101 121;
+  --danger-scale-500: 255 140 156;
+  --danger-scale-600: 255 152 166;
+  --danger-scale-700: 255 170 181;
+  --danger-scale-800: 255 193 201;
+  --danger-scale-900: 255 225 229;
+  --danger-scale-950: 255 241 243;
+  --warning-scale-50: 64 52 33;
+  --warning-scale-100: 81 63 37;
+  --warning-scale-200: 106 81 45;
+  --warning-scale-300: 138 104 58;
+  --warning-scale-400: 187 142 81;
+  --warning-scale-500: 242 190 115;
+  --warning-scale-600: 244 198 128;
+  --warning-scale-700: 245 203 141;
+  --warning-scale-800: 248 220 177;
+  --warning-scale-900: 252 236 213;
+  --warning-scale-950: 255 247 232;
+
+  --chart-grid: #2b3e58;
+  --chart-axis: #b3c4db;
+  --chart-plan: #7890ae;
+  --chart-actual: #6f9fff;
+  --chart-actual-soft: #82adff;
+  --chart-canvas: #172439;
+  --chart-raised: #213149;
+  --chart-text: #edf4ff;
+  --chart-success: #6ee3ae;
+  --chart-danger: #ff8c9c;
+  --chart-warning: #f2be73;
+
   --neu-light: 43 62 88;
   --neu-shade: 10 20 37;
-  --neu-edge: rgb(var(--border) / 0.82);
-  --neu-shadow-xs: 2px 2px 5px rgb(var(--neu-shade) / 0.72),
-    -2px -2px 5px rgb(var(--neu-light) / 0.52);
-  --neu-shadow-1: 4px 4px 10px rgb(var(--neu-shade) / 0.78),
-    -4px -4px 10px rgb(var(--neu-light) / 0.58);
-  --neu-shadow-2: 8px 8px 18px rgb(var(--neu-shade) / 0.85),
-    -8px -8px 18px rgb(var(--neu-light) / 0.7);
-  --neu-shadow-2-hover: 10px 10px 22px rgb(var(--neu-shade) / 0.88),
-    -10px -10px 22px rgb(var(--neu-light) / 0.76);
-  --neu-shadow-3: 14px 14px 34px rgb(var(--neu-shade) / 0.9),
-    -10px -10px 26px rgb(var(--neu-light) / 0.72), 0 28px 56px -34px rgb(0 0 0 / 0.65);
-  --neu-inset: inset 5px 5px 10px rgb(var(--neu-shade) / 0.88),
-    inset -5px -5px 10px rgb(var(--neu-light) / 0.58);
-  --neu-inset-sm: inset 2px 2px 4px rgb(var(--neu-shade) / 0.82),
-    inset -2px -2px 4px rgb(var(--neu-light) / 0.5);
-  --neu-pressed: inset 4px 4px 8px rgb(var(--neu-shade) / 0.88),
-    inset -3px -3px 7px rgb(var(--neu-light) / 0.55);
-  --neu-duration: 200ms;
+  --neu-edge: rgb(var(--border) / 0.88);
+  --neu-shadow-xs: 2px 2px 5px rgb(var(--neu-shade) / 0.68),
+    -2px -2px 5px rgb(var(--neu-light) / 0.4);
+  --neu-shadow-1: 5px 5px 12px rgb(var(--neu-shade) / 0.72),
+    -5px -5px 12px rgb(var(--neu-light) / 0.44);
+  --neu-shadow-2: 9px 9px 20px rgb(var(--neu-shade) / 0.76),
+    -8px -8px 18px rgb(var(--neu-light) / 0.48);
+  --neu-shadow-2-hover: 11px 11px 24px rgb(var(--neu-shade) / 0.8),
+    -10px -10px 22px rgb(var(--neu-light) / 0.52);
+  --neu-shadow-3: 15px 16px 34px rgb(var(--neu-shade) / 0.82),
+    -11px -11px 27px rgb(var(--neu-light) / 0.5), 0 28px 56px -36px rgb(0 0 0 / 0.6);
+  --neu-inset: inset 5px 5px 10px rgb(var(--neu-shade) / 0.78),
+    inset -5px -5px 10px rgb(var(--neu-light) / 0.42);
+  --neu-inset-sm: inset 2px 2px 5px rgb(var(--neu-shade) / 0.7),
+    inset -2px -2px 5px rgb(var(--neu-light) / 0.38);
+  --neu-pressed: inset 4px 4px 9px rgb(var(--neu-shade) / 0.76),
+    inset -4px -4px 9px rgb(var(--neu-light) / 0.42);
+  color-scheme: dark;
 }
 /* Phones: shorter shadows keep compact layouts crisp and inexpensive to paint. */
 @media (max-width: 640px) {
   :root {
-    --neu-shadow-2: 5px 5px 12px rgb(var(--neu-shade) / 0.78),
-      -5px -5px 12px rgb(var(--neu-light) / 0.58);
-    --neu-shadow-2-hover: 6px 6px 14px rgb(var(--neu-shade) / 0.82),
-      -6px -6px 14px rgb(var(--neu-light) / 0.62);
-    --neu-shadow-3: 8px 8px 20px rgb(var(--neu-shade) / 0.84),
-      -5px -5px 14px rgb(var(--neu-light) / 0.6), 0 24px 48px -28px rgb(0 0 0 / 0.65);
+    --neu-shadow-2: 5px 5px 13px rgb(var(--neu-shade) / 0.32),
+      -5px -5px 13px rgb(var(--neu-light) / 0.84);
+    --neu-shadow-2-hover: 6px 6px 15px rgb(var(--neu-shade) / 0.36),
+      -6px -6px 15px rgb(var(--neu-light) / 0.88);
+    --neu-shadow-3: 9px 10px 22px rgb(var(--neu-shade) / 0.38),
+      -6px -6px 16px rgb(var(--neu-light) / 0.88);
   }
 }
 
@@ -80,6 +263,10 @@ body {
   overflow-x: clip;
   min-height: 100vh;
   background: rgb(var(--canvas));
+  color: rgb(var(--ink));
+  transition:
+    background-color var(--neu-duration) ease,
+    color var(--neu-duration) ease;
 }
 button,
 input,
@@ -105,7 +292,7 @@ table {
   background: rgb(var(--primary) / 0.22);
   color: rgb(var(--ink));
 }
-/* Premium authentication shell: one consistent dark Soft UI composition. */
+/* Premium authentication shell: one consistent Ice Blue Soft UI composition. */
 .login-page-shell {
   position: relative;
   display: grid;
@@ -359,18 +546,26 @@ table {
   background: rgb(var(--primary));
   box-shadow: 0 0 7px rgb(var(--primary) / 0.6);
 }
+/* The three nodes ride the dashed ring around LIVE, a third of a turn apart:
+   the orbit is that ring's box, so each node's top/left is a point on it. */
+.login-visual-orbit {
+  position: absolute;
+  inset: 12%;
+}
+.login-visual-orbit .login-visual-node {
+  translate: -50% -50%;
+}
 .login-visual-node-plan {
-  top: 4%;
+  top: 0;
   left: 50%;
-  transform: translateX(-50%);
 }
 .login-visual-node-fact {
-  right: -2%;
-  bottom: 19%;
+  top: 75%;
+  left: 93.3%;
 }
 .login-visual-node-audit {
-  bottom: 19%;
-  left: -2%;
+  top: 75%;
+  left: 6.7%;
 }
 .login-visual-node-audit i {
   background: rgb(var(--success));
@@ -910,10 +1105,38 @@ table {
   .login-visual-core {
     animation: login-core-breathe 3.2s ease-in-out infinite;
   }
+  /* The nodes circle LIVE; each turns back by the same amount, so its label
+     stays upright the whole way round. */
+  .login-visual-orbit {
+    animation: login-orbit-spin 18s linear infinite;
+  }
+  .login-visual-orbit .login-visual-node {
+    animation: login-node-upright 18s linear infinite;
+  }
+  .login-visual-node i {
+    animation: login-node-pulse 2.4s ease-in-out infinite;
+  }
+  .login-visual-node-fact i {
+    animation-delay: -0.8s;
+  }
+  .login-visual-node-audit i {
+    animation-delay: -1.6s;
+  }
 }
 @keyframes login-orbit-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+@keyframes login-node-upright {
+  to {
+    rotate: -360deg;
+  }
+}
+@keyframes login-node-pulse {
+  50% {
+    opacity: 0.45;
+    scale: 0.7;
   }
 }
 @keyframes login-core-breathe {
@@ -1104,7 +1327,7 @@ table {
   isolation: isolate;
 }
 .neu-select-native {
-  color-scheme: dark;
+  color-scheme: light;
 }
 .neu-select-native::-ms-expand {
   display: none;
@@ -1518,8 +1741,124 @@ table {
 .fincore-topbar {
   background: rgb(var(--surface));
   box-shadow:
-    inset 0 -1px 0 rgb(var(--neu-light) / 0.58),
-    0 8px 18px -12px rgb(var(--neu-shade) / 0.94);
+    inset 0 1px 0 rgb(var(--neu-light) / 0.9),
+    8px 8px 20px rgb(var(--neu-shade) / 0.3),
+    -7px -7px 18px rgb(var(--neu-light) / 0.82);
+}
+
+/* Shared depth corrections for the login, navigation, charts and overlays. */
+.login-story-panel,
+.login-form-card {
+  box-shadow:
+    var(--neu-shadow-3),
+    inset 0 1px 0 rgb(var(--neu-light) / 0.88);
+}
+.login-brand-mark,
+.login-visual-core,
+.login-auth-emblem {
+  box-shadow:
+    var(--neu-shadow-1),
+    inset 0 1px 0 rgb(var(--neu-light) / 0.9);
+}
+.login-control-visual {
+  background: rgb(var(--inset));
+  box-shadow: var(--neu-inset), var(--neu-shadow-1);
+}
+.login-input {
+  background: rgb(var(--inset));
+  box-shadow: var(--neu-inset);
+}
+.login-input:focus {
+  background: rgb(var(--raised));
+  box-shadow:
+    var(--neu-inset),
+    0 0 0 3px rgb(var(--primary) / 0.16);
+}
+.fincore-sidebar {
+  border: 1px solid rgb(var(--neu-light) / 0.72);
+  box-shadow: inset 0 1px 0 rgb(var(--neu-light) / 0.88);
+}
+.sidebar-brand-panel,
+.sidebar-collapse-panel,
+.sidebar-logo-well,
+.sidebar-nav-group,
+.sidebar-nav-item,
+.sidebar-nav-item:hover {
+  box-shadow: var(--neu-shadow-1);
+}
+.sidebar-nav-group {
+  background: rgb(var(--surface) / 0.56);
+}
+.sidebar-nav-item {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+.sidebar-nav-item:hover {
+  background: rgb(var(--raised));
+}
+.sidebar-nav-item-active,
+.sidebar-nav-item-active:hover {
+  background: rgb(var(--inset));
+  box-shadow:
+    var(--neu-pressed),
+    0 0 0 1px rgb(var(--primary) / 0.1);
+}
+.neu-chart-frame {
+  background: rgb(var(--inset));
+  box-shadow:
+    var(--neu-inset),
+    inset 0 1px 0 rgb(var(--neu-light) / 0.82);
+}
+.neu-chart-frame .recharts-line-curve,
+.neu-chart-frame .recharts-area-curve,
+.neu-chart-frame .recharts-bar-rectangle path,
+.neu-chart-frame .recharts-sector {
+  filter: drop-shadow(2px 3px 3px rgb(var(--neu-shade) / 0.3));
+}
+.neu-chart-tooltip,
+.neu-select-popover,
+.neu-date-popover {
+  box-shadow:
+    var(--neu-shadow-3),
+    inset 0 1px 0 rgb(var(--neu-light) / 0.86);
+}
+.neu-select-option-selected,
+.neu-select-option-selected:hover,
+.neu-date-day-selected,
+.neu-date-day-selected:hover {
+  background: rgb(var(--primary-soft));
+  box-shadow: var(--neu-pressed);
+}
+.theme-toggle-sun,
+.theme-toggle-moon {
+  transition:
+    opacity var(--neu-duration) ease,
+    transform var(--neu-duration) cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.theme-toggle-moon {
+  opacity: 0;
+  transform: scale(0.55) rotate(-25deg);
+}
+:root[data-theme='dark'] .theme-toggle-sun {
+  opacity: 0;
+  transform: scale(0.55) rotate(25deg);
+}
+:root[data-theme='dark'] .theme-toggle-moon {
+  opacity: 1;
+  transform: scale(1) rotate(0);
+}
+.login-theme-toggle {
+  position: absolute;
+  top: clamp(1.6rem, 3vw, 3.5rem);
+  right: clamp(1.6rem, 3vw, 3.5rem);
+  z-index: 5;
+}
+:root[data-theme='dark'] .fincore-topbar {
+  box-shadow:
+    inset 0 1px 0 rgb(var(--neu-light) / 0.48),
+    8px 8px 20px rgb(var(--neu-shade) / 0.74),
+    -7px -7px 18px rgb(var(--neu-light) / 0.42);
 }
 .premium-enter {
   animation: premium-enter 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
@@ -1565,7 +1904,7 @@ table {
   }
   /* The dimmed layer behind a dialog: solid, no blur. */
   .neu-scrim {
-    background: rgb(var(--neu-shade) / 0.76);
+    background: rgb(var(--ink) / 0.42);
   }
   /* Clickable surfaces: lift on hover, press in on click. */
   .neu-interactive {
@@ -1613,7 +1952,7 @@ table {
 }
 .scrollbar-thin {
   scrollbar-width: thin;
-  scrollbar-color: #2b3e58 transparent;
+  scrollbar-color: rgb(var(--neutral-400)) transparent;
 }
 
 @media (prefers-reduced-motion: reduce) {

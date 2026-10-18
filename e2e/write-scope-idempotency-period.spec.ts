@@ -146,11 +146,7 @@ async function ledgerSummary(
   }, endpoint);
 }
 
-async function ledgerItemCount(
-  page: Page,
-  endpoint: '/api/expenses',
-  id: string,
-): Promise<number> {
+async function ledgerItemCount(page: Page, endpoint: '/api/expenses', id: string): Promise<number> {
   return page.evaluate(
     async ({ endpoint, id }) => {
       const response = await fetch(`${endpoint}?page=1&pageSize=100`, { credentials: 'include' });

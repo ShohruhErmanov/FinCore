@@ -95,7 +95,8 @@ export interface CashierReportInput {
  */
 export function buildCashierReport(input: CashierReportInput): CashierReport {
   const visibleBranches = input.branches.filter(
-    (branch) => branch.isActive && (input.branchFilter === 'all' || branch.id === input.branchFilter),
+    (branch) =>
+      branch.isActive && (input.branchFilter === 'all' || branch.id === input.branchFilter),
   );
 
   const groups: CashierBranchGroup[] = visibleBranches.map((branch) => {
@@ -160,7 +161,10 @@ export function buildCashierReport(input: CashierReportInput): CashierReport {
             planUzs: sum(mine.map((row) => row.planUzs)).toString(),
             actualUzs: sum(mine.map((row) => row.actualUzs)).toString(),
             varianceUzs: sum(mine.map((row) => row.varianceUzs)).toString(),
-            completionPct: percentOf(sum(mine.map((row) => row.actualUzs)), sum(mine.map((row) => row.planUzs))),
+            completionPct: percentOf(
+              sum(mine.map((row) => row.actualUzs)),
+              sum(mine.map((row) => row.planUzs)),
+            ),
             salaryTotalUzs: sum(
               mine.filter((row) => row.isActive).map((row) => row.fixedSalaryUzs),
             ).toString(),

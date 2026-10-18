@@ -76,7 +76,7 @@ export function ImportPage() {
       setSummary(result);
       setPreview(null);
       await invalidateExpenseAggregates(queryClient);
-      await queryClient.invalidateQueries({ queryKey: ['budget'] });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.budgetRoot });
     },
   });
 

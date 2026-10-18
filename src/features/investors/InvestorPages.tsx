@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { investorApi, payoutApi } from '@/shared/api/contracts';
+import { queryKeys } from '@/shared/api/query-keys';
 import { routes } from '@/shared/config/routes';
 import { formatMoney, formatPercent, formatShare } from '@/shared/lib/format';
 import type {
@@ -36,7 +37,7 @@ export function InvestorListPage() {
   // The share, not the hand-recorded entitlement: this list and the detail
   // page it links to have to agree, and the detail page shows the share.
   const query = useQuery({
-    queryKey: ['investor-payouts', 'list', year],
+    queryKey: queryKeys.investorPayoutList(year),
     queryFn: ({ signal }) => payoutApi.list(year, signal),
   });
 
@@ -65,15 +66,30 @@ export function InvestorListPage() {
         description={`${year}-yil fakt tushumidan hisoblangan ulush va to‘lov holati.`}
       />
 
-      <section aria-label="Investor kapitali to‘lov shakli bo‘yicha" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section
+        aria-label="Investor kapitali to‘lov shakli bo‘yicha"
+        className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
+      >
         <KpiCard
           label="Jami investor kapitali"
           value={formatMoney(String(capitalTotals.total))}
           helper="Payoutlardan alohida"
         />
-        <KpiCard label="Naqd" value={formatMoney(String(capitalTotals.cash))} helper="Kiritilgan kapital" />
-        <KpiCard label="Plastik / Karta" value={formatMoney(String(capitalTotals.card))} helper="Kiritilgan kapital" />
-        <KpiCard label="Bank o‘tkazmasi" value={formatMoney(String(capitalTotals.bank))} helper="Kiritilgan kapital" />
+        <KpiCard
+          label="Naqd"
+          value={formatMoney(String(capitalTotals.cash))}
+          helper="Kiritilgan kapital"
+        />
+        <KpiCard
+          label="Plastik / Karta"
+          value={formatMoney(String(capitalTotals.card))}
+          helper="Kiritilgan kapital"
+        />
+        <KpiCard
+          label="Bank o‘tkazmasi"
+          value={formatMoney(String(capitalTotals.bank))}
+          helper="Kiritilgan kapital"
+        />
       </section>
 
       {rows.length === 0 ? (
@@ -166,7 +182,7 @@ export function InvestorDetailPage({ investorId }: { investorId?: string } = {})
   const { year, month } = useSelectedPeriod();
 
   const shareQuery = useQuery({
-    queryKey: ['investor-payouts', 'investor', id, year],
+    queryKey: queryKeys.investorPayout(id, year),
     queryFn: ({ signal }) => payoutApi.summary(id, year, signal),
     enabled: Boolean(id),
   });
@@ -174,7 +190,7 @@ export function InvestorDetailPage({ investorId }: { investorId?: string } = {})
   // The 014 ledger: the payments themselves, and the amount a director may have
   // recorded by hand. Separate call, because it answers a separate question.
   const recordedQuery = useQuery({
-    queryKey: ['investor', id, year],
+    queryKey: queryKeys.investorDashboard(id, year),
     queryFn: ({ signal }) => investorApi.dashboard(id, year, signal),
     enabled: Boolean(id),
   });
@@ -202,10 +218,7 @@ export function InvestorDetailPage({ investorId }: { investorId?: string } = {})
 
       <InvestorShareView summary={data} year={year} month={month} />
 
-      <Card
-        title="To‘lov so‘rovlari"
-        description="Investor shu ulush bo‘yicha yuborgan so‘rovlar."
-      >
+      <Card title="To‘lov so‘rovlari" description="Investor shu ulush bo‘yicha yuborgan so‘rovlar.">
         {requests.length === 0 ? (
           <EmptyState description="Bu yil uchun to‘lov so‘rovi yuborilmagan." />
         ) : (

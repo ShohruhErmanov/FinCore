@@ -16,6 +16,7 @@ import {
   WalletCards,
 } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
+import { CHART_COLORS, CHART_TOOLTIP_STYLE } from '@/shared/lib/chart-theme';
 import { formatMoney, formatMoneyCompact, formatPercent, toChartNumber } from '@/shared/lib/format';
 import type { AnnualNetProfit, NetProfitMonth } from '@/shared/types/domain';
 import { Select } from '@/shared/ui';
@@ -23,7 +24,7 @@ import { Select } from '@/shared/ui';
 /**
  * Twelve months of net profit — collected minus spent — in one glance.
  *
- * Sits below FinCore Pulse and deliberately borrows its Deep Navy raised surface
+ * Sits below FinCore Pulse and deliberately borrows its Ice Blue raised surface
  * and soft inset tiles. Pulse answers "how is
  * this month going"; this answers "how has the year gone", and the two read as
  * one system rather than two widgets.
@@ -152,10 +153,10 @@ export function MonthlyNetProfit({
                 <LineChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id={totalStrokeId} x1="0" y1="0" x2="1" y2="0">
-                      <stop offset="0%" stopColor="#B7D3FF" />
-                      <stop offset="42%" stopColor="#6F9FFF" />
-                      <stop offset="72%" stopColor="#80B3FF" />
-                      <stop offset="100%" stopColor="#78E6CF" />
+                      <stop offset="0%" stopColor="var(--chart-actual-soft)" />
+                      <stop offset="42%" stopColor="var(--chart-actual)" />
+                      <stop offset="72%" stopColor="var(--chart-actual-soft)" />
+                      <stop offset="100%" stopColor="var(--chart-success)" />
                     </linearGradient>
                     <filter id={totalGlowId} x="-30%" y="-45%" width="160%" height="190%">
                       <feGaussianBlur stdDeviation="3.2" result="softGlow" />
@@ -171,30 +172,23 @@ export function MonthlyNetProfit({
                       </feMerge>
                     </filter>
                   </defs>
-                  <CartesianGrid stroke="rgba(43,62,88,0.9)" vertical={false} />
+                  <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
                   <XAxis
                     dataKey="name"
-                    tick={{ fill: '#B3C4DB', fontSize: 11 }}
+                    tick={{ fill: 'var(--chart-axis)', fontSize: 11 }}
                     axisLine={false}
                     tickLine={false}
                   />
                   <YAxis
-                    tick={{ fill: '#B3C4DB', fontSize: 10 }}
+                    tick={{ fill: 'var(--chart-axis)', fontSize: 10 }}
                     axisLine={false}
                     tickLine={false}
                     width={64}
                     tickFormatter={(value: number) => formatMoneyCompact(String(Math.trunc(value)))}
                   />
                   <Tooltip
-                    cursor={{ stroke: 'rgba(111,159,255,0.38)' }}
-                    contentStyle={{
-                      background: '#213149',
-                      border: '1px solid rgba(43,62,88,0.9)',
-                      borderRadius: 12,
-                      color: '#EDF4FF',
-                      boxShadow:
-                        '8px 8px 18px rgba(10,20,37,.85), -8px -8px 18px rgba(43,62,88,.7)',
-                    }}
+                    cursor={{ stroke: 'rgb(var(--primary) / 0.38)' }}
+                    contentStyle={{ ...CHART_TOOLTIP_STYLE, borderRadius: 12 }}
                     formatter={(value, name) => [
                       formatMoney(String(Math.trunc(Number(value)))),
                       name === 'total'
@@ -211,8 +205,18 @@ export function MonthlyNetProfit({
                     stroke={`url(#${totalStrokeId})`}
                     strokeWidth={3.75}
                     filter={`url(#${totalGlowId})`}
-                    dot={{ r: 3, fill: '#172439', stroke: '#83B0FF', strokeWidth: 2 }}
-                    activeDot={{ r: 6, fill: '#EDF4FF', stroke: '#6F9FFF', strokeWidth: 3 }}
+                    dot={{
+                      r: 3,
+                      fill: 'var(--chart-canvas)',
+                      stroke: 'var(--chart-actual-soft)',
+                      strokeWidth: 2,
+                    }}
+                    activeDot={{
+                      r: 6,
+                      fill: 'var(--chart-raised)',
+                      stroke: 'var(--chart-actual)',
+                      strokeWidth: 3,
+                    }}
                   />
                   {paymentMethods.map((method, index) => (
                     <Line
@@ -225,7 +229,7 @@ export function MonthlyNetProfit({
                       strokeWidth={2}
                       strokeDasharray="2 7"
                       dot={false}
-                      activeDot={{ r: 4.5, fill: '#172439', strokeWidth: 2 }}
+                      activeDot={{ r: 4.5, fill: 'var(--chart-canvas)', strokeWidth: 2 }}
                     />
                   ))}
                 </LineChart>
@@ -233,11 +237,11 @@ export function MonthlyNetProfit({
             </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-medium text-muted">
-            <ChartLegend color="#6F9FFF" label="Jami sof foyda" />
+            <ChartLegend color="var(--chart-actual)" label="Jami sof foyda" />
             {paymentMethods.map((method, index) => (
               <ChartLegend
                 key={method.paymentMethodId}
-                color={METHOD_COLORS[index % METHOD_COLORS.length] ?? '#7890AE'}
+                color={METHOD_COLORS[index % METHOD_COLORS.length] ?? 'var(--chart-axis)'}
                 label={method.name}
                 dashed
               />
@@ -333,7 +337,7 @@ export function MonthlyNetProfit({
 }
 
 const CORE_PAYMENT_METHODS = new Set(['CASH', 'CARD', 'BANK_TRANSFER']);
-const METHOD_COLORS = ['#6EE3AE', '#82ADFF', '#F2BE73'];
+const METHOD_COLORS = [CHART_COLORS.success, CHART_COLORS.actualSoft, CHART_COLORS.warning];
 
 function PaymentMethodCard({ method }: { method: AnnualNetProfit['paymentMethods'][number] }) {
   const Icon = paymentMethodIcon(method.code);

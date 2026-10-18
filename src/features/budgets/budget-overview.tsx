@@ -1,6 +1,12 @@
 import { useMemo, type ReactNode } from 'react';
+import { ProgressBar } from '@/shared/ui';
 import { AlertTriangle, ArrowUpRight, CheckCircle2 } from 'lucide-react';
-import { MONTH_NAMES_UZ, formatMoney, formatPercent } from '@/shared/lib/format';
+import {
+  MONTH_NAMES_UZ,
+  MONTH_SHORT_NAMES_UZ,
+  formatMoney,
+  formatPercent,
+} from '@/shared/lib/format';
 import type { BudgetHistory, BudgetLine, MonthlyReport } from '@/shared/types/domain';
 import { summarizeBudget } from './budget-summary';
 import { buildMonthlyReportMatrix } from '@/features/reports/monthly-report';
@@ -11,22 +17,6 @@ const money = (value: bigint | null) => formatMoney(value === null ? null : valu
 function width(value: bigint, max: bigint) {
   return max > 0n ? Number((value * 10_000n) / max) / 100 : 0;
 }
-
-/** For a phone, where a full month name would squeeze two 9-digit amounts. */
-const MONTH_SHORT_UZ = [
-  'Yan',
-  'Fev',
-  'Mar',
-  'Apr',
-  'May',
-  'Iyn',
-  'Iyl',
-  'Avg',
-  'Sen',
-  'Okt',
-  'Noy',
-  'Dek',
-];
 
 function budgetSharePct(branchBudget: bigint | null, totalBudget: bigint | null): number | null {
   if (branchBudget === null || totalBudget === null || totalBudget === 0n) return null;
@@ -52,16 +42,12 @@ function Progress({
   danger?: boolean;
 }) {
   return (
-    <div
-      role="img"
-      aria-label={`${label}: ${formatPercent(value)}`}
-      className="h-2 overflow-hidden rounded-full neu-track"
-    >
-      <div
-        className={`h-full rounded-full transition-[width] duration-200 motion-reduce:transition-none ${danger ? 'bg-red-500' : 'bg-navy-700'}`}
-        style={{ width: `${Math.min(100, Math.max(0, value ?? 0))}%` }}
-      />
-    </div>
+    <ProgressBar
+      value={value}
+      label={`${label}: ${formatPercent(value)}`}
+      className="h-2"
+      barClassName={`transition-[width] duration-200 motion-reduce:transition-none ${danger ? 'bg-red-500' : 'bg-navy-700'}`}
+    />
   );
 }
 
@@ -430,7 +416,7 @@ export function BudgetTrend({
               <span
                 className={`text-sm ${number === month ? 'font-semibold text-ink' : 'text-slate-600'}`}
               >
-                <span className="sm:hidden">{MONTH_SHORT_UZ[number - 1]}</span>
+                <span className="sm:hidden">{MONTH_SHORT_NAMES_UZ[number - 1]}</span>
                 <span className="hidden sm:inline">{name}</span>
               </span>
               <TrendCell
@@ -516,12 +502,11 @@ function TrendCell({
       >
         {value === null ? '—' : money(value)}
       </span>
-      <div aria-hidden="true" className="mt-1 h-1 rounded-full neu-track">
-        <div
-          className={`h-full rounded-full ${barClassName}`}
-          style={{ width: `${width(value ?? 0n, max)}%` }}
-        />
-      </div>
+      <ProgressBar
+        value={width(value ?? 0n, max)}
+        className="mt-1 h-1"
+        barClassName={barClassName}
+      />
     </div>
   );
 }

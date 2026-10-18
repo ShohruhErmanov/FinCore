@@ -48,9 +48,10 @@ test.describe('Rahbariyat dashboardi', () => {
     const compositionChart = page.getByLabel(
       'Yillik doimiy va o‘zgaruvchan xarajatlar diagrammasi',
     );
-    await compositionChart.locator('.recharts-sector').first().hover({ force: true });
-
     const tooltip = compositionChart.locator('.neu-chart-tooltip');
+    await expect(tooltip).toHaveCount(0);
+
+    await compositionChart.locator('.recharts-sector').first().hover({ force: true });
     await expect(tooltip).toBeVisible();
     await expect(tooltip).toContainText('Doimiy');
     await expect(tooltip).toContainText(/\d[\d\s]* so‘m/);

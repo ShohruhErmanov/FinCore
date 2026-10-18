@@ -163,7 +163,7 @@ export function RolesPage() {
   const [selectedRole, setSelectedRole] = useState<RoleCode>('cashier');
   const [matrix, setMatrix] = useState(initialRolePermissions);
   const roles = useQuery({
-    queryKey: ['roles', 'permissions'],
+    queryKey: queryKeys.rolePermissions,
     queryFn: ({ signal }) => adminApi.rolePermissions(signal),
   });
   useEffect(() => {
@@ -187,9 +187,9 @@ export function RolesPage() {
     onSuccess: async (saved) => {
       setMatrix((current) => ({ ...current, [saved.role]: saved.permissions }));
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['roles', 'permissions'] }),
-        queryClient.invalidateQueries({ queryKey: ['me'] }),
-        queryClient.invalidateQueries({ queryKey: ['users'] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.rolePermissions }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.me }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.users }),
         queryClient.invalidateQueries({ queryKey: queryKeys.userDirectory }),
       ]);
     },

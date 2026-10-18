@@ -18,7 +18,7 @@ import { z } from 'zod';
 import { getApiErrorMessage } from '@/shared/api/client';
 import { environment } from '@/shared/config/env';
 import { landingRoute } from '@/shared/config/routes';
-import { Alert, BrandMark, Button, FormField, Input } from '@/shared/ui';
+import { Alert, BrandMark, Button, FormField, Input, ThemeToggle } from '@/shared/ui';
 import { useAuth } from './auth-context';
 
 const schema = z.object({
@@ -72,6 +72,7 @@ export function LoginPage() {
     <main className="login-page-shell">
       <div className="login-ambient login-ambient-one" aria-hidden="true" />
       <div className="login-ambient login-ambient-two" aria-hidden="true" />
+      <ThemeToggle className="login-theme-toggle" />
       <section className="login-story-panel" aria-label="FINCORE haqida">
         <div className="login-brand-row">
           <div className="login-brand-mark">
@@ -107,17 +108,19 @@ export function LoginPage() {
               <Activity size={28} />
               <strong>LIVE</strong>
             </div>
-            <div className="login-visual-node login-visual-node-plan">
-              <span>REJA</span>
-              <i />
-            </div>
-            <div className="login-visual-node login-visual-node-fact">
-              <span>FAKT</span>
-              <i />
-            </div>
-            <div className="login-visual-node login-visual-node-audit">
-              <span>AUDIT</span>
-              <i />
+            <div className="login-visual-orbit">
+              <div className="login-visual-node login-visual-node-plan">
+                <span>REJA</span>
+                <i />
+              </div>
+              <div className="login-visual-node login-visual-node-fact">
+                <span>FAKT</span>
+                <i />
+              </div>
+              <div className="login-visual-node login-visual-node-audit">
+                <span>AUDIT</span>
+                <i />
+              </div>
             </div>
           </div>
         </div>
