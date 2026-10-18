@@ -16,6 +16,13 @@ const booleanish = z
 const notPlaceholder = (value: string) => !/^__.*__$/.test(value.trim());
 const PLACEHOLDER_MESSAGE = 'still the .env.example placeholder — generate a real random value';
 
+/** A host name only this machine can reach (URL keeps IPv6 in brackets). */
+const isLoopbackHost = (hostname: string) =>
+  hostname === 'localhost' ||
+  hostname.endsWith('.localhost') ||
+  hostname === '127.0.0.1' ||
+  hostname === '[::1]';
+
 const schema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -152,13 +159,17 @@ const schema = z
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production') {
+      // A browser on this machine talking to this machine: the cookie never
+      // crosses a network, and browsers treat http://localhost as a secure
+      // context. Any address another machine uses still needs https.
+      const loopbackOnly = isLoopbackHost(new URL(env.FRONTEND_URL).hostname);
       if (!env.DATABASE_URL)
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['DATABASE_URL'],
           message: 'DATABASE_URL is required in production',
         });
-      if (!env.COOKIE_SECURE)
+      if (!env.COOKIE_SECURE && !loopbackOnly)
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['COOKIE_SECURE'],
@@ -170,7 +181,7 @@ const schema = z
           path: ['SWAGGER_ENABLED'],
           message: 'SWAGGER_ENABLED must be false in production',
         });
-      if (new URL(env.FRONTEND_URL).protocol !== 'https:')
+      if (new URL(env.FRONTEND_URL).protocol !== 'https:' && !loopbackOnly)
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['FRONTEND_URL'],

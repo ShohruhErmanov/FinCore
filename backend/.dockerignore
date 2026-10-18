@@ -1,0 +1,14 @@
+node_modules
+dist
+coverage
+*.log
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+Dockerfile
+.dockerignore
+# Local database investigation artifacts (real row ids and counts).
+db-analysis.json
+db-august-analysis.json
+scripts/inspect-db*.mjs

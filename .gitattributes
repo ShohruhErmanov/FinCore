@@ -1,0 +1,6 @@
+# Files that run or are read inside Linux containers keep LF line endings,
+# whatever the checkout platform: a CRLF shell script fails with "\r".
+*.sh text eol=lf
+docker/** text eol=lf
+Dockerfile text eol=lf
+*.Dockerfile text eol=lf

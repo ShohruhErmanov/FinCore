@@ -19,3 +19,7 @@ backend/db-august-analysis.json
 backend/scripts/inspect-db.mjs
 backend/scripts/inspect-db-fks.mjs
 backend/scripts/inspect-db-fns.mjs
+
+# Docker: generated secrets and database dumps (real financial data).
+docker/*.env
+docker/backups/
