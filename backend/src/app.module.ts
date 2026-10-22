@@ -19,6 +19,7 @@ import { NotificationEventsModule } from './notification-events/notification-eve
 import { DailyRevenuesModule } from './daily-revenues/daily-revenues.module';
 import { InvestorsModule } from './investors/investors.module';
 import { AuditModule } from './audit/audit.module';
+import { BackupsModule } from './backups/backups.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { AuditModule } from './audit/audit.module';
     DailyRevenuesModule,
     InvestorsModule,
     AuditModule,
+    BackupsModule,
   ],
   providers: [
     // Order matters: reject cross-site cookie mutations before authentication,

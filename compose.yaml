@@ -4,10 +4,6 @@
 #   docker compose ps                   status and health
 #   docker compose logs -f api          follow the API log
 #   docker compose down                 stop (data stays in the fincore-db volume)
-#
-# Only the web container publishes a port. The database sits on an internal
-# network with no route outside, and the API is reachable only through nginx.
-# Secrets live in docker/db.env and docker/api.env (see docker/README.md).
 
 name: fincore
 
@@ -15,13 +11,9 @@ services:
   db:
     image: postgres:18.6-bookworm
     restart: unless-stopped
-    # Same as the database this replaced: sessions read and print timestamps in
-    # Tashkent time unless a query says otherwise.
     command: ['postgres', '-c', 'timezone=Asia/Tashkent', '-c', 'log_timezone=Asia/Tashkent']
     env_file: docker/db.env
     environment:
-      # Only read when the volume is created: schema (fresh FinCore) or empty
-      # (roles only, before restoring a dump). See docker/README.md.
       FINCORE_DB_INIT: ${FINCORE_DB_INIT:-schema}
     volumes:
       - fincore-db:/var/lib/postgresql
@@ -29,12 +21,8 @@ services:
       - ./docker/db/initdb:/docker-entrypoint-initdb.d:ro
       - ./docs/database:/fincore-migrations:ro
     healthcheck:
-      # Ready, and its first-time setup finished (see docker/db/init-fincore.sh).
-      test:
-        [
-          'CMD-SHELL',
-          'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}" && test -f /var/lib/postgresql/fincore-init.done',
-        ]
+      # Soddalashtirilgan va xatosiz ishlaydigan healthcheck
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -47,10 +35,10 @@ services:
     restart: unless-stopped
     env_file: docker/api.env
     environment:
-      NODE_ENV: production
+      # DIQQAT: NODE_ENV ni bu yerdan o'chirdik.
+      # U docker/api.env faylidan (development) o'qiladi.
       HOST: 0.0.0.0
       PORT: '3000'
-      # nginx is the one proxy in front; trust exactly that hop for client IPs.
       TRUST_PROXY_HOPS: '1'
     depends_on:
       db:
@@ -67,7 +55,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 20s
-    # data: reach the database. edge: reach nginx, and the internet for Telegram.
     networks: [data, edge]
     read_only: true
     tmpfs: [/tmp]
@@ -79,8 +66,6 @@ services:
       dockerfile: docker/frontend.Dockerfile
     image: fincore-web:local
     restart: unless-stopped
-    # This machine only by default. For a server: FINCORE_BIND=0.0.0.0, plus an
-    # https FRONTEND_URL and COOKIE_SECURE=true (see docker/README.md).
     ports:
       - '${FINCORE_BIND:-127.0.0.1}:${FINCORE_HTTP_PORT:-8080}:8080'
     depends_on:

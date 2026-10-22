@@ -12,7 +12,18 @@
  * already holds business_owner.
  */
 import { createRequire } from 'node:module';
+import { createHmac } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
+
+function mintActorToken(userId, keyId, keyBase64, ttlSeconds = 60) {
+  const key = Buffer.from(keyBase64, 'base64');
+  const now = Math.floor(Date.now() / 1000);
+  const payload = Buffer.from(
+    JSON.stringify({ uid: userId, iat: now, exp: now + ttlSeconds }),
+  ).toString('base64url');
+  const signature = createHmac('sha256', key).update(payload, 'utf8').digest('base64url');
+  return keyId + ':' + payload + ':' + signature;
+}
 
 const require = createRequire(import.meta.url);
 const { hashPassword } = require('../dist/auth/password.js');
@@ -99,6 +110,10 @@ try {
   }
 
   const created = await prisma.$transaction(async (tx) => {
+    if (process.env.ACTOR_SIGNING_KEY_ID && process.env.ACTOR_SIGNING_KEY) {
+      const token = mintActorToken(grantor.id, process.env.ACTOR_SIGNING_KEY_ID, process.env.ACTOR_SIGNING_KEY);
+      await tx.$executeRawUnsafe("SELECT set_config('app.actor_token', '" + token + "', true)");
+    }
     const user = await tx.users.create({
       data: {
         full_name: name,

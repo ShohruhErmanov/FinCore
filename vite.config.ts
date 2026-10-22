@@ -9,7 +9,16 @@ export default defineConfig({
   // it Vite silently moves to 5174 when 5173 is taken, and every API call is
   // then blocked by CORS with an error that reads like the server is down.
   // Failing to start is the far easier problem to diagnose.
-  server: { port: 5173, strictPort: true },
+  server: {
+    port: 5173,
+    strictPort: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+    },
+  },
   build: {
     rollupOptions: {
       output: {

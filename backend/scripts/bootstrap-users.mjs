@@ -21,10 +21,21 @@
  * changes a password, a role or a status.
  */
 import { createRequire } from 'node:module';
+import { createHmac } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 
 const require = createRequire(import.meta.url);
 const { hashPassword } = require('../dist/auth/password.js');
+
+function mintActorToken(userId, keyId, keyBase64, ttlSeconds = 60) {
+  const key = Buffer.from(keyBase64, 'base64');
+  const now = Math.floor(Date.now() / 1000);
+  const payload = Buffer.from(
+    JSON.stringify({ uid: userId, iat: now, exp: now + ttlSeconds }),
+  ).toString('base64url');
+  const signature = createHmac('sha256', key).update(payload, 'utf8').digest('base64url');
+  return keyId + ':' + payload + ':' + signature;
+}
 
 /** Seeded system-process account; the grantor of record for bootstrap grants. */
 const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000001';
@@ -185,6 +196,10 @@ try {
 
     const password_hash = await hashPassword(person.password);
     await prisma.$transaction(async (tx) => {
+      if (process.env.ACTOR_SIGNING_KEY_ID && process.env.ACTOR_SIGNING_KEY) {
+        const token = mintActorToken(grantor.id, process.env.ACTOR_SIGNING_KEY_ID, process.env.ACTOR_SIGNING_KEY);
+        await tx.$executeRawUnsafe("SELECT set_config('app.actor_token', '" + token + "', true)");
+      }
       const user = await tx.users.create({
         data: {
           full_name: person.fullName,
